@@ -1,6 +1,6 @@
 /**
- * Grudge6 kit loader — exact gear_presets mesh_ids + Bip001 AnimationDirector packs.
- * SSOT: fleetGearPresets (gameopen gearPresets.ts) · grudge6-modular-characters · combat-runtime
+ * Grudge6 kit loader — exact gear_presets mesh_ids + Bip001 director packs.
+ * Deploy order from grudge-character-correctness (characterDeploy helpers).
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -10,8 +10,13 @@ import { getClass } from "./classes.js";
 import { resolveClassKit } from "./fleetGearPresets.js";
 import { loadAnimPack } from "./animPackLoader.js";
 import { AnimationDirector } from "./bip001Director.js";
-
-const HUMAN_HEIGHT_M = 1.8;
+import {
+  applyArtForwardPlusZ,
+  deployGrudge6Model,
+  stripPositionTracks,
+  reGroundAfterAnimSample,
+  diagnoseCharacterLook,
+} from "./characterDeploy.js";
 
 let _loader = null;
 function getLoader() {
@@ -31,33 +36,28 @@ const templateCache = new Map();
 
 async function loadTemplate(url) {
   if (templateCache.has(url)) return templateCache.get(url);
+  window.setLoaderStatus?.(`Loading kit ${url.split("/").pop()}…`);
   const gltf = await getLoader().loadAsync(url);
   templateCache.set(url, gltf.scene);
   return gltf.scene;
 }
 
-/** Normalize mesh id for fuzzy match (case + separators). */
 function normId(name) {
   return String(name || "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 }
 
-/**
- * Catalog hide → show only exact gear_presets visibleMeshes.
- * Prefer exact name; fall back to case-insensitive / normalized id.
- */
+/** Catalog hide → show exact gear_presets mesh_ids only. */
 export function applyExactMeshIds(root, visibleMeshes = []) {
   const exact = new Set(visibleMeshes.filter(Boolean));
   const fuzzy = new Set([...exact].map(normId));
 
-  // First pass: hide all mesh/skinned (wardrobe catalog)
   root.traverse((o) => {
     if (!o.isMesh && !o.isSkinnedMesh) return;
     o.visible = false;
   });
 
-  // Second: show exact matches
   const shown = new Set();
   root.traverse((o) => {
     if (!o.isMesh && !o.isSkinnedMesh) return;
@@ -73,9 +73,8 @@ export function applyExactMeshIds(root, visibleMeshes = []) {
     }
   });
 
-  // If nothing matched (bad kit / rename), restore body-like meshes so we never T-pose naked black
   if (shown.size === 0) {
-    console.warn("[grudge6Loader] no mesh_ids matched; showing body-like fallback", visibleMeshes);
+    console.warn("[grudge6Loader] no mesh_ids matched; body fallback", visibleMeshes);
     root.traverse((o) => {
       if (!o.isMesh && !o.isSkinnedMesh) return;
       if (/body|arms|legs|head|units_/i.test(o.name) && !/weapon|shield|bag|wood|quiver/i.test(o.name)) {
@@ -83,56 +82,11 @@ export function applyExactMeshIds(root, visibleMeshes = []) {
       }
     });
   }
-
   return [...shown];
-}
-
-function bodyBox(root) {
-  const box = new THREE.Box3();
-  let any = false;
-  root.updateMatrixWorld(true);
-  root.traverse((o) => {
-    if (!o.isSkinnedMesh || !o.visible) return;
-    if (!any) {
-      box.setFromObject(o, true);
-      any = true;
-    } else box.expandByObject(o);
-  });
-  if (!any) box.setFromObject(root, true);
-  return box;
-}
-
-function fitSiHeight(root) {
-  let box = bodyBox(root);
-  const size = new THREE.Vector3();
-  box.getSize(size);
-  if (size.y < 0.01) return;
-  // Classic 100× unit fix
-  if (size.y > 50) {
-    root.scale.multiplyScalar(0.01);
-    box = bodyBox(root);
-    box.getSize(size);
-  }
-  const s = HUMAN_HEIGHT_M / size.y;
-  root.scale.multiplyScalar(s);
-  root.updateMatrixWorld(true);
-  box = bodyBox(root);
-  root.position.y -= box.min.y;
 }
 
 /**
  * @param {string} classId
- * @returns {Promise<{
- *   root: THREE.Group,
- *   model: THREE.Object3D,
- *   classDef: object,
- *   kit: object,
- *   mixer: THREE.AnimationMixer,
- *   director: AnimationDirector|null,
- *   animPack: string,
- *   visibleMeshes: string[],
- *   shownMeshes: string[],
- * }>}
  */
 export async function loadGrudge6Class(classId) {
   const classDef = getClass(classId);
@@ -150,18 +104,26 @@ export async function loadGrudge6Class(classId) {
   }
 
   const model = SkeletonUtils.clone(template);
+  // Force skeleton bind update after clone
+  model.traverse((o) => {
+    if (o.isSkinnedMesh && o.skeleton) {
+      o.skeleton.pose();
+      o.skeleton.update();
+    }
+  });
+
   const shownMeshes = applyExactMeshIds(model, visibleMeshes);
 
   model.traverse((o) => {
     if (!o.isMesh && !o.isSkinnedMesh) return;
     o.castShadow = true;
     o.receiveShadow = true;
+    o.frustumCulled = true;
     if (o.material) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
         if (m.map) {
           m.map.colorSpace = THREE.SRGBColorSpace;
-          // Toon RTS / FBX atlas path
           m.map.flipY = false;
         }
         m.vertexColors = false;
@@ -173,10 +135,9 @@ export async function loadGrudge6Class(classId) {
     }
   });
 
-  fitSiHeight(model);
-
-  // Art-forward: Toon RTS kits face +X; controller walks +Z
-  model.rotation.y = Math.PI / 2;
+  // SSOT deploy: fit 1.8m → art-forward +π/2 → feet ground local y=0
+  const diag = deployGrudge6Model(model, { groundY: 0 });
+  if (!diag.ok) console.warn("[grudge6Loader] diagnose", diag);
 
   const root = new THREE.Group();
   root.name = `grudge6_${classDef.id}`;
@@ -187,13 +148,22 @@ export async function loadGrudge6Class(classId) {
   let clips = {};
 
   try {
+    window.setLoaderStatus?.(`Loading anim pack ${animPack}…`);
     clips = await loadAnimPack(animPack);
+    // Strip position tracks again for safety
+    for (const k of Object.keys(clips)) {
+      if (clips[k]) clips[k] = stripPositionTracks(clips[k]);
+    }
     const hasAny = Object.values(clips).some(Boolean);
     if (hasAny) {
       director = new AnimationDirector(mixer, clips);
+      // Sample idle once then re-ground (kills residual hip float)
+      mixer.update(1 / 30);
+      reGroundAfterAnimSample(model, 0);
+      const d2 = diagnoseCharacterLook(model, 0);
       console.info(
-        `[grudge6Loader] ${classId} pack=${animPack} meshes=${shownMeshes.length}/${visibleMeshes.length}`,
-        visibleMeshes,
+        `[grudge6Loader] ${classId} pack=${animPack} meshes=${shownMeshes.length} h=${d2.height?.toFixed(2)} feet=${d2.feetMinY?.toFixed(3)}`,
+        d2.ok ? "OK" : d2.errors,
       );
     } else {
       console.warn("[grudge6Loader] anim pack empty", animPack);
@@ -213,6 +183,7 @@ export async function loadGrudge6Class(classId) {
     animPack,
     visibleMeshes,
     shownMeshes,
+    diagnose: diag,
   };
 }
 

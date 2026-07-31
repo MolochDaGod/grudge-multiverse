@@ -1,6 +1,6 @@
 /**
- * Multiverse Warlords mode — Bermuda island, grudge6 (Bip001 director + gear_presets),
- * harvest, vendors, crafting, bosses, skill bar, fleet VFX, static collider rebind.
+ * Multiverse Warlords — Bermuda island, grudge6 (deploy SSOT), harvest, combat soft-lock,
+ * fleet VFX, static collider rebind, warlords HUD.
  */
 import * as THREE from "three";
 import { CLASSES, getClass } from "./classes.js";
@@ -9,14 +9,21 @@ import { HarvestSystem } from "./harvest.js";
 import { BossFight } from "./bosses.js";
 import { loadGrudge6Class } from "./grudge6Loader.js";
 import { SkillBar } from "./skills.js";
-import { loadBag, saveBag, rollKillReward } from "./inventory.js";
+import { loadBag, rollKillReward } from "./inventory.js";
 import { QUICK_RECIPES, craft } from "./crafting.js";
 import { VENDORS, buy } from "./vendors.js";
 import { FleetSkillVfx, vfxKindForSkill } from "./fleetVfx.js";
+import {
+  aim,
+  bindCombatAim,
+  resolveAimPoint,
+  resolveBodyYaw,
+  syncFocusCrosshair,
+  updateWorldReticle,
+  markHostile,
+} from "./combatAim.js";
+import { mountWarlordsHud } from "./warlordsHud.js";
 
-/**
- * Patch name overlay for class selection instead of mixamo cast.
- */
 export function setupClassSelectUI() {
   const picker = document.getElementById("char-picker");
   if (!picker) return { classId: "warrior" };
@@ -47,9 +54,6 @@ export function setupClassSelectUI() {
   };
 }
 
-/**
- * Build main panel tabs content for inventory / craft / vendors / players.
- */
 export function enhanceMainPanel() {
   const tabs = document.getElementById("main-panel-tabs");
   if (!tabs) return;
@@ -191,7 +195,6 @@ export function renderVendors() {
   });
 }
 
-/** Map skill → director one-shot clip role. */
 function skillAnimRole(skill) {
   if (!skill) return "attack";
   if (skill.key === "KeyF") return "attack";
@@ -199,14 +202,10 @@ function skillAnimRole(skill) {
   return m[skill.key] || "attack";
 }
 
-/**
- * Re-bind island meshes as the player's static BVH collider so buildings fully block.
- * Uses playerController.buildStaticCollider (MeshBVH).
- */
 export function rebindIslandStaticCollider(localPlayer, islandRoot) {
   const ctrl = localPlayer?._player;
   if (!ctrl?.buildStaticCollider || !islandRoot) {
-    console.warn("[warlords] cannot rebind static collider — missing controller or island");
+    console.warn("[warlords] cannot rebind static collider");
     return false;
   }
   try {
@@ -220,9 +219,20 @@ export function rebindIslandStaticCollider(localPlayer, islandRoot) {
   }
 }
 
-/**
- * Full warlords world attach after LocalPlayer exists.
- */
+/** Capsule origin → approximate feet Y offset for SI scale 0.01 controller. */
+function capsuleFeetY(ctrl, capsule) {
+  if (!ctrl || !capsule) return capsule?.position?.y ?? 0;
+  const s = ctrl.playerModelConfig?.scale ?? 0.01;
+  // rideHeight 40 * s + approx half-capsule below origin
+  const ride = 40 * s;
+  const r = 30 * s;
+  const h = 180 * s;
+  const colliderH = h - ride;
+  const segment = Math.max(0.01, colliderH - 2 * r);
+  // feet ≈ capsule.y - segment - r - ride  (geometry local bottom)
+  return capsule.position.y - segment - r - ride * 0.25;
+}
+
 export async function attachWarlordsWorld(ctx) {
   const {
     scene,
@@ -239,50 +249,74 @@ export async function attachWarlordsWorld(ctx) {
   const classId = localStorage.getItem("mv_class_id") || "warrior";
   const classDef = getClass(classId);
 
-  // Island (CDN bermuda preferred)
+  mountWarlordsHud();
+  window.setLoaderStatus?.("Loading Bermuda island…");
   flash?.("Loading Bermuda island…", 1.2);
+
   const island = await loadBermudaIsland(scene, { targetWidth: 120, maxHarvest: 70 });
   const groundAt = makeGroundSampler(island.root);
 
-  // Place player on island spawn
-  const spawn = island.spawns[Math.floor(Math.random() * island.spawns.length)];
-  const y = groundAt(spawn.x, spawn.z);
-  if (y != null) spawn.y = y + 1.1;
+  // Place player on grass spawn outside hub
+  const spawn = island.spawns[Math.floor(Math.random() * island.spawns.length)].clone();
+  const gy = groundAt(spawn.x, spawn.z);
+  spawn.y = (gy ?? 0) + 1.15;
   const capsule = localPlayer._player?.getPlayerCapsule?.();
-  if (capsule) capsule.position.copy(spawn);
+  if (capsule) {
+    capsule.position.copy(spawn);
+    // Zero velocity so we don't punch through on first frame
+    try {
+      localPlayer._player.playerVelocity?.set(0, 0, 0);
+    } catch {
+      /* ignore */
+    }
+  }
 
-  // #5 — re-bind static collider AFTER island load so buildings block
+  // Camera near spawn (third-person over shoulder)
+  if (ctx.camera && ctx.controls) {
+    ctx.camera.position.set(spawn.x + 4, spawn.y + 2.5, spawn.z + 6);
+    ctx.controls.target.copy(spawn);
+    ctx.controls.update?.();
+  }
+
+  // #5 static collider rebind
   rebindIslandStaticCollider(localPlayer, island.root);
 
-  // Fleet skill VFX
-  const vfx = new FleetSkillVfx(scene);
+  // Soft-lock world reticle
+  const reticle = new THREE.Mesh(
+    new THREE.RingGeometry(0.35, 0.48, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0xe8c877,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  reticle.rotation.x = -Math.PI / 2;
+  reticle.visible = false;
+  scene.add(reticle);
 
-  // grudge6 visual: exact mesh_ids + Bip001 director + baked packs
+  const vfx = new FleetSkillVfx(scene);
+  const crosshairEl = document.getElementById("crosshair");
+
+  // grudge6 character
   let g6 = null;
+  let bodyYaw = 0;
   try {
+    window.setLoaderStatus?.(`Loading ${classDef.label}…`);
     g6 = await loadGrudge6Class(classId);
     const old = localPlayer.getPlayerModel?.();
     if (old) old.visible = false;
 
     const host = localPlayer._player;
-    if (host?.playerModel) {
-      g6.root.position.set(0, 0, 0);
-      try {
-        host.playerModel.visible = false;
-        // Prefer world attachment so SI scale is independent of mixamo capsule scale
-        scene.add(g6.root);
-      } catch {
-        scene.add(g6.root);
-      }
-    } else {
-      scene.add(g6.root);
-    }
+    if (host?.playerModel) host.playerModel.visible = false;
 
-    // Mute mixamo locomotion animation on the controller model (visual is grudge6)
+    // World attach — SI independent of mixamo scale
+    scene.add(g6.root);
+    g6.root.position.set(spawn.x, gy ?? 0, spawn.z);
+
     try {
-      if (host?.animation?.mixer) {
-        host.animation.mixer.timeScale = 0;
-      }
+      if (host?.animation?.mixer) host.animation.mixer.timeScale = 0;
     } catch {
       /* ignore */
     }
@@ -295,7 +329,6 @@ export async function attachWarlordsWorld(ctx) {
     console.warn("grudge6 load failed", e);
   }
 
-  // Harvest
   const harvest = new HarvestSystem(scene, island.harvestNodes, {
     flash,
     onBreak: (n) => {
@@ -308,36 +341,37 @@ export async function attachWarlordsWorld(ctx) {
     },
   });
 
-  // Bosses
   const bosses = new BossFight(scene, island.bossPads);
+  // Mark bosses hostile for soft-lock select
+  for (const b of bosses.bosses || []) {
+    if (b.root) markHostile(b.root, b.id, "boss");
+  }
 
-  // Skills + director one-shots + fleet VFX
   const skillBar = new SkillBar(classDef, () => loadBag().level || 1, {
     flash,
     onCast: (skill) => {
       const pos = capsule?.position;
       if (!pos) return;
 
-      // Director attack/skill clip
       if (g6?.director) {
         const role = skillAnimRole(skill);
-        const played =
-          g6.director.requestOneShot(role) ||
-          g6.director.requestOneShot("attack") ||
-          0;
-        if (!played) {
-          /* no clip — still play VFX */
-        }
+        g6.director.requestOneShot(role) || g6.director.requestOneShot("attack");
       }
 
-      // Fleet VFX slash / bolt / nova
-      const dir = new THREE.Vector3(0, 0, 1);
-      try {
-        const q = capsule.getWorldQuaternion?.(new THREE.Quaternion());
-        if (q) dir.applyQuaternion(q);
-      } catch {
-        /* default forward */
-      }
+      const cam = ctx.camera;
+      const camFwd = new THREE.Vector3();
+      cam?.getWorldDirection(camFwd);
+      camFwd.y = 0;
+      if (camFwd.lengthSq() < 1e-6) camFwd.set(0, 0, 1);
+      camFwd.normalize();
+
+      const feet = new THREE.Vector3(pos.x, groundAt(pos.x, pos.z) ?? pos.y - 1, pos.z);
+      const aimPt = resolveAimPoint(feet, camFwd);
+      const dir = aimPt.clone().sub(feet);
+      dir.y = 0;
+      if (dir.lengthSq() < 1e-6) dir.copy(camFwd);
+      dir.normalize();
+
       const kind = vfxKindForSkill(skill);
       const color =
         classId === "mage"
@@ -347,28 +381,56 @@ export async function attachWarlordsWorld(ctx) {
             : classId === "worge"
               ? 0xff6a3a
               : 0x9fe8ff;
-      vfx.play(kind, pos.clone(), dir, color);
+      vfx.play(kind, feet.clone(), dir, color);
 
-      // Damage nearest boss in range
-      if (skill.kind?.includes("melee") || skill.kind === "magic" || skill.kind?.includes("ranged")) {
-        for (const b of bosses.bosses) {
-          if (b.dead) continue;
-          if (b.root.position.distanceTo(pos) < 5) {
-            const dmg = Math.floor(14 * (skill.dmgMul || 1));
-            const res = bosses.hit(b.id, dmg, playerId);
-            set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
-            if (res.killed) {
-              const reward = rollKillReward(true);
-              flash?.(`${b.name} defeated! L${reward.level}`, 1.2);
-            } else flash?.(`${b.name} HP ${res.hp}`, 0.4);
-          }
+      // Range-gated damage (combat-runtime style)
+      const range =
+        skill.kind?.includes("ranged") || skill.kind === "magic"
+          ? 22
+          : skill.kind?.includes("aoe")
+            ? 4.5
+            : 2.8;
+      for (const b of bosses.bosses) {
+        if (b.dead) continue;
+        const d = b.root.position.distanceTo(pos);
+        if (d < range) {
+          const dmg = Math.floor(14 * (skill.dmgMul || 1));
+          const res = bosses.hit(b.id, dmg, playerId);
+          set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
+          if (res.killed) {
+            const reward = rollKillReward(true);
+            flash?.(`${b.name} defeated! L${reward.level}`, 1.2);
+          } else flash?.(`${b.name} HP ${res.hp}`, 0.4);
         }
       }
     },
   });
   skillBar.bind();
 
-  // Vendor markers
+  // Soft-lock / focus input
+  const canvas = ctx.renderer?.domElement || document.querySelector("canvas");
+  let unbindAim = () => {};
+  if (canvas && ctx.camera) {
+    unbindAim = bindCombatAim(
+      canvas,
+      ctx.camera,
+      () => {
+        const list = [];
+        for (const b of bosses.bosses || []) if (b.root && !b.dead) list.push(b.root);
+        for (const n of island.harvestNodes || []) if (n.object && !n.broken) list.push(n.object);
+        return list;
+      },
+      {
+        onAttack: () => {
+          const skills = classDef.skills || [];
+          const f = skills.find((s) => s.key === "KeyF");
+          if (f) skillBar.cast(f);
+        },
+        onFocusChange: (on) => flash?.(on ? "Focus ON · soft-lock" : "Focus OFF", 0.5),
+      },
+    );
+  }
+
   for (const v of island.vendorPads) {
     const m = new THREE.Mesh(
       new THREE.CylinderGeometry(0.4, 0.5, 1.6, 10),
@@ -386,7 +448,6 @@ export async function attachWarlordsWorld(ctx) {
     v._label = label;
   }
 
-  // Harvest interact E
   document.addEventListener("keydown", (e) => {
     if (e.code !== "KeyE" || e.repeat) return;
     const cam = ctx.camera;
@@ -413,7 +474,6 @@ export async function attachWarlordsWorld(ctx) {
     }
   });
 
-  // Firebase harvest + bosses
   if (db && ref && onValue) {
     onValue(ref(db, `rooms/${roomId}/harvest`), (snap) => {
       const data = snap.val() || {};
@@ -437,8 +497,8 @@ export async function attachWarlordsWorld(ctx) {
     meshIds: g6?.visibleMeshes,
   });
 
-  // Horizontal speed for gait (SI m/s-ish from controller velocity)
   const tmpVel = new THREE.Vector3();
+  const _euler = new THREE.Euler();
 
   return {
     island,
@@ -447,39 +507,87 @@ export async function attachWarlordsWorld(ctx) {
     skillBar,
     g6,
     vfx,
+    aim,
     classDef,
     groundAt,
     getClassState,
+    unbindAim,
     rebindCollider: () => rebindIslandStaticCollider(localPlayer, island.root),
     update(dt) {
       harvest.update();
       vfx.update(dt);
+      syncFocusCrosshair(crosshairEl);
 
       const pos = capsule?.position;
       const ctrl = localPlayer?._player;
+      if (!pos) return;
 
-      if (g6?.root && pos) {
-        // Feet under capsule (capsule center ~ mid body at ~0.9 m when SI)
-        g6.root.position.set(pos.x, pos.y - 0.9, pos.z);
-        const q = capsule.getWorldQuaternion?.(new THREE.Quaternion());
-        if (q) g6.root.quaternion.copy(q);
+      // Feet IK / snap — raycast ground under player
+      const groundY = groundAt(pos.x, pos.z) ?? 0;
+      // Keep capsule from falling into void (safety)
+      const feetEst = capsuleFeetY(ctrl, capsule);
+      if (feetEst < groundY - 0.5 || pos.y < groundY - 2) {
+        pos.y = groundY + 1.15;
+        try {
+          ctrl.playerVelocity.y = 0;
+        } catch {
+          /* ignore */
+        }
+      }
 
-        // Bip001 director gait from controller velocity
+      // Body yaw: soft-lock / travel
+      let moving = false;
+      let dx = 0;
+      let dz = 0;
+      try {
+        const vel = ctrl?.getVelocity?.() || tmpVel.set(0, 0, 0);
+        dx = vel.x;
+        dz = vel.z;
+        moving = Math.hypot(dx, dz) > 0.05 || !!localPlayer.isMoving;
+      } catch {
+        moving = !!localPlayer.isMoving;
+      }
+
+      let camYaw = 0;
+      if (ctx.camera) {
+        ctx.camera.getWorldDirection(tmpVel);
+        camYaw = Math.atan2(tmpVel.x, tmpVel.z);
+      }
+
+      const targetYaw = resolveBodyYaw({
+        moving,
+        dx,
+        dz,
+        camYaw,
+        focusEnabled: aim.focusEnabled,
+        rmb: aim.rmb,
+      });
+      // Smooth yaw
+      let dy = targetYaw - bodyYaw;
+      while (dy > Math.PI) dy -= Math.PI * 2;
+      while (dy < -Math.PI) dy += Math.PI * 2;
+      bodyYaw += dy * Math.min(1, 12 * dt);
+
+      updateWorldReticle(reticle, pos, bodyYaw, groundY);
+
+      if (g6?.root) {
+        // Feet on ground (Box3-style feet Y) — model local feet at 0
+        g6.root.position.set(pos.x, groundY, pos.z);
+        // Yaw only — never copy full capsule quaternion (kills sideways/roll)
+        g6.root.rotation.set(0, bodyYaw, 0);
+
         if (g6.director && ctrl) {
           let speed01 = 0;
-          let moving = false;
           let sprinting = false;
           try {
             const vel = ctrl.getVelocity?.() || tmpVel.set(0, 0, 0);
             tmpVel.set(vel.x, 0, vel.z);
             const spd = tmpVel.length();
-            // controller scale can be tiny (0.01); use relative speed
             const maxSpd = Math.max(0.01, (ctrl.curPlayerSpeed || ctrl.playerSpeed || 1) * 0.9);
             speed01 = Math.min(1, spd / maxSpd);
-            moving = speed01 > 0.05 || localPlayer.isMoving;
             sprinting = !!ctrl.input?.shift || speed01 > 0.85;
           } catch {
-            moving = !!localPlayer.isMoving;
+            /* ignore */
           }
           g6.director.setGaitTarget(moving, sprinting, speed01);
           g6.director.update(dt);
@@ -488,8 +596,7 @@ export async function attachWarlordsWorld(ctx) {
         }
       }
 
-      // vendor labels
-      if (ctx.camera && ctx.renderer) {
+      if (ctx.camera) {
         for (const v of island.vendorPads) {
           if (!v._label || !v._mesh) continue;
           const sp = v._mesh.position.clone().project(ctx.camera);
@@ -499,11 +606,10 @@ export async function attachWarlordsWorld(ctx) {
           v._label.style.display = sp.z < 1 ? "block" : "none";
         }
       }
-      if (pos) {
-        const attacks = bosses.update(dt, pos);
-        for (const a of attacks) {
-          ctx.onBossHitLocal?.(a.damage, a.name);
-        }
+
+      const attacks = bosses.update(dt, pos);
+      for (const a of attacks) {
+        ctx.onBossHitLocal?.(a.damage, a.name);
       }
     },
     onPlayerKillEnemy(isBoss) {

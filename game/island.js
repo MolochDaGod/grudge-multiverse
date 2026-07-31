@@ -1,6 +1,6 @@
 /**
- * Bermuda Free Fire island: layered map + water ring + harvest classification.
- * Map binary lives on R2 CDN (GitHub 50 MB warning); local public/maps is dev fallback.
+ * Bermuda Free Fire island — layered bake, water ring, grass harvest nodes outside hub.
+ * Map binary: R2 CDN (GitHub 50 MB free). Local public/maps is offline fallback only.
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -8,30 +8,34 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
 const BASE = import.meta.env.BASE_URL || "/";
 
-/** Production R2 CDN (assets.grudge-studio.com → grudge-assets bucket). */
 export const MAP_CDN_URL = "https://assets.grudge-studio.com/models/maps/bermuda.glb";
-/** Local/dev fallback when CDN unavailable. */
 export const MAP_LOCAL_URL = BASE + "maps/bermuda.glb";
-/** Preferred load URL: CDN first. */
 export const MAP_URL = MAP_CDN_URL;
-
-/** World SI: fit island ~120 m across for human 1.8 m */
 export const ISLAND_TARGET_WIDTH_M = 120;
 
-/**
- * Classify mesh for harvest / terrain.
- * @returns {'terrain'|'tree'|'rock'|'prop'|'water_edge'|null}
- */
+/** Layer names for production world stack */
+export const ISLAND_LAYERS = {
+  terrain: "layer-terrain",
+  props: "layer-props",
+  harvest: "layer-harvest",
+  buildings: "layer-buildings",
+  water: "layer-water",
+  hubs: "layer-hub",
+};
+
 export function classifyMeshName(name) {
   const n = String(name || "");
-  if (/pinecone|Common_trunk|Common_leave|wood_trunk|plant_01/i.test(n) && !/wall|fence|house|power/i.test(n)) {
+  if (/pinecone|Common_trunk|Common_leave|wood_trunk|plant_01|grass|bush/i.test(n) && !/wall|fence|house|power/i.test(n)) {
     return "tree";
   }
   if (/Rock_big|stone_01_A|stone_01_B/i.test(n) && !/ruined|house/i.test(n)) {
     return "rock";
   }
-  if (/^ground|ground\.|Floor|terrain|CementFactory_ground/i.test(n)) {
+  if (/^ground|ground\.|Floor|terrain|CementFactory_ground|grass_ground|Road/i.test(n)) {
     return "terrain";
+  }
+  if (/house|building|wall|fence|tower|factory|barn|roof/i.test(n)) {
+    return "building";
   }
   return "prop";
 }
@@ -43,7 +47,10 @@ async function loadIslandGltf(loader, preferredUrl) {
   let lastErr;
   for (const url of candidates) {
     try {
+      window.setLoaderStatus?.(`Loading map ${url.includes("assets.") ? "CDN" : "local"}…`);
+      window.setLoaderProgress?.(0, 1, "Downloading Bermuda island…");
       const gltf = await loader.loadAsync(url);
+      window.setLoaderProgress?.(1, 1, "Island geometry ready");
       console.info("[island] loaded", url);
       return { gltf, url };
     } catch (e) {
@@ -55,7 +62,7 @@ async function loadIslandGltf(loader, preferredUrl) {
 }
 
 /**
- * Load Bermuda GLB, SI-scale, build water border, return harvest roots.
+ * Load Bermuda GLB, SI-scale, build water border, layered groups, grass harvest ring outside hub.
  */
 export async function loadBermudaIsland(scene, opts = {}) {
   const loader = new GLTFLoader();
@@ -71,7 +78,19 @@ export async function loadBermudaIsland(scene, opts = {}) {
   const root = gltf.scene;
   root.name = "bermuda-island";
 
-  // Compute bounds and SI scale
+  // Layer groups
+  const layers = {
+    terrain: new THREE.Group(),
+    props: new THREE.Group(),
+    harvest: new THREE.Group(),
+    buildings: new THREE.Group(),
+    hubs: new THREE.Group(),
+  };
+  for (const [k, g] of Object.entries(layers)) {
+    g.name = ISLAND_LAYERS[k] || `layer-${k}`;
+  }
+
+  // SI scale
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
   box.getSize(size);
@@ -79,7 +98,6 @@ export async function loadBermudaIsland(scene, opts = {}) {
   const scale = (opts.targetWidth || ISLAND_TARGET_WIDTH_M) / maxXZ;
   root.scale.setScalar(scale);
 
-  // Center on XZ, feet-ish on y=0
   box.setFromObject(root);
   const center = new THREE.Vector3();
   box.getCenter(center);
@@ -89,26 +107,45 @@ export async function loadBermudaIsland(scene, opts = {}) {
 
   box.setFromObject(root);
   const halfW = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.5;
+  const hubRadius = halfW * 0.18; // central hub exclusion for harvest
 
-  // Water ring at borders (island)
-  const waterGroup = new THREE.Group();
-  waterGroup.name = "island-water";
-  const waterSize = halfW * 2.6;
-  const waterGeo = new THREE.CircleGeometry(waterSize, 64);
-  const waterMat = new THREE.MeshStandardMaterial({
-    color: 0x1a5a7a,
-    metalness: 0.2,
-    roughness: 0.35,
-    transparent: true,
-    opacity: 0.92,
+  // Materials / shadows
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    o.frustumCulled = true;
+    if (o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
+        m.side = THREE.FrontSide;
+        m.needsUpdate = true;
+      }
+    }
+    const kind = classifyMeshName(o.name);
+    o.userData.layer = kind;
+    o.userData.worldKind = kind;
   });
-  const water = new THREE.Mesh(waterGeo, waterMat);
+
+  // Water ring
+  const waterGroup = new THREE.Group();
+  waterGroup.name = ISLAND_LAYERS.water;
+  const waterSize = halfW * 2.6;
+  const water = new THREE.Mesh(
+    new THREE.CircleGeometry(waterSize, 64),
+    new THREE.MeshStandardMaterial({
+      color: 0x1a5a7a,
+      metalness: 0.2,
+      roughness: 0.35,
+      transparent: true,
+      opacity: 0.92,
+    }),
+  );
   water.rotation.x = -Math.PI / 2;
   water.position.y = box.min.y - 0.15;
   water.receiveShadow = true;
   waterGroup.add(water);
-
-  // Outer deep water plane
   const deep = new THREE.Mesh(
     new THREE.PlaneGeometry(waterSize * 4, waterSize * 4),
     new THREE.MeshStandardMaterial({ color: 0x0a2030, metalness: 0.15, roughness: 0.5 }),
@@ -119,8 +156,11 @@ export async function loadBermudaIsland(scene, opts = {}) {
 
   scene.add(waterGroup);
   scene.add(root);
+  // Keep layer markers as empty groups for tools (children stay under root for skinning/world)
+  for (const g of Object.values(layers)) scene.add(g);
+  scene.add(waterGroup);
 
-  // Harvestable nodes: group by parent LOD root when possible
+  // Harvestables — prefer grass/tree/rock OUTSIDE hub ring
   const harvestNodes = [];
   const seen = new Set();
   root.traverse((obj) => {
@@ -140,6 +180,11 @@ export async function loadBermudaIsland(scene, opts = {}) {
     const hs = new THREE.Vector3();
     wb.getSize(hs);
 
+    // Outside hub (middle) + not in deep water edge
+    const distXZ = Math.hypot(c.x, c.z);
+    if (distXZ < hubRadius) return; // skip central hub
+    if (distXZ > halfW * 0.92) return; // skip water edge
+
     harvestNodes.push({
       id: `hrv_${kind}_${harvestNodes.length}`,
       kind,
@@ -150,19 +195,61 @@ export async function loadBermudaIsland(scene, opts = {}) {
       hp: kind === "tree" ? 40 : 55,
       maxHp: kind === "tree" ? 40 : 55,
       tool: kind === "tree" ? "axe" : "pick",
+      zone: "grass",
     });
     host.userData.harvestId = harvestNodes[harvestNodes.length - 1].id;
     host.userData.harvestKind = kind;
+    host.userData.selectable = "node";
   });
+
+  // If classification found few trees, seed synthetic grass-ring nodes for gameplay
+  if (harvestNodes.length < 12) {
+    const ringCount = 24;
+    for (let i = 0; i < ringCount; i++) {
+      const a = (i / ringCount) * Math.PI * 2;
+      const r = hubRadius * 1.6 + (i % 3) * halfW * 0.08;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const kind = i % 3 === 0 ? "rock" : "tree";
+      const mesh = new THREE.Mesh(
+        kind === "tree"
+          ? new THREE.ConeGeometry(0.45, 2.2, 6)
+          : new THREE.DodecahedronGeometry(0.55, 0),
+        new THREE.MeshStandardMaterial({
+          color: kind === "tree" ? 0x2d6b3a : 0x6a6a68,
+          roughness: 0.9,
+        }),
+      );
+      mesh.position.set(x, 1.1, z);
+      mesh.castShadow = true;
+      mesh.userData.selectable = "node";
+      layers.harvest.add(mesh);
+      harvestNodes.push({
+        id: `hrv_seed_${kind}_${i}`,
+        kind,
+        materialId: kind === "tree" ? "t0_wood" : "t0_stone",
+        object: mesh,
+        position: mesh.position.clone(),
+        halfExtents: new THREE.Vector3(0.5, 1, 0.5),
+        hp: kind === "tree" ? 40 : 55,
+        maxHp: kind === "tree" ? 40 : 55,
+        tool: kind === "tree" ? "axe" : "pick",
+        zone: "grass",
+        seeded: true,
+      });
+      mesh.userData.harvestId = harvestNodes[harvestNodes.length - 1].id;
+    }
+  }
 
   const maxH = opts.maxHarvest ?? 80;
   const capped = harvestNodes.slice(0, maxH);
 
+  // Spawns on grass ring outside hub
   const spawns = [];
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
-    const r = halfW * 0.22;
-    spawns.push(new THREE.Vector3(Math.cos(a) * r, box.max.y * 0.05 + 1.2, Math.sin(a) * r));
+    const r = hubRadius * 1.35;
+    spawns.push(new THREE.Vector3(Math.cos(a) * r, 2, Math.sin(a) * r));
   }
 
   const bossPads = [
@@ -175,36 +262,51 @@ export async function loadBermudaIsland(scene, opts = {}) {
     { id: "weapon", position: new THREE.Vector3(-4, 1.2, 6), label: "Weaponsmith" },
   ];
 
+  // Invisible large ground plane under island as physics safety net
+  const safety = new THREE.Mesh(
+    new THREE.CircleGeometry(halfW * 1.15, 48),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  safety.rotation.x = -Math.PI / 2;
+  safety.position.y = box.min.y - 0.02;
+  safety.name = "island-safety-ground";
+  root.add(safety);
+
   return {
     root,
     waterGroup,
+    layers,
     harvestNodes: capped,
     spawns,
     bossPads,
     vendorPads,
     halfW,
+    hubRadius,
     bounds: box.clone(),
     scale,
   };
 }
 
-/** Simple ground height: raycast down onto terrain meshes */
+/** Ground height via raycast — terrain meshes preferred. */
 export function makeGroundSampler(islandRoot) {
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
   const meshes = [];
   islandRoot.traverse((o) => {
-    if (o.isMesh && classifyMeshName(o.name) === "terrain") meshes.push(o);
+    if (o.isMesh && (classifyMeshName(o.name) === "terrain" || o.name === "island-safety-ground")) {
+      meshes.push(o);
+    }
   });
-  if (!meshes.length) {
+  if (meshes.length < 2) {
     islandRoot.traverse((o) => {
       if (o.isMesh) meshes.push(o);
     });
   }
   return (x, z) => {
-    origin.set(x, 200, z);
+    origin.set(x, 400, z);
     ray.set(origin, down);
+    ray.far = 800;
     const hits = ray.intersectObjects(meshes, true);
     if (hits[0]) return hits[0].point.y;
     return 0;

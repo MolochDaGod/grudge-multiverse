@@ -19,6 +19,7 @@ import {
   enhanceMainPanel,
 } from "./game/warlordsBootstrap.js";
 import { loadBag } from "./game/inventory.js";
+import { mountWarlordsHud } from "./game/warlordsHud.js";
 
 const BASE = import.meta.env.BASE_URL;
 /** @type {Awaited<ReturnType<typeof attachWarlordsWorld>> | null} */
@@ -1417,20 +1418,31 @@ async function init() {
     camera.position.copy(spawnPos).add(new THREE.Vector3(4, 3, 6));
     controls.target.copy(spawnPos);
 
-    // Local player (mixamo controller capsule; grudge6 visual layered in warlords)
+    // Local player: SI capsule (scale 0.01 → ~1.8 m) + grudge6 visual in warlords
+    // Mixamo mesh hidden after attach; do NOT use 0.001 FPS scale (tiny capsule / void fall).
     localPlayer = new LocalPlayer({ scene, camera, controls });
     await localPlayer.init({
         playerModelConfig: {
             ...PLAYER_MODEL,
-            // SI-friendly scale for warlords hybrid (visual replaced by grudge6)
             scale: USE_WARLORDS_ISLAND ? 0.01 : PLAYER_MODEL.scale,
+            // Prefer idle; gun anims unused in warlords
+            noGun: USE_WARLORDS_ISLAND ? true : PLAYER_MODEL.noGun,
         },
         initPos: spawnPos,
-        minCamDistance: 2,
-        maxCamDistance: USE_WARLORDS_ISLAND ? 18 : 220,
+        minCamDistance: USE_WARLORDS_ISLAND ? 2.5 : 2,
+        maxCamDistance: USE_WARLORDS_ISLAND ? 14 : 220,
         enableOverShoulderView: true,
         staticCollider: sceneModel,
     });
+    if (USE_WARLORDS_ISLAND) {
+        // Hide FPS mixamo immediately; grudge6 attaches later
+        try {
+            localPlayer.getPlayerModel?.()?.traverse((c) => { c.visible = false; });
+            if (localPlayer._player?.playerModel) localPlayer._player.playerModel.visible = false;
+        } catch { /* ignore */ }
+        mountWarlordsHud();
+        window.setLoaderStatus?.("Controller ready · loading world…");
+    }
 
     // è®¾ç½®æœ¬åœ°çŽ©å®¶æè´¨
     localPlayer.getPlayerModel()?.traverse((child) => {
@@ -1580,13 +1592,15 @@ async function init() {
     const nameEl = document.getElementById("local-player-name");
     if (nameEl) nameEl.textContent = myName;
 
-    // Warlords: Bermuda island + grudge6 + harvest + bosses + skills
+    // Warlords: Bermuda island + grudge6 + harvest + bosses + skills + soft-lock
     if (USE_WARLORDS_ISLAND) {
         try {
+            window.setLoaderProgress?.(0.4, 1, "Deploying island layers…");
             warlords = await attachWarlordsWorld({
                 scene,
                 camera,
                 renderer,
+                controls,
                 localPlayer,
                 db,
                 roomId,
@@ -1607,19 +1621,19 @@ async function init() {
                     }
                 },
                 onBossHitLocal: (dmg, name) => {
-                    if (isDead || PLAYER_MODEL.noGun) return;
-                    // Warlords classes take boss damage
+                    if (isDead) return;
                     myHp = Math.max(0, myHp - dmg);
                     updateMyHPUI();
                     addRoomNotify(name, `hits you −${dmg}`);
                     if (myHp <= 0) triggerDeath();
                 },
             });
-            // class state for multiplayer
             window.__mvClassId = localStorage.getItem("mv_class_id") || "warrior";
+            window.setLoaderProgress?.(1, 1, "World ready");
         } catch (e) {
             console.error("[warlords] attach failed", e);
             addRoomNotify("Warlords world", "failed to load — see console");
+            window.setLoaderStatus?.("World load failed — check console");
         }
     }
 
@@ -1629,9 +1643,11 @@ async function init() {
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // åŠ¨æ€å¹³å°
-    createDynamicPlatform({ position: new THREE.Vector3(22, 2.76, 9.7), motion: { axis: "y", distance: 4, speed: 0.25 } });
-    createDynamicPlatform({ position: dynamicPlatformXPath[0], motion: { axis: "x", distance: 3, speed: 0.05 } });
+    // Dynamic platforms only on legacy burnout map
+    if (!USE_WARLORDS_ISLAND) {
+        createDynamicPlatform({ position: new THREE.Vector3(22, 2.76, 9.7), motion: { axis: "y", distance: 4, speed: 0.25 } });
+        createDynamicPlatform({ position: dynamicPlatformXPath[0], motion: { axis: "x", distance: 3, speed: 0.05 } });
+    }
 
     window.hideLoader?.();
 }
