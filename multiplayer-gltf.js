@@ -286,7 +286,7 @@ function waitForName() {
 
 // æ‰“å¼€èŠå¤©è¾“å…¥æ¡†ï¼Œæš‚åœæ¸¸æˆè¾“å…¥
 function openChat() {
-    if (isChatting || isDead || !localPlayer) return;
+    if (isChatting || isDead || !localPlayer || mainPanelOpen) return;
     isChatting = true;
     localPlayer.offAllEvent();      // å…ˆè§£ç»‘ï¼Œå†é‡Šæ”¾é”ï¼Œå‡å°‘æ¼äº‹ä»¶çª—å£
     document.exitPointerLock?.();
@@ -581,6 +581,9 @@ class RemotePlayer {
             this.name = state.name;
             if (this.nameLabelEl) this.nameLabelEl.textContent = state.name;
         }
+        if (state.hp !== undefined) this._lastHp = state.hp;
+        updateNameLabelRelation(this.id);
+        if (mainPanelOpen) renderPlayersPanel();
     }
 
     // æ·¡åˆ‡åˆ°æŒ‡å®šåŠ¨ç”» clipï¼ˆ0.2s è¿‡æ¸¡ï¼‰
@@ -746,8 +749,227 @@ function sendState() {
     });
 }
 
-// å‘æŒ‡å®šçŽ©å®¶çš„å‘½ä¸­é˜Ÿåˆ—å†™å…¥ä¼¤å®³è®°å½•ï¼Œç”±å¯¹æ–¹å®¢æˆ·ç«¯æ¶ˆè´¹
+// ---------- Players panel: friend / enemy relations ----------
+/** @type {Map<string, 'friend'|'enemy'>} */
+const playerRelations = new Map(); // targetId → relation (default enemy)
+const REL_STORAGE_KEY = "mv_player_relations_v1";
+
+function loadRelations() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(REL_STORAGE_KEY) || "{}");
+        // raw: { [nameOrId]: 'friend'|'enemy' }
+        for (const [k, v] of Object.entries(raw)) {
+            if (v === "friend" || v === "enemy") playerRelations.set(k, v);
+        }
+    } catch { /* ignore */ }
+}
+function saveRelations() {
+    const obj = {};
+    for (const [k, v] of playerRelations) obj[k] = v;
+    try { localStorage.setItem(REL_STORAGE_KEY, JSON.stringify(obj)); } catch { /* ignore */ }
+}
+function getRelation(targetId) {
+    if (!targetId || targetId === playerId) return "self";
+    const byId = playerRelations.get(targetId);
+    if (byId) return byId;
+    const name = remotePlayers.get(targetId)?.name;
+    if (name) {
+        const byName = playerRelations.get(`name:${name}`);
+        if (byName) return byName;
+    }
+    return "enemy"; // default: PvP
+}
+function setRelation(targetId, rel) {
+    if (!targetId || targetId === playerId) return;
+    if (rel !== "friend" && rel !== "enemy") return;
+    playerRelations.set(targetId, rel);
+    const name = remotePlayers.get(targetId)?.name;
+    if (name) playerRelations.set(`name:${name}`, rel);
+    saveRelations();
+    updateNameLabelRelation(targetId);
+    renderPlayersPanel();
+}
+
+// Enemy areas (map zones). Inside zone → treat others as enemy for damage even if friend? 
+// Soft rule: badge only for friends; hard PvP still uses friend/enemy labels.
+// Zone membership can force "enemy" damage while inside (PvP zones).
+const ENEMY_AREAS = [
+    {
+        id: "junction-core",
+        name: "Junction Core",
+        // Axis-aligned box around map center (SI-ish world units of this map)
+        min: new THREE.Vector3(-8, 0, 6),
+        max: new THREE.Vector3(12, 12, 22),
+        forcePvp: true,
+    },
+    {
+        id: "west-ridge",
+        name: "West Ridge",
+        min: new THREE.Vector3(-28, 8, -4),
+        max: new THREE.Vector3(-14, 18, 12),
+        forcePvp: true,
+    },
+];
+let inEnemyArea = false;
+let mainPanelOpen = false;
+
+function isInEnemyArea(pos) {
+    if (!pos) return null;
+    for (const a of ENEMY_AREAS) {
+        if (
+            pos.x >= a.min.x && pos.x <= a.max.x &&
+            pos.y >= a.min.y && pos.y <= a.max.y &&
+            pos.z >= a.min.z && pos.z <= a.max.z
+        ) return a;
+    }
+    return null;
+}
+
+function localCapsulePos() {
+    return localPlayer?._player?.getPlayerCapsule?.()?.position ?? null;
+}
+
+function canDamageTarget(targetId) {
+    if (!targetId || targetId === playerId) return false;
+    const area = isInEnemyArea(localCapsulePos());
+    // Force PvP inside enemy areas
+    if (area?.forcePvp) return true;
+    return getRelation(targetId) === "enemy";
+}
+
+function canTakeDamageFrom(attackerId) {
+    if (!attackerId || attackerId === playerId) return false;
+    const capsule = localPlayer?._player?.getPlayerCapsule?.();
+    const area = capsule ? isInEnemyArea(capsule.position) : null;
+    if (area?.forcePvp) return true;
+    return getRelation(attackerId) === "enemy";
+}
+
+function updateNameLabelRelation(targetId) {
+    const rp = remotePlayers.get(targetId);
+    if (!rp?.nameLabelEl) return;
+    const rel = getRelation(targetId);
+    rp.nameLabelEl.classList.remove("rel-friend", "rel-enemy");
+    if (rel === "friend") rp.nameLabelEl.classList.add("rel-friend");
+    else if (rel === "enemy") rp.nameLabelEl.classList.add("rel-enemy");
+}
+
+function renderPlayersPanel() {
+    const list = document.getElementById("players-list");
+    if (!list) return;
+    const rows = [];
+
+    // Local player
+    rows.push({
+        id: playerId,
+        name: myName || "You",
+        local: true,
+        kills: localKills,
+        deaths: localDeaths,
+        hp: myHp,
+        rel: "self",
+    });
+    for (const [id, rp] of remotePlayers) {
+        rows.push({
+            id,
+            name: rp.name || id,
+            local: false,
+            kills: rp.kills ?? 0,
+            deaths: rp.deaths ?? 0,
+            hp: rp._lastHp ?? "—",
+            rel: getRelation(id),
+        });
+    }
+
+    list.innerHTML = rows.map((r) => {
+        if (r.local) {
+            return `<div class="pl-row is-local">
+                <div>
+                    <div class="pl-name">${escapeHtml(r.name)}<span class="tag">you</span></div>
+                    <div class="pl-meta">K ${r.kills} · D ${r.deaths} · HP ${r.hp}</div>
+                </div>
+                <div></div>
+                <div class="pl-rel"><button type="button" disabled>Self</button></div>
+            </div>`;
+        }
+        const fOn = r.rel === "friend" ? "on" : "";
+        const eOn = r.rel === "enemy" ? "on" : "";
+        return `<div class="pl-row" data-pid="${escapeHtml(r.id)}">
+            <div>
+                <div class="pl-name">${escapeHtml(r.name)}</div>
+                <div class="pl-meta">K ${r.kills} · D ${r.deaths}</div>
+            </div>
+            <div></div>
+            <div class="pl-rel">
+                <button type="button" class="friend ${fOn}" data-rel="friend" data-pid="${escapeHtml(r.id)}">Friend</button>
+                <button type="button" class="enemy ${eOn}" data-rel="enemy" data-pid="${escapeHtml(r.id)}">Enemy</button>
+            </div>
+        </div>`;
+    }).join("");
+
+    list.querySelectorAll("button[data-rel]").forEach((btn) => {
+        btn.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            const id = btn.getAttribute("data-pid");
+            const rel = btn.getAttribute("data-rel");
+            setRelation(id, rel);
+        });
+    });
+
+    const areasList = document.getElementById("enemy-areas-list");
+    if (areasList) {
+        areasList.innerHTML = ENEMY_AREAS.map((a) =>
+            `<li><strong style="color:#ff8a8a">${escapeHtml(a.name)}</strong> — force PvP while inside${inEnemyArea && isInEnemyArea(localPlayer?._player?.getPlayerCapsule?.()?.position)?.id === a.id ? ' <em style="color:#f4c542">(you are here)</em>' : ""}</li>`
+        ).join("");
+    }
+}
+
+function escapeHtml(s) {
+    return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function openMainPanel() {
+    const el = document.getElementById("main-panel");
+    if (!el) return;
+    mainPanelOpen = true;
+    el.classList.add("open");
+    el.setAttribute("aria-hidden", "false");
+    renderPlayersPanel();
+    document.exitPointerLock?.();
+    localPlayer?.offAllEvent?.();
+}
+function closeMainPanel() {
+    const el = document.getElementById("main-panel");
+    if (!el) return;
+    mainPanelOpen = false;
+    el.classList.remove("open");
+    el.setAttribute("aria-hidden", "true");
+    if (!isDead && !isChatting) localPlayer?.onAllEvent?.();
+}
+function toggleMainPanel() {
+    if (mainPanelOpen) closeMainPanel();
+    else openMainPanel();
+}
+
+function updateEnemyAreaBadge() {
+    const badge = document.getElementById("enemy-area-badge");
+    if (!badge) return;
+    const capsule = localPlayer?._player?.getPlayerCapsule?.();
+    const area = capsule ? isInEnemyArea(capsule.position) : null;
+    const was = inEnemyArea;
+    inEnemyArea = !!area;
+    badge.style.display = area ? "block" : "none";
+    badge.textContent = area ? `ENEMY AREA · ${area.name}` : "ENEMY AREA";
+    if (inEnemyArea && !was) addRoomNotify(area.name, "entered PvP zone");
+}
+
+// Write hit only if target is enemy (or force PvP zone)
 function onHitPlayer(targetId, damage) {
+    if (!canDamageTarget(targetId)) return; // friend — no damage
     _lastHitterOf.set(targetId, playerId);
     set(ref(db, `rooms/${roomId}/hits/${targetId}/${Date.now()}`), { damage, by: playerId });
 }
@@ -823,18 +1045,20 @@ function initFirebaseSync() {
         remove(snap.ref);
     });
 
-    // ç›‘å¬å‘½ä¸­æœ¬çŽ©å®¶çš„äº‹ä»¶
+    // Hits against local player
     const myHitsRef = ref(db, `rooms/${roomId}/hits/${playerId}`);
     onChildAdded(myHitsRef, snap => {
-        const { damage, by } = snap.val();
+        const { damage, by } = snap.val() || {};
+        remove(snap.ref);
+        // Friend label: do not take damage from that player (unless enemy area)
+        if (by && !canTakeDamageFrom(by)) return;
         if (by) lastAttackerOnMe = by;
-        // noGun è§’è‰²å…ç–«æžªå‡»ä¼¤å®³
+        // noGun characters ignore gun damage
         if (!isDead && !PLAYER_MODEL.noGun) {
-            myHp = Math.max(0, myHp - damage);
+            myHp = Math.max(0, myHp - (damage || 0));
             updateMyHPUI();
             if (myHp <= 0) triggerDeath();
         }
-        remove(snap.ref); // è¯»å®Œå³åˆ 
     });
 }
 
@@ -865,8 +1089,29 @@ function addKillFeedEntry(killerName, victimName) {
     setTimeout(() => entry.parentNode && entry.parentNode.removeChild(entry), 10000);
 }
 
-// åˆå§‹åŒ– UIï¼ˆmp-panel å·²ç§»é™¤ï¼Œä¿ç•™ç©ºå‡½æ•°å…¼å®¹è°ƒç”¨ç‚¹ï¼‰
-function initUI() { }
+function initUI() {
+    loadRelations();
+    const closeBtn = document.getElementById("main-panel-close");
+    const panel = document.getElementById("main-panel");
+    closeBtn?.addEventListener("click", () => closeMainPanel());
+    panel?.addEventListener("click", (e) => {
+        if (e.target === panel) closeMainPanel();
+    });
+    document.querySelectorAll("#main-panel-tabs button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll("#main-panel-tabs button").forEach((b) => b.classList.remove("on"));
+            btn.classList.add("on");
+            const tab = btn.getAttribute("data-tab");
+            const pl = document.getElementById("players-list");
+            const ar = document.getElementById("areas-panel");
+            if (pl) pl.style.display = tab === "players" ? "block" : "none";
+            if (ar) ar.style.display = tab === "areas" ? "block" : "none";
+            if (tab === "players") renderPlayersPanel();
+            if (tab === "areas") renderPlayersPanel();
+        });
+    });
+    renderPlayersPanel();
+}
 
 // æ›´æ–°åœ¨çº¿äººæ•°æ˜¾ç¤º
 function updateCountUI() {
@@ -1076,12 +1321,8 @@ function animate() {
         rp.updateNameLabel(camera, renderer);
     }
 
-    // if (localPlayer) {
-    //     const p = localPlayer.getPosition();
-    //     if (p) console.log(`x:${p.x.toFixed(3)} y:${p.y.toFixed(3)} z:${p.z.toFixed(3)}`);
-    // }
-
-    updateDynamicPlatforms(); // æ›´æ–°æ‰€æœ‰åŠ¨æ€å¹³å°ä½ç½®åŠäº‘æœµæ¸²æŸ“
+    updateDynamicPlatforms();
+    updateEnemyAreaBadge();
 
     renderer.render(scene, camera);
 }
@@ -1132,7 +1373,31 @@ async function init() {
     sceneModel.scale.set(10, 10, 10);
     scene.add(sceneModel);
 
-    // æˆ¿é—´äººæ•°æ£€æŸ¥ï¼Œå¹¶æŒ‰å½“å‰äººæ•°åˆ†é…å‡ºç”Ÿç‚¹
+    // Visualize enemy areas (translucent red boxes, non-colliding)
+    for (const a of ENEMY_AREAS) {
+        const size = new THREE.Vector3().subVectors(a.max, a.min);
+        const center = new THREE.Vector3().addVectors(a.min, a.max).multiplyScalar(0.5);
+        const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0xff3333,
+            transparent: true,
+            opacity: 0.12,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(center);
+        mesh.name = `enemy-area-${a.id}`;
+        mesh.userData.enemyArea = true;
+        scene.add(mesh);
+        const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geo),
+            new THREE.LineBasicMaterial({ color: 0xff6666, transparent: true, opacity: 0.55 }),
+        );
+        edges.position.copy(center);
+        scene.add(edges);
+    }
+
     const snap = await get(ref(db, `rooms/${roomId}/players`));
     const existingCount = snap.exists() ? Object.keys(snap.val()).length : 0;
     if (existingCount >= MAX_PLAYERS) { showRoomFull(); return; }
@@ -1257,14 +1522,27 @@ async function init() {
         }
     });
 
-    // Tab é”®æ˜¾ç¤º/éšè—è®¡åˆ†æ¿ï¼ˆèŠå¤©æ—¶è·³è¿‡ï¼‰
+    // Tab = scoreboard; K = Players main panel
     const scoreboardEl = document.getElementById("scoreboard");
     document.addEventListener("keydown", e => {
         if (isChatting) return;
-        if (e.key === "Tab") { e.preventDefault(); updateScoreboard(); scoreboardEl.style.display = "flex"; }
+        if (e.key === "Tab") {
+            e.preventDefault();
+            if (mainPanelOpen) return;
+            updateScoreboard();
+            if (scoreboardEl) scoreboardEl.style.display = "flex";
+        }
+        if (e.code === "KeyK" && !e.repeat) {
+            e.preventDefault();
+            toggleMainPanel();
+        }
+        if (e.key === "Escape" && mainPanelOpen) {
+            e.preventDefault();
+            closeMainPanel();
+        }
     });
     document.addEventListener("keyup", e => {
-        if (e.key === "Tab") scoreboardEl.style.display = "none";
+        if (e.key === "Tab" && scoreboardEl) scoreboardEl.style.display = "none";
     });
 
     // Z é”®ï¼šAntMan èšäººç¼©æ”¾æŠ€èƒ½ï¼ˆä»… AntMan è§’è‰²å¯ç”¨ï¼‰

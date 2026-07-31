@@ -12,7 +12,7 @@
                 position: absolute; background: transparent;
             }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* 操作提示 */
             .hud {
                 position: fixed; left: 12px; top: 12px; z-index: 9999;
                 background: rgba(0,0,0,0.45); color: #fff;
@@ -31,7 +31,7 @@
             .hint-text { color: #cde; font-size: 12px; }
             .hud-sep { width: 1px; height: 12px; background: rgba(255,255,255,0.2); margin: 0 6px; }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 击杀动态（右上角） ===== */
             #kill-feed {
                 position: fixed; top: 12px; right: 12px; z-index: 9999;
                 display: flex; flex-direction: column; gap: 4px;
@@ -48,7 +48,7 @@
             .kf-killer { color: #fff; }
             .kf-victim { color: #fff; }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 头顶悬浮名字标签 ===== */
             .player-name-label {
                 position: fixed; display: none; pointer-events: none;
                 transform: translate(-50%, -100%); z-index: 9996;
@@ -58,7 +58,7 @@
                 letter-spacing: 0.04em;
             }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 头顶聊天气泡 ===== */
             .player-chat-bubble {
                 position: fixed; display: none; pointer-events: none;
                 transform: translate(-50%, -100%); z-index: 9995;
@@ -74,13 +74,13 @@
                 word-break: break-word;
             }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 左下角：角色头像 + HP ===== */
             #player-hud {
                 position: fixed; bottom: 20px; left: 20px; z-index: 9999;
                 display: flex; align-items: center; gap: 10px;
-                 param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
-                 param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
-                 param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+                /* background: rgba(0,0,0,0.65); */
+                /* border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; */
+                /* padding: 10px 14px; backdrop-filter: blur(6px); */
             }
             .avatar-box {
                 width: 50px; height: 50px; flex-shrink: 0;
@@ -89,7 +89,7 @@
                 display: flex; align-items: center; justify-content: center;
                 background: rgba(0,0,0,0.55);
             }
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* 从底部向上填充的血量指示 */
             #avatar-hp-fill {
                 position: absolute; bottom: 0; left: 0; right: 0;
                 height: 100%;
@@ -103,7 +103,7 @@
                 text-shadow: 0 1px 6px rgba(0,0,0,1), 0 0 12px rgba(0,0,0,0.9);
             }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 准星 ===== */
             #crosshair {
                 position: fixed; top: 50%; left: 50%;
                 transform: translate(-50%,-50%);
@@ -112,7 +112,7 @@
                 box-shadow: 0 0 3px rgba(0,0,0,0.8); pointer-events: none;
             }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 右下角面板：源码（上） + 弹药（下） ===== */
             #br-panel {
                 position: fixed; bottom: 16px; right: 16px; z-index: 9999;
                 display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -151,10 +151,10 @@
             #ammo-total-val { color: #fff; font-family: monospace; font-size: 13px;
                 text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 武器槽（保留但不展示，保持 HUD.js 兼容） ===== */
             #weapon-hud { display: none; }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 房间已满提示 ===== */
             #room-full-overlay {
                 position: fixed; top: 14px; right: 14px; z-index: 99999;
                 background: rgba(15,18,28,0.92); backdrop-filter: blur(6px);
@@ -166,7 +166,7 @@
             #room-full-overlay .rf-sub   { color: #aaa; font-size: 12px; }
             #room-full-overlay .rf-hint  { color: #6ecbff; font-size: 11px; }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 名字输入弹窗 ===== */
             #name-overlay {
                 position: fixed; inset: 0; z-index: 99999;
                 background: rgba(0,0,0,0.82); backdrop-filter: blur(8px);
@@ -178,7 +178,7 @@
                 padding: 28px 28px; display: flex; flex-direction: row; gap: 20px;
                 box-shadow: 0 8px 40px rgba(0,0,0,0.6); align-items: flex-start;
             }
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ---- 角色选择区 ---- */
             #char-picker {
                 display: grid; grid-template-columns: repeat(3, 1fr);
                 gap: 8px; align-content: start;
@@ -218,7 +218,7 @@
                 border-top: 1px solid rgba(255,255,255,0.08);
                 letter-spacing: 0.03em; opacity: 0.85;
             }
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ---- 名字表单区 ---- */
             #name-form {
                 display: flex; flex-direction: column; gap: 14px;
                 min-width: 210px; flex: 1;
@@ -247,7 +247,7 @@
             }
             #name-confirm:hover { opacity: 0.88; }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 计分板（Tab 键显示） ===== */
             #scoreboard {
                 position: fixed; inset: 0; z-index: 99997;
                 display: none; align-items: center; justify-content: center;
@@ -286,7 +286,7 @@
             #scoreboard-panel tbody tr.sb-local td:nth-child(2) { color: #6ecbff; font-weight: bold; }
             #scoreboard-panel tbody td:first-child { color: #666; width: 36px; }
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 死亡遮罩 ===== */
             #death-overlay {
                 position: fixed; inset: 0; z-index: 99998;
                 background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(4px);
@@ -309,7 +309,7 @@
             #btn-respawn:hover { opacity: 0.75; }
 
 
-             param($m) if ($m.Value.Length -gt 80) { '/* style */' } else { $m.Value } 
+            /* ===== 聊天系统 ===== */
             #chat-container {
                 position: fixed; bottom: 110px; left: 20px; z-index: 9997;
                 width: 320px; display: flex; flex-direction: column; gap: 4px;
@@ -339,6 +339,91 @@
             }
 
             @media (max-width: 480px) { .hud { display: none; } }
+        
+            /* ===== Main Panel — Players (K) ===== */
+            #main-panel {
+                position: fixed; inset: 0; z-index: 99996;
+                display: none; align-items: center; justify-content: center;
+                background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+            }
+            #main-panel.open { display: flex; }
+            #main-panel-card {
+                width: min(520px, 92vw); max-height: min(70vh, 560px);
+                background: rgba(12,14,22,0.96);
+                border: 1px solid rgba(200,168,75,0.35); border-radius: 12px;
+                box-shadow: 0 16px 48px rgba(0,0,0,0.55);
+                display: flex; flex-direction: column; overflow: hidden;
+                font-family: system-ui, sans-serif; color: #e8e4d8;
+            }
+            #main-panel-card .mp-head {
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
+                background: rgba(200,168,75,0.08);
+            }
+            #main-panel-card .mp-head h2 {
+                margin: 0; font-size: 14px; letter-spacing: 0.14em;
+                text-transform: uppercase; color: #c8a84b;
+            }
+            #main-panel-card .mp-head .mp-sub { font-size: 11px; color: #888; margin-top: 2px; }
+            #main-panel-close {
+                border: 1px solid rgba(255,255,255,0.15); background: transparent;
+                color: #ccc; border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px;
+            }
+            #main-panel-tabs {
+                display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08);
+            }
+            #main-panel-tabs button {
+                flex: 1; padding: 10px; border: none; background: transparent;
+                color: #888; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+                text-transform: uppercase; cursor: pointer;
+            }
+            #main-panel-tabs button.on {
+                color: #c8a84b; box-shadow: inset 0 -2px 0 #c8a84b;
+                background: rgba(200,168,75,0.06);
+            }
+            #players-list {
+                flex: 1; overflow-y: auto; padding: 8px 0; min-height: 200px;
+            }
+            .pl-row {
+                display: grid; grid-template-columns: 1fr auto auto;
+                gap: 8px; align-items: center;
+                padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);
+            }
+            .pl-row:hover { background: rgba(255,255,255,0.03); }
+            .pl-row.is-local { background: rgba(100,180,255,0.06); }
+            .pl-name { font-size: 13px; font-weight: 600; }
+            .pl-name .tag { font-size: 10px; color: #666; font-weight: 500; margin-left: 6px; }
+            .pl-meta { font-size: 11px; color: #777; }
+            .pl-rel {
+                display: flex; gap: 4px;
+            }
+            .pl-rel button {
+                border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+                color: #aaa; border-radius: 999px; padding: 4px 10px; font-size: 11px;
+                cursor: pointer; font-weight: 600;
+            }
+            .pl-rel button.friend.on { border-color: rgba(80,200,120,0.6); color: #6eec9a; background: rgba(80,200,120,0.12); }
+            .pl-rel button.enemy.on { border-color: rgba(230,80,80,0.6); color: #ff8a8a; background: rgba(230,80,80,0.12); }
+            .pl-rel button:disabled { opacity: 0.4; cursor: default; }
+            #main-panel-foot {
+                padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.08);
+                font-size: 11px; color: #777; line-height: 1.4;
+            }
+            #main-panel-foot kbd {
+                display: inline-block; padding: 1px 5px; font-size: 10px;
+                background: #222; border: 1px solid #444; border-radius: 3px; color: #ccc;
+            }
+            .player-name-label.rel-friend { color: #6eec9a !important; }
+            .player-name-label.rel-enemy { color: #ff8a8a !important; }
+            #enemy-area-badge {
+                position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+                z-index: 9990; display: none; padding: 6px 14px; border-radius: 999px;
+                background: rgba(180,30,30,0.75); color: #fff; font-family: system-ui;
+                font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+                border: 1px solid rgba(255,100,100,0.5);
+                text-shadow: 0 1px 4px #000;
+            }
+
         </style>
         <script src="/loader.js"></script>
     </head>
@@ -461,6 +546,36 @@
             </div>
         </div>
 
+        
+        <!-- Main Panel: Players (friend / enemy) — open with K -->
+        <div id="main-panel" aria-hidden="true">
+            <div id="main-panel-card" role="dialog" aria-label="Players panel">
+                <div class="mp-head">
+                    <div>
+                        <h2>Players</h2>
+                        <div class="mp-sub">Room roster · friend = no damage · enemy = PvP</div>
+                    </div>
+                    <button type="button" id="main-panel-close" aria-label="Close">Close</button>
+                </div>
+                <div id="main-panel-tabs">
+                    <button type="button" class="on" data-tab="players">Players</button>
+                    <button type="button" data-tab="areas">Enemy Areas</button>
+                </div>
+                <div id="players-list"></div>
+                <div id="areas-panel" style="display:none;padding:12px 16px;font-size:12px;color:#aaa;line-height:1.5;overflow:auto;">
+                    <p><strong style="color:#ff8a8a">Enemy Areas</strong> are map zones where PvP is forced.</p>
+                    <ul id="enemy-areas-list" style="margin:8px 0 0 16px;padding:0;"></ul>
+                    <p style="margin-top:10px;color:#666;">Inside a red zone, all other players count as enemies even if marked friend (optional: soft / hard mode in later build).</p>
+                </div>
+                <div id="main-panel-foot">
+                    <kbd>K</kbd> toggle panel · <kbd>Tab</kbd> scoreboard ·
+                    <span style="color:#6eec9a">Friend</span> = no damage either way ·
+                    <span style="color:#ff8a8a">Enemy</span> = default PvP
+                </div>
+            </div>
+        </div>
+        <div id="enemy-area-badge">ENEMY AREA</div>
+
         <!-- 死亡遮罩 -->
         <div id="death-overlay">
             <button id="btn-respawn">复活</button>
@@ -493,7 +608,7 @@
         <!-- 右下角面板：源码（上） + 弹药（下） -->
         <div id="br-panel">
             <a class="source" href="https://github.com/hh-hang/three-player-controller/blob/master/example/multiplayer-gltf.js" target="_blank" rel="noopener noreferrer">
-                <img src="./img/source.svg" alt="" />
+                <img src="/img/source.svg" alt="" />
             </a>
             <div id="ammo-hud">
                 <div class="weapon-img-box">
