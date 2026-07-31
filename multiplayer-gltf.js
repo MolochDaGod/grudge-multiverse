@@ -13,8 +13,16 @@ import { DecalSystem } from "./shooting/weapon/DecalSystem.js";
 
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, onValue, onDisconnect, remove, get, onChildAdded } from "firebase/database";
+import {
+  setupClassSelectUI,
+  attachWarlordsWorld,
+  enhanceMainPanel,
+} from "./game/warlordsBootstrap.js";
+import { loadBag } from "./game/inventory.js";
 
 const BASE = import.meta.env.BASE_URL;
+/** @type {Awaited<ReturnType<typeof attachWarlordsWorld>> | null} */
+let warlords = null;
 
 // ================================================================
 // Firebase é…ç½®
@@ -41,8 +49,10 @@ const myRef = ref(db, `rooms/${roomId}/players/${playerId}`);
 onDisconnect(myRef).remove();
 window.addEventListener("beforeunload", () => remove(myRef));
 
-// ==================== åœºæ™¯é…ç½® ====================
-const SCENE_URL = BASE + "glb/burnout_revenge_-_central_route_crash_junction.glb";
+// ==================== Scene (Bermuda island via warlordsBootstrap) ====================
+// Legacy burnout path kept as optional fallback only
+const SCENE_URL = BASE + "maps/bermuda.glb";
+const USE_WARLORDS_ISLAND = true;
 // å‡ºç”Ÿç‚¹åˆ—è¡¨ï¼ŒçŽ©å®¶æŒ‰å…¥æˆ¿é¡ºåºä¾æ¬¡åˆ†é…
 const SPAWN_POINTS = [
     new THREE.Vector3(21.500, 3.755, 15.000),
@@ -234,53 +244,34 @@ function randomName() {
 // æ˜¾ç¤ºåå­—è¾“å…¥å¼¹çª—ï¼Œä»Ž localStorage é¢„å¡«ä¸Šæ¬¡çš„åå­—å’Œè§’è‰²ï¼Œä½†å§‹ç»ˆæ˜¾ç¤ºè®©ç”¨æˆ·ç¡®è®¤
 function waitForName() {
     const savedName = localStorage.getItem("mp_name");
-    const savedCharIdx = parseInt(localStorage.getItem("mp_char_idx") ?? "2");
-    selectedModelUrl = CHARACTER_LIST[savedCharIdx]?.url ?? CHARACTER_LIST[2].url;
+    // Grudge6 class select (warrior / ranger / mage / worge)
+    const classUi = setupClassSelectUI();
+    // Keep a mixamo fallback model for controller capsule until grudge6 visual attaches
+    selectedModelUrl = CHARACTER_LIST[2]?.url ?? CHARACTER_LIST[0].url;
 
-    // ç”¨ BASE è®¾ç½®è§’è‰²å¤´åƒè·¯å¾„
-    const charImgs = [
-        BASE + "img/multiplayer/char_josh.png",
-        BASE + "img/multiplayer/char_tommy.png",
-        BASE + "img/multiplayer/char_swat.png",
-        BASE + "img/multiplayer/char_manny.png",
-        BASE + "img/multiplayer/char_mob.png",
-        BASE + "img/multiplayer/char_antMan.png",
-    ];
-    document.querySelectorAll(".char-avatar").forEach((el, i) => {
-        if (charImgs[i]) el.style.backgroundImage = `url(${charImgs[i]})`;
-    });
-
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
         const input = document.getElementById("name-input");
         const btn = document.getElementById("name-confirm");
         const overlay = document.getElementById("name-overlay");
-        const cards = document.querySelectorAll(".char-card");
 
-        input.value = savedName || randomName();
-        input.select();
-
-        // æ¢å¤ä¸Šæ¬¡é€‰ä¸­çš„è§’è‰²
-        cards.forEach(c => c.classList.remove("selected"));
-        (cards[savedCharIdx] ?? cards[2]).classList.add("selected");
-
-        // è§’è‰²åˆ‡æ¢
-        cards.forEach(card => card.addEventListener("click", () => {
-            cards.forEach(c => c.classList.remove("selected"));
-            card.classList.add("selected");
-            selectedModelUrl = CHARACTER_LIST[parseInt(card.dataset.idx)]?.url ?? CHARACTER_LIST[2].url;
-        }));
+        if (input) {
+            input.value = savedName || randomName();
+            input.select();
+        }
 
         const confirm = () => {
-            myName = (input.value.trim() || randomName()).slice(0, 16);
-            const selCard = document.querySelector(".char-card.selected");
-            const charIdx = selCard ? parseInt(selCard.dataset.idx) : 2;
+            myName = (input?.value.trim() || randomName()).slice(0, 16);
+            const classId = classUi.getClassId?.() || localStorage.getItem("mv_class_id") || "warrior";
             localStorage.setItem("mp_name", myName);
-            localStorage.setItem("mp_char_idx", charIdx);
-            overlay.style.display = "none";
+            localStorage.setItem("mv_class_id", classId);
+            localStorage.setItem("mp_char_idx", "2");
+            if (overlay) overlay.style.display = "none";
             resolve();
         };
-        btn.addEventListener("click", confirm);
-        input.addEventListener("keydown", e => { if (e.key === "Enter") confirm(); });
+        btn?.addEventListener("click", confirm);
+        input?.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") confirm();
+        });
     });
 }
 
@@ -333,7 +324,8 @@ function addChatMessage(name, text) {
 // è§¦å‘æœ¬åœ°çŽ©å®¶æ­»äº¡ï¼šåœæ­¢è¾“å…¥ã€æ’­æ­»äº¡åŠ¨ç”»ã€æŽ¨é€æ­»äº¡çŠ¶æ€åˆ° Firebase
 function triggerDeath() {
     if (isDead) return;
-    if (PLAYER_MODEL.noGun) return; // noGun è§’è‰²æ²¡æœ‰æ­»äº¡åŠ¨ç”»ï¼Œä¸å“åº”æ­»äº¡
+    // Warlords grudge6 classes always allow death; legacy noGun freefly chars skip
+    if (PLAYER_MODEL.noGun && !USE_WARLORDS_ISLAND) return;
     isDead = true;
     localDeaths++;
     updateKillBar();
@@ -745,6 +737,8 @@ function sendState() {
         name: myName,
         shotSeq: localShotSeq,
         platformIdx, pox, poy, poz,
+        classId: localStorage.getItem("mv_class_id") || "warrior",
+        level: loadBag()?.level || 1,
         t: Date.now(),
     });
 }
@@ -1323,6 +1317,7 @@ function animate() {
 
     updateDynamicPlatforms();
     updateEnemyAreaBadge();
+    if (warlords?.update) warlords.update(delta);
 
     renderer.render(scene, camera);
 }
@@ -1367,13 +1362,27 @@ async function init() {
     draco.setDecoderPath("https://unpkg.com/three@0.180.0/examples/jsm/libs/draco/");
     gltfLoader.setDRACOLoader(draco);
 
-    // åŠ è½½åœºæ™¯
-    const gltf = await gltfLoader.loadAsync(SCENE_URL);
-    const sceneModel = gltf.scene;
-    sceneModel.scale.set(10, 10, 10);
-    scene.add(sceneModel);
+    // Collider / visual scene: Bermuda island (Warlords) or legacy burnout
+    let sceneModel = new THREE.Group();
+    sceneModel.name = "scene-root";
+    if (!USE_WARLORDS_ISLAND) {
+        const gltf = await gltfLoader.loadAsync(BASE + "glb/burnout_revenge_-_central_route_crash_junction.glb");
+        sceneModel = gltf.scene;
+        sceneModel.scale.set(10, 10, 10);
+        scene.add(sceneModel);
+    } else {
+        // Temporary ground until island attaches (grudge6 SI)
+        const ground = new THREE.Mesh(
+            new THREE.CircleGeometry(40, 48),
+            new THREE.MeshStandardMaterial({ color: 0x2a3a28, roughness: 0.95 }),
+        );
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        sceneModel.add(ground);
+        scene.add(sceneModel);
+    }
 
-    // Visualize enemy areas (translucent red boxes, non-colliding)
+    // Enemy area viz (legacy map coords — still useful as danger zones near origin)
     for (const a of ENEMY_AREAS) {
         const size = new THREE.Vector3().subVectors(a.max, a.min);
         const center = new THREE.Vector3().addVectors(a.min, a.max).multiplyScalar(0.5);
@@ -1402,17 +1411,23 @@ async function init() {
     const existingCount = snap.exists() ? Object.keys(snap.val()).length : 0;
     if (existingCount >= MAX_PLAYERS) { showRoomFull(); return; }
     spawnIndex = existingCount % SPAWN_POINTS.length;
-    const spawnPos = SPAWN_POINTS[spawnIndex];
-    camera.position.copy(spawnPos);
+    const spawnPos = USE_WARLORDS_ISLAND
+        ? new THREE.Vector3(0, 2, 0)
+        : SPAWN_POINTS[spawnIndex];
+    camera.position.copy(spawnPos).add(new THREE.Vector3(4, 3, 6));
     controls.target.copy(spawnPos);
 
-    // æœ¬åœ°çŽ©å®¶ (LocalPlayer åŒ…è£…)
+    // Local player (mixamo controller capsule; grudge6 visual layered in warlords)
     localPlayer = new LocalPlayer({ scene, camera, controls });
     await localPlayer.init({
-        playerModelConfig: PLAYER_MODEL,
+        playerModelConfig: {
+            ...PLAYER_MODEL,
+            // SI-friendly scale for warlords hybrid (visual replaced by grudge6)
+            scale: USE_WARLORDS_ISLAND ? 0.01 : PLAYER_MODEL.scale,
+        },
         initPos: spawnPos,
-        minCamDistance: 10,
-        maxCamDistance: 220,
+        minCamDistance: 2,
+        maxCamDistance: USE_WARLORDS_ISLAND ? 18 : 220,
         enableOverShoulderView: true,
         staticCollider: sceneModel,
     });
@@ -1532,7 +1547,8 @@ async function init() {
             updateScoreboard();
             if (scoreboardEl) scoreboardEl.style.display = "flex";
         }
-        if (e.code === "KeyK" && !e.repeat) {
+        // Main panel: I (inventory / players) — K still works as alias
+        if ((e.code === "KeyI" || e.code === "KeyK") && !e.repeat) {
             e.preventDefault();
             toggleMainPanel();
         }
@@ -1554,14 +1570,58 @@ async function init() {
         antManAnimateToScale(antManIsSmall ? normalScale / 9 : normalScale, 1);
     });
 
-    // Firebase åŒæ­¥
+    // Firebase sync
     initFirebaseSync();
 
     // UI
     initUI();
+    enhanceMainPanel();
     updateMyHPUI();
     const nameEl = document.getElementById("local-player-name");
     if (nameEl) nameEl.textContent = myName;
+
+    // Warlords: Bermuda island + grudge6 + harvest + bosses + skills
+    if (USE_WARLORDS_ISLAND) {
+        try {
+            warlords = await attachWarlordsWorld({
+                scene,
+                camera,
+                renderer,
+                localPlayer,
+                db,
+                roomId,
+                playerId,
+                set,
+                ref,
+                onValue,
+                onChildAdded,
+                remove,
+                flash: (msg, t) => {
+                    const el = document.getElementById("combat-flash");
+                    if (el) {
+                        el.textContent = msg;
+                        el.style.opacity = "1";
+                        setTimeout(() => { el.style.opacity = "0"; }, (t || 0.8) * 1000);
+                    } else {
+                        addRoomNotify(msg, "");
+                    }
+                },
+                onBossHitLocal: (dmg, name) => {
+                    if (isDead || PLAYER_MODEL.noGun) return;
+                    // Warlords classes take boss damage
+                    myHp = Math.max(0, myHp - dmg);
+                    updateMyHPUI();
+                    addRoomNotify(name, `hits you −${dmg}`);
+                    if (myHp <= 0) triggerDeath();
+                },
+            });
+            // class state for multiplayer
+            window.__mvClassId = localStorage.getItem("mv_class_id") || "warrior";
+        } catch (e) {
+            console.error("[warlords] attach failed", e);
+            addRoomNotify("Warlords world", "failed to load — see console");
+        }
+    }
 
     window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
