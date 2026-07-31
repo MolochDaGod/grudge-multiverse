@@ -1,0 +1,20 @@
+{
+  "framework": null,
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/room/:path*", "destination": "/index.html" },
+    { "source": "/((?!assets|glb|audio|img|loader.js).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/glb/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/(.*)\\.js",
+      "headers": [{ "key": "Content-Type", "value": "application/javascript; charset=utf-8" }]
+    }
+  ]
+}

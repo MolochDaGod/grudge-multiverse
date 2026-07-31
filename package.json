@@ -1,0 +1,22 @@
+{
+  "name": "@grudge-studio/multiverse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Grudge Multiverse — multiplayer GLTF FPS/TPS (three-player-controller + Firebase rooms)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && npx vercel deploy --prod --yes"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "firebase": "^12.14.0",
+    "three": "^0.185.1",
+    "three-mesh-bvh": "^0.9.9"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
