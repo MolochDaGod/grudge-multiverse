@@ -14,11 +14,11 @@ import { DecalSystem } from "./shooting/weapon/DecalSystem.js";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, onValue, onDisconnect, remove, get, onChildAdded } from "firebase/database";
 import {
-  setupClassSelectUI,
+  setupRaceClassSelectUI,
   attachWarlordsWorld,
 } from "./game/warlordsBootstrap.js";
 import { loadBag } from "./game/inventory.js";
-import { mountWarlordsHud } from "./game/warlordsHud.js";
+import { mountWarlordsHud, setNetStatus } from "./game/warlordsHud.js";
 import {
   mountMainPanelShell,
   renderMainPanelTab,
@@ -27,6 +27,8 @@ import {
   refreshOpenTab,
   wireInventoryBuys,
 } from "./game/mainPanel.js";
+import { connectMultiverseDanger, STATE_REPORT_MS } from "./game/net/dangerRelay.js";
+import { loadSelection } from "./game/fleetGearPresets.js";
 
 const BASE = import.meta.env.BASE_URL;
 /** @type {Awaited<ReturnType<typeof attachWarlordsWorld>> | null} */
@@ -249,12 +251,11 @@ function randomName() {
         + _nameNoun[Math.floor(Math.random() * _nameNoun.length)];
 }
 
-// æ˜¾ç¤ºåå­—è¾“å…¥å¼¹çª—ï¼Œä»Ž localStorage é¢„å¡«ä¸Šæ¬¡çš„åå­—å’Œè§’è‰²ï¼Œä½†å§‹ç»ˆæ˜¾ç¤ºè®©ç”¨æˆ·ç¡®è®¤
+// Race → Class → name, then boot Danger systems
 function waitForName() {
     const savedName = localStorage.getItem("mp_name");
-    // Grudge6 class select (warrior / ranger / mage / worge)
-    const classUi = setupClassSelectUI();
-    // Keep a mixamo fallback model for controller capsule until grudge6 visual attaches
+    const selectUi = setupRaceClassSelectUI();
+    // Mixamo capsule only for controller; visual is grudge6 after attach
     selectedModelUrl = CHARACTER_LIST[2]?.url ?? CHARACTER_LIST[0].url;
 
     return new Promise((resolve) => {
@@ -268,11 +269,19 @@ function waitForName() {
         }
 
         const confirm = () => {
+            // Step: race → class → enter
+            if (selectUi.advanceOrReady && !selectUi.advanceOrReady()) {
+                return;
+            }
             myName = (input?.value.trim() || randomName()).slice(0, 16);
-            const classId = classUi.getClassId?.() || localStorage.getItem("mv_class_id") || "warrior";
+            const raceId = selectUi.getRaceId?.() || localStorage.getItem("mv_race_id") || "western-kingdoms";
+            const classId = selectUi.getClassId?.() || localStorage.getItem("mv_class_id") || "warrior";
             localStorage.setItem("mp_name", myName);
+            localStorage.setItem("mv_race_id", raceId);
             localStorage.setItem("mv_class_id", classId);
             localStorage.setItem("mp_char_idx", "2");
+            window.__mvRaceId = raceId;
+            window.__mvClassId = classId;
             if (overlay) overlay.style.display = "none";
             resolve();
         };
@@ -1688,6 +1697,70 @@ async function init() {
     const nameEl = document.getElementById("local-player-name");
     if (nameEl) nameEl.textContent = myName;
 
+    // B — Railway Danger Room relay (primary presence); Firebase still for social/harvest
+    let dangerNet = null;
+    try {
+        setNetStatus("Net · Railway Danger…", false);
+        window.setLoaderStatus?.("Connecting Railway Danger room…");
+        const roomHint = (location.hash || "#room1").slice(1) || "room1";
+        const { client, ok, err, code } = await connectMultiverseDanger(myName, `MV${roomHint}`);
+        dangerNet = client;
+        window.__mvDangerNet = client;
+        if (ok) {
+            setNetStatus(`Net · Danger ${code || "OK"}`, true);
+            // Report SI capsule state at STATE_REPORT_MS
+            let lastReport = 0;
+            const reportState = () => {
+                if (!dangerNet?.connected) return;
+                const cap = localPlayer?._player?.getPlayerCapsule?.();
+                if (!cap) return;
+                const now = performance.now();
+                if (now - lastReport < STATE_REPORT_MS) return;
+                lastReport = now;
+                const vel = localPlayer._player.getVelocity?.() || { x: 0, y: 0, z: 0 };
+                const moving = Math.hypot(vel.x, vel.z) > 0.05;
+                const sel = loadSelection();
+                dangerNet.sendState({
+                    px: cap.position.x,
+                    py: cap.position.y,
+                    pz: cap.position.z,
+                    ry: cap.rotation?.y ?? 0,
+                    clip: moving ? "run" : "idle",
+                    weapon: sel.classId || "none",
+                    hp: myHp,
+                    moving,
+                    grounded: !!localPlayer._player.getIsOnGround?.(),
+                    guard: "open",
+                });
+            };
+            // Hook into warlords update via shared interval
+            setInterval(reportState, STATE_REPORT_MS);
+            dangerNet.on("snapshot", (players) => {
+                // Lightweight: update remote name tags if Firebase remotes exist
+                for (const p of players || []) {
+                    if (p.id === dangerNet.selfId) continue;
+                    const rp = [...remotePlayers.values()].find((r) => r.name === p.name);
+                    if (rp && typeof p.px === "number") {
+                        try {
+                            rp.applyState?.({
+                                x: p.px, y: p.py, z: p.pz,
+                                ry: p.ry, name: p.name, t: Date.now(),
+                            });
+                        } catch { /* remote may use different state shape */ }
+                    }
+                }
+            });
+            dangerNet.on("close", () => setNetStatus("Net · Danger reconnect…", false));
+            dangerNet.on("open", () => setNetStatus(`Net · Danger ${dangerNet.roomCode || "live"}`, true));
+        } else {
+            setNetStatus(`Net · Firebase fallback (${err || "no danger"})`, false);
+            console.warn("[net] Danger relay unavailable, Firebase presence only", err);
+        }
+    } catch (e) {
+        setNetStatus("Net · Firebase only", false);
+        console.warn("[net] Danger connect failed", e);
+    }
+
     // Warlords: Bermuda island + grudge6 + harvest + bosses + skills + soft-lock
     if (USE_WARLORDS_ISLAND) {
         try {
@@ -1724,7 +1797,9 @@ async function init() {
                     if (myHp <= 0) triggerDeath();
                 },
             });
-            window.__mvClassId = localStorage.getItem("mv_class_id") || "warrior";
+            const sel = loadSelection();
+            window.__mvClassId = sel.classId;
+            window.__mvRaceId = sel.raceId;
             window.setLoaderProgress?.(1, 1, "World ready");
         } catch (e) {
             console.error("[warlords] attach failed", e);

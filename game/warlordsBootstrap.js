@@ -3,7 +3,7 @@
  * fleet VFX, static collider rebind, warlords HUD.
  */
 import * as THREE from "three";
-import { CLASSES, getClass } from "./classes.js";
+import { getClass } from "./classes.js";
 import { loadBermudaIsland, makeGroundSampler } from "./island.js";
 import { HarvestSystem } from "./harvest.js";
 import { BossFight } from "./bosses.js";
@@ -23,36 +23,15 @@ import {
   markHostile,
 } from "./combatAim.js";
 import { mountWarlordsHud } from "./warlordsHud.js";
+import { setupRaceClassSelectUI } from "./raceClassSelect.js";
+import { loadSelection } from "./fleetGearPresets.js";
 
+/** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
-  const picker = document.getElementById("char-picker");
-  if (!picker) return { classId: "warrior" };
-  picker.innerHTML = "";
-  picker.style.gridTemplateColumns = "repeat(2, 1fr)";
-  let selected = localStorage.getItem("mv_class_id") || "warrior";
-  CLASSES.forEach((c) => {
-    const card = document.createElement("div");
-    card.className = "char-card" + (c.id === selected ? " selected" : "");
-    card.dataset.classId = c.id;
-    card.innerHTML = `
-      <div class="char-avatar" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#1a2030,#0d1018);color:#c8a84b;font-size:22px;font-weight:800;">
-        ${c.label.slice(0, 1)}
-      </div>
-      <span class="char-name">${c.label}</span>`;
-    card.title = c.blurb;
-    card.addEventListener("click", () => {
-      picker.querySelectorAll(".char-card").forEach((x) => x.classList.remove("selected"));
-      card.classList.add("selected");
-      selected = c.id;
-      localStorage.setItem("mv_class_id", c.id);
-    });
-    picker.appendChild(card);
-  });
-  return {
-    getClassId: () =>
-      document.querySelector("#char-picker .char-card.selected")?.dataset?.classId || selected,
-  };
+  return setupRaceClassSelectUI();
 }
+
+export { setupRaceClassSelectUI };
 
 /** @deprecated use mountMainPanelShell from mainPanel.js (fleet main-panel layout). */
 export function enhanceMainPanel() {
@@ -187,8 +166,12 @@ export async function attachWarlordsWorld(ctx) {
     onValue,
   } = ctx;
 
-  const classId = localStorage.getItem("mv_class_id") || "warrior";
-  const classDef = getClass(classId);
+  const sel = loadSelection();
+  const classId = sel.classId || "warrior";
+  const raceId = sel.raceId || "western-kingdoms";
+  const skillClass =
+    classId === "knight" ? "warrior" : classId === "unarmed" ? "worge" : classId;
+  const classDef = getClass(skillClass);
 
   mountWarlordsHud();
   window.setLoaderStatus?.("Loading Bermuda island…");
@@ -244,8 +227,8 @@ export async function attachWarlordsWorld(ctx) {
   let g6 = null;
   let bodyYaw = 0;
   try {
-    window.setLoaderStatus?.(`Loading ${classDef.label}…`);
-    g6 = await loadGrudge6Class(classId);
+    window.setLoaderStatus?.(`Loading ${raceId} · ${classId}…`);
+    g6 = await loadGrudge6Class({ raceId, classId });
     const old = localPlayer.getPlayerModel?.();
     if (old) old.visible = false;
 
@@ -263,7 +246,7 @@ export async function attachWarlordsWorld(ctx) {
     }
 
     flash?.(
-      `${classDef.label} · ${g6.animPack} · ${g6.shownMeshes?.length || 0} meshes`,
+      `${g6.kit?.label || classDef.label} · ${g6.animPack} · ${g6.shownMeshes?.length || 0} meshes`,
       1.4,
     );
   } catch (e) {
@@ -429,6 +412,7 @@ export async function attachWarlordsWorld(ctx) {
   }
 
   const getClassState = () => ({
+    raceId,
     classId,
     level: loadBag().level || 1,
     gear: classDef.starterGear,

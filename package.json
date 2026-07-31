@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Grudge Multiverse — multiplayer GLTF FPS/TPS (three-player-controller + Firebase rooms)",
+  "description": "Grudge Multiverse — race→class grudge6 + Danger systems; Railway Danger relay + Firebase social fallback",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/strip-map-glb.mjs",

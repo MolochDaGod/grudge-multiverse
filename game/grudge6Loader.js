@@ -7,11 +7,10 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import { getClass } from "./classes.js";
-import { resolveClassKit } from "./fleetGearPresets.js";
+import { resolveRaceClass, resolveClassKit, loadSelection } from "./fleetGearPresets.js";
 import { loadAnimPack } from "./animPackLoader.js";
 import { AnimationDirector } from "./bip001Director.js";
 import {
-  applyArtForwardPlusZ,
   deployGrudge6Model,
   stripPositionTracks,
   reGroundAfterAnimSample,
@@ -86,11 +85,26 @@ export function applyExactMeshIds(root, visibleMeshes = []) {
 }
 
 /**
- * @param {string} classId
+ * @param {string} [classIdOrOpts]
+ * @param {string} [raceId]
  */
-export async function loadGrudge6Class(classId) {
-  const classDef = getClass(classId);
-  const kit = resolveClassKit(classId);
+export async function loadGrudge6Class(classIdOrOpts, raceId) {
+  let classId = classIdOrOpts;
+  let race = raceId;
+  if (classIdOrOpts && typeof classIdOrOpts === "object") {
+    classId = classIdOrOpts.classId;
+    race = classIdOrOpts.raceId;
+  }
+  if (!classId || !race) {
+    const sel = loadSelection();
+    classId = classId || sel.classId;
+    race = race || sel.raceId;
+  }
+  // Skills UI maps knight→warrior, unarmed→worge-ish
+  const skillClass =
+    classId === "knight" ? "warrior" : classId === "unarmed" ? "worge" : classId;
+  const classDef = getClass(skillClass);
+  const kit = race ? resolveRaceClass(race, classId) : resolveClassKit(classId);
   const kitUrl = kit.kitUrl || classDef.kitUrl;
   const animPack = kit.animPack || classDef.animPack || "sword_shield";
   const visibleMeshes = kit.visibleMeshes || [];
@@ -181,6 +195,8 @@ export async function loadGrudge6Class(classId) {
     director,
     clips,
     animPack,
+    raceId: kit.raceId,
+    classId: kit.classId,
     visibleMeshes,
     shownMeshes,
     diagnose: diag,
