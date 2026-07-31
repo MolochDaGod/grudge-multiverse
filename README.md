@@ -1,19 +1,51 @@
-# Grudge Multiverse
+# Grudge Multiverse (Warlords)
 
-**Live:** https://multiverse.grudge-studio.com (alias of this deploy)
+**Live:** https://grudge-multiverse.vercel.app/#room1  
 
-Multiplayer GLTF shooter / freeflight sandbox based on **three-player-controller** multiplayer-gltf:
+Multiplayer Warlords island on Free Fire **Bermuda** map + grudge6 RTS Toon classes.
 
-- Burnout junction map  
-- 6 characters (Josh, Tommy, Swat, Manny, Mob, AntMan)  
-- Firebase realtime rooms (`#room1` …)  
-- Weapons, decals, kill feed, chat, scoreboard  
+## Play
 
-## Stack
+1. Open room URL, enter **name**
+2. Pick class: **Warrior · Ranger · Mage · Worge**
+3. Land on **Bermuda island** (water borders)
 
-- Three.js r185 + three-mesh-bvh + Rapier (controller)  
-- Firebase RTDB rooms (`player-controller` project — demo rooms)  
-- Vite production SPA  
+### Controls
+
+| Key | Action |
+|-----|--------|
+| WASD | Move |
+| Mouse | Look / aim |
+| **E** | Harvest tree/rock (look at it) |
+| **F** | Class skill 0 |
+| **Shift+1…5** | Class skills (unlock with level) |
+| **I** | Main panel (Players / Bag / Craft / Vendors / Areas) |
+| **Tab** | Scoreboard |
+| **Enter** | Chat |
+
+### Systems (v1 live)
+
+- **Map:** `public/maps/bermuda.glb` SI-scaled ~120 m, water ring island  
+- **Harvest:** pinecone/common trees → wood; stone/rock → stone (≤70 nodes), Firebase HP sync  
+- **Classes:** CDN grudge6 kits (`WK_ / ELF_ / UD_ / ORC_`), starter T0 gear  
+- **Skills:** hotbar F + Shift tiers by level (XP from kills/harvest)  
+- **Rewards:** T0 mats + T0–T1 gear rolls on kills; bosses = higher loot  
+- **Vendors:** Armourer + Weaponsmith (gold buy)  
+- **Craft:** quick recipes (planks, swords, mail, …)  
+- **Bosses:** East Colossus + West Colossus (phase 2 at 50% HP), MP HP sync  
+- **Players panel:** friend (no damage) / enemy (default PvP)  
+- **Enemy areas:** force PvP zones  
+
+### Multiplayer
+
+Firebase RTDB rooms (`#room1`…): players, harvest nodes, bosses, hits, chat, decals.
+
+### Next (Danger-parity)
+
+- Full Danger Room AnimationDirector + Bip001 baked packs on grudge6  
+- Fleet weapon skill VFX (slash / bolt / nova)  
+- Precise gear_presets mesh_ids from D1  
+- Upload bermuda.glb → R2 CDN (repo is 51 MB — GitHub warned)  
 
 ## Dev
 
@@ -21,35 +53,9 @@ Multiplayer GLTF shooter / freeflight sandbox based on **three-player-controller
 cd F:\GitHub\grudge-multiverse
 npm install
 npm run dev
-# http://localhost:5195
-```
-
-## Deploy
-
-```bash
 npm run deploy
-# then: npx vercel domains add multiverse.grudge-studio.com
-# Cloudflare: CNAME multiverse → cname.vercel-dns.com
 ```
 
-## Fleet
+## Repo
 
-| Surface | URL |
-|---------|-----|
-| Multiverse | https://multiverse.grudge-studio.com |
-| Metaverse shell | https://metaverse.grudge-studio.com |
-| Open | https://open.grudge-studio.com |
-
-Source controller: `F:\GitHub\three-player-controller` (upstream example).
-
-## DNS (Cloudflare)
-
-`grudge-studio.com` is on Cloudflare. Add:
-
-| Type | Name | Target | Proxy |
-|------|------|--------|-------|
-| CNAME | multiverse | `fda20071bf6d8a6d.vercel-dns-016.com` | DNS only (grey cloud) |
-
-Or A record: `multiverse` ? `76.76.21.21`
-
-Until DNS propagates: **https://grudge-multiverse.vercel.app**
+https://github.com/MolochDaGod/grudge-multiverse  
