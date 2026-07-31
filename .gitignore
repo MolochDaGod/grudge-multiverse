@@ -6,3 +6,8 @@ dist/
 
 .vercel
 .env*
+
+# Large map binary lives on R2 CDN (assets.grudge-studio.com/models/maps/bermuda.glb)
+# Keep a local copy for offline dev; do not commit (GitHub 50 MB warning).
+public/maps/bermuda.glb
+

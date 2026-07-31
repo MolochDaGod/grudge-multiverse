@@ -1,8 +1,10 @@
 /**
  * Grudge6 RTS Toon classes for Multiverse.
  * CDN SSOT: assets.grudge-studio.com/models/grudge6/races/*
+ * Exact mesh_ids: fleetGearPresets.js (gameopen gearPresets.ts / D1)
  * Classes: warrior | ranger | mage | worge
  */
+import { resolveClassKit } from "./fleetGearPresets.js";
 
 export const CDN = "https://assets.grudge-studio.com";
 
@@ -24,8 +26,8 @@ export const CLASSES = [
       armor: { id: "t0_mail", name: "Recruit Mail", tier: 0, slot: "armor", armor: 8 },
       offhand: { id: "t0_shield", name: "Wood Shield", tier: 0, slot: "shield", armor: 4 },
     },
-    /** Approximate mesh name fragments for kit visibility (WK_ modular) */
-    meshHints: ["body", "arms", "legs", "head", "sword", "shield"],
+    /** @deprecated use resolveClassKit().visibleMeshes — exact gear_presets mesh_ids */
+    meshHints: null,
     skills: [
       { id: "slash", name: "Slash", key: "KeyF", level: 1, cd: 0.8, dmgMul: 1.0, kind: "melee" },
       { id: "shield_bash", name: "Shield Bash", key: "Digit1", shift: true, level: 1, cd: 6, dmgMul: 1.4, kind: "melee" },
@@ -49,7 +51,7 @@ export const CLASSES = [
       armor: { id: "t0_leather", name: "Scout Leather", tier: 0, slot: "armor", armor: 5 },
       offhand: null,
     },
-    meshHints: ["body", "arms", "legs", "head", "bow", "quiver"],
+    meshHints: null,
     skills: [
       { id: "shot", name: "Quick Shot", key: "KeyF", level: 1, cd: 0.5, dmgMul: 1.0, kind: "ranged" },
       { id: "power_shot", name: "Power Shot", key: "Digit1", shift: true, level: 1, cd: 5, dmgMul: 1.6, kind: "ranged" },
@@ -73,7 +75,7 @@ export const CLASSES = [
       armor: { id: "t0_robe", name: "Apprentice Robe", tier: 0, slot: "armor", armor: 3 },
       offhand: null,
     },
-    meshHints: ["body", "arms", "legs", "head", "staff"],
+    meshHints: null,
     skills: [
       { id: "bolt", name: "Arcane Bolt", key: "KeyF", level: 1, cd: 0.7, dmgMul: 1.0, kind: "magic" },
       { id: "nova", name: "Frost Nova", key: "Digit1", shift: true, level: 1, cd: 8, dmgMul: 1.3, kind: "magic_aoe" },
@@ -90,14 +92,14 @@ export const CLASSES = [
     prefix: "ORC_",
     kitUrl: `${CDN}/models/grudge6/races/ORC_Characters.glb`,
     atlasUrl: `${CDN}/models/grudge6/atlases/ORC_StandardUnits.webp`,
-    animPack: "2h_melee",
+    animPack: "twohand",
     blurb: "Brutal orc · 2H melee · raw power",
     starterGear: {
       weapon: { id: "t0_axe", name: "Worge Axe", tier: 0, slot: "weapon", dmg: 15 },
       armor: { id: "t0_hide", name: "Hide Harness", tier: 0, slot: "armor", armor: 6 },
       offhand: null,
     },
-    meshHints: ["body", "arms", "legs", "head", "axe", "weapon"],
+    meshHints: null,
     skills: [
       { id: "smash", name: "Smash", key: "KeyF", level: 1, cd: 0.9, dmgMul: 1.1, kind: "melee" },
       { id: "howl", name: "Howl", key: "Digit1", shift: true, level: 1, cd: 10, dmgMul: 0, kind: "buff" },
@@ -111,6 +113,11 @@ export const CLASSES = [
 
 export function getClass(id) {
   return CLASSES.find((c) => c.id === id) || CLASSES[0];
+}
+
+/** Exact gear_presets mesh_ids + anim pack for a Multiverse class. */
+export function getClassKit(id) {
+  return resolveClassKit(id);
 }
 
 /** Level unlock: skill index unlocked when player level >= skill.level */

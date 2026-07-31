@@ -1,6 +1,6 @@
 /**
- * Multiverse Warlords mode — wires Bermuda island, grudge6 classes,
- * harvest, vendors, crafting, bosses, skill bar, main panel on I.
+ * Multiverse Warlords mode — Bermuda island, grudge6 (Bip001 director + gear_presets),
+ * harvest, vendors, crafting, bosses, skill bar, fleet VFX, static collider rebind.
  */
 import * as THREE from "three";
 import { CLASSES, getClass } from "./classes.js";
@@ -12,6 +12,7 @@ import { SkillBar } from "./skills.js";
 import { loadBag, saveBag, rollKillReward } from "./inventory.js";
 import { QUICK_RECIPES, craft } from "./crafting.js";
 import { VENDORS, buy } from "./vendors.js";
+import { FleetSkillVfx, vfxKindForSkill } from "./fleetVfx.js";
 
 /**
  * Patch name overlay for class selection instead of mixamo cast.
@@ -52,7 +53,6 @@ export function setupClassSelectUI() {
 export function enhanceMainPanel() {
   const tabs = document.getElementById("main-panel-tabs");
   if (!tabs) return;
-  // Replace tabs: Players | Bag | Craft | Vendors | Areas
   tabs.innerHTML = `
     <button type="button" class="on" data-tab="players">Players</button>
     <button type="button" data-tab="bag">Bag</button>
@@ -64,7 +64,8 @@ export function enhanceMainPanel() {
   if (!bagPanel) {
     bagPanel = document.createElement("div");
     bagPanel.id = "bag-panel";
-    bagPanel.style.cssText = "display:none;padding:12px 16px;overflow:auto;max-height:40vh;font-size:12px;color:#ccc;";
+    bagPanel.style.cssText =
+      "display:none;padding:12px 16px;overflow:auto;max-height:40vh;font-size:12px;color:#ccc;";
     document.getElementById("players-list")?.parentElement?.insertBefore(
       bagPanel,
       document.getElementById("main-panel-foot"),
@@ -98,7 +99,7 @@ export function enhanceMainPanel() {
       if (el) el.style.display = "none";
     });
     const el = document.getElementById(map[id]);
-    if (el) el.style.display = id === "players" || id === "areas" ? (id === "players" ? "block" : "block") : "block";
+    if (el) el.style.display = "block";
     if (id === "bag") renderBag();
     if (id === "craft") renderCraft();
     if (id === "vendors") renderVendors();
@@ -120,7 +121,14 @@ export function renderBag() {
   el.innerHTML = `
     <div style="margin-bottom:8px;color:#c8a84b;font-weight:700">Level ${bag.level} · XP ${bag.xp} · Gold ${bag.gold}</div>
     <ul style="margin:0;padding-left:16px;line-height:1.6">
-      ${bag.items.map((i) => `<li>${i.name}${i.qty && i.qty > 1 ? ` ×${i.qty}` : ""} <span style="color:#666">T${i.tier} ${i.slot}</span></li>`).join("") || "<li>Empty bag</li>"}
+      ${
+        bag.items
+          .map(
+            (i) =>
+              `<li>${i.name}${i.qty && i.qty > 1 ? ` ×${i.qty}` : ""} <span style="color:#666">T${i.tier} ${i.slot}</span></li>`,
+          )
+          .join("") || "<li>Empty bag</li>"
+      }
     </ul>
   `;
 }
@@ -128,11 +136,14 @@ export function renderBag() {
 export function renderCraft() {
   const el = document.getElementById("craft-panel");
   if (!el) return;
-  el.innerHTML = `<div style="color:#c8a84b;font-weight:700;margin-bottom:8px">Quick Crafting</div>` +
+  el.innerHTML =
+    `<div style="color:#c8a84b;font-weight:700;margin-bottom:8px">Quick Crafting</div>` +
     QUICK_RECIPES.map(
       (r) =>
         `<button type="button" data-craft="${r.id}" style="display:block;width:100%;text-align:left;margin:4px 0;padding:8px;border-radius:6px;border:1px solid rgba(200,168,75,0.3);background:rgba(0,0,0,0.35);color:#ddd;cursor:pointer">
-          <strong>${r.name}</strong><br/><span style="font-size:10px;color:#888">${Object.entries(r.costs).map(([k, v]) => `${k}×${v}`).join(", ")}</span>
+          <strong>${r.name}</strong><br/><span style="font-size:10px;color:#888">${Object.entries(r.costs)
+            .map(([k, v]) => `${k}×${v}`)
+            .join(", ")}</span>
         </button>`,
     ).join("");
   el.querySelectorAll("[data-craft]").forEach((btn) => {
@@ -153,7 +164,8 @@ export function renderVendors() {
   const el = document.getElementById("vendor-panel");
   if (!el) return;
   const bag = loadBag();
-  el.innerHTML = `<div style="color:#c8a84b;margin-bottom:8px">Gold: ${bag.gold}</div>` +
+  el.innerHTML =
+    `<div style="color:#c8a84b;margin-bottom:8px">Gold: ${bag.gold}</div>` +
     Object.entries(VENDORS)
       .map(
         ([key, v]) =>
@@ -179,9 +191,37 @@ export function renderVendors() {
   });
 }
 
+/** Map skill → director one-shot clip role. */
+function skillAnimRole(skill) {
+  if (!skill) return "attack";
+  if (skill.key === "KeyF") return "attack";
+  const m = { Digit1: "skill1", Digit2: "skill2", Digit3: "skill3", Digit4: "skill4", Digit5: "skill5" };
+  return m[skill.key] || "attack";
+}
+
+/**
+ * Re-bind island meshes as the player's static BVH collider so buildings fully block.
+ * Uses playerController.buildStaticCollider (MeshBVH).
+ */
+export function rebindIslandStaticCollider(localPlayer, islandRoot) {
+  const ctrl = localPlayer?._player;
+  if (!ctrl?.buildStaticCollider || !islandRoot) {
+    console.warn("[warlords] cannot rebind static collider — missing controller or island");
+    return false;
+  }
+  try {
+    islandRoot.updateMatrixWorld(true);
+    ctrl.buildStaticCollider(islandRoot);
+    console.info("[warlords] island static collider rebound");
+    return true;
+  } catch (e) {
+    console.warn("[warlords] static collider rebind failed", e);
+    return false;
+  }
+}
+
 /**
  * Full warlords world attach after LocalPlayer exists.
- * @returns warlords context for multiplayer sync
  */
 export async function attachWarlordsWorld(ctx) {
   const {
@@ -194,14 +234,12 @@ export async function attachWarlordsWorld(ctx) {
     set,
     ref,
     onValue,
-    onChildAdded,
-    remove,
   } = ctx;
 
   const classId = localStorage.getItem("mv_class_id") || "warrior";
   const classDef = getClass(classId);
 
-  // Island
+  // Island (CDN bermuda preferred)
   flash?.("Loading Bermuda island…", 1.2);
   const island = await loadBermudaIsland(scene, { targetWidth: 120, maxHarvest: 70 });
   const groundAt = makeGroundSampler(island.root);
@@ -213,33 +251,46 @@ export async function attachWarlordsWorld(ctx) {
   const capsule = localPlayer._player?.getPlayerCapsule?.();
   if (capsule) capsule.position.copy(spawn);
 
-  // grudge6 visual
+  // #5 — re-bind static collider AFTER island load so buildings block
+  rebindIslandStaticCollider(localPlayer, island.root);
+
+  // Fleet skill VFX
+  const vfx = new FleetSkillVfx(scene);
+
+  // grudge6 visual: exact mesh_ids + Bip001 director + baked packs
   let g6 = null;
   try {
     g6 = await loadGrudge6Class(classId);
-    // Hide default mixamo mesh, attach grudge6
     const old = localPlayer.getPlayerModel?.();
     if (old) old.visible = false;
-    // Parent to capsule / player root
-    const attach =
-      localPlayer._player?.getPlayerCapsule?.() ||
-      localPlayer._player?.player ||
-      localPlayer._sceneGroup;
-    // Attach to controller root if available
+
     const host = localPlayer._player;
     if (host?.playerModel) {
-      // offset feet
       g6.root.position.set(0, 0, 0);
-      // Some controllers put model under a group
       try {
         host.playerModel.visible = false;
-        host.playerModel.parent?.add(g6.root);
+        // Prefer world attachment so SI scale is independent of mixamo capsule scale
+        scene.add(g6.root);
       } catch {
         scene.add(g6.root);
       }
     } else {
       scene.add(g6.root);
     }
+
+    // Mute mixamo locomotion animation on the controller model (visual is grudge6)
+    try {
+      if (host?.animation?.mixer) {
+        host.animation.mixer.timeScale = 0;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    flash?.(
+      `${classDef.label} · ${g6.animPack} · ${g6.shownMeshes?.length || 0} meshes`,
+      1.4,
+    );
   } catch (e) {
     console.warn("grudge6 load failed", e);
   }
@@ -260,14 +311,46 @@ export async function attachWarlordsWorld(ctx) {
   // Bosses
   const bosses = new BossFight(scene, island.bossPads);
 
-  // Skills
+  // Skills + director one-shots + fleet VFX
   const skillBar = new SkillBar(classDef, () => loadBag().level || 1, {
     flash,
     onCast: (skill) => {
-      // Simple skill: damage nearest boss or ray harvest / attack pulse
+      const pos = capsule?.position;
+      if (!pos) return;
+
+      // Director attack/skill clip
+      if (g6?.director) {
+        const role = skillAnimRole(skill);
+        const played =
+          g6.director.requestOneShot(role) ||
+          g6.director.requestOneShot("attack") ||
+          0;
+        if (!played) {
+          /* no clip — still play VFX */
+        }
+      }
+
+      // Fleet VFX slash / bolt / nova
+      const dir = new THREE.Vector3(0, 0, 1);
+      try {
+        const q = capsule.getWorldQuaternion?.(new THREE.Quaternion());
+        if (q) dir.applyQuaternion(q);
+      } catch {
+        /* default forward */
+      }
+      const kind = vfxKindForSkill(skill);
+      const color =
+        classId === "mage"
+          ? 0xc478ff
+          : classId === "ranger"
+            ? 0x7ec8ff
+            : classId === "worge"
+              ? 0xff6a3a
+              : 0x9fe8ff;
+      vfx.play(kind, pos.clone(), dir, color);
+
+      // Damage nearest boss in range
       if (skill.kind?.includes("melee") || skill.kind === "magic" || skill.kind?.includes("ranged")) {
-        const pos = capsule?.position;
-        if (!pos) return;
         for (const b of bosses.bosses) {
           if (b.dead) continue;
           if (b.root.position.distanceTo(pos) < 5) {
@@ -322,7 +405,6 @@ export async function attachWarlordsWorld(ctx) {
         });
       }
     } else {
-      // Near vendor?
       for (const v of island.vendorPads) {
         if (v._mesh && capsule.position.distanceTo(v._mesh.position) < 3) {
           flash?.(`${v.label}: open panel (I) → Vendors`, 1);
@@ -347,12 +429,16 @@ export async function attachWarlordsWorld(ctx) {
 
   enhanceMainPanel();
 
-  // Sync class in player state helper
   const getClassState = () => ({
     classId,
     level: loadBag().level || 1,
     gear: classDef.starterGear,
+    animPack: g6?.animPack,
+    meshIds: g6?.visibleMeshes,
   });
+
+  // Horizontal speed for gait (SI m/s-ish from controller velocity)
+  const tmpVel = new THREE.Vector3();
 
   return {
     island,
@@ -360,19 +446,48 @@ export async function attachWarlordsWorld(ctx) {
     bosses,
     skillBar,
     g6,
+    vfx,
     classDef,
     groundAt,
     getClassState,
+    rebindCollider: () => rebindIslandStaticCollider(localPlayer, island.root),
     update(dt) {
       harvest.update();
+      vfx.update(dt);
+
       const pos = capsule?.position;
+      const ctrl = localPlayer?._player;
+
       if (g6?.root && pos) {
+        // Feet under capsule (capsule center ~ mid body at ~0.9 m when SI)
         g6.root.position.set(pos.x, pos.y - 0.9, pos.z);
-        // face camera yaw if available
         const q = capsule.getWorldQuaternion?.(new THREE.Quaternion());
         if (q) g6.root.quaternion.copy(q);
-        g6.mixer?.update(dt);
+
+        // Bip001 director gait from controller velocity
+        if (g6.director && ctrl) {
+          let speed01 = 0;
+          let moving = false;
+          let sprinting = false;
+          try {
+            const vel = ctrl.getVelocity?.() || tmpVel.set(0, 0, 0);
+            tmpVel.set(vel.x, 0, vel.z);
+            const spd = tmpVel.length();
+            // controller scale can be tiny (0.01); use relative speed
+            const maxSpd = Math.max(0.01, (ctrl.curPlayerSpeed || ctrl.playerSpeed || 1) * 0.9);
+            speed01 = Math.min(1, spd / maxSpd);
+            moving = speed01 > 0.05 || localPlayer.isMoving;
+            sprinting = !!ctrl.input?.shift || speed01 > 0.85;
+          } catch {
+            moving = !!localPlayer.isMoving;
+          }
+          g6.director.setGaitTarget(moving, sprinting, speed01);
+          g6.director.update(dt);
+        } else {
+          g6.mixer?.update(dt);
+        }
       }
+
       // vendor labels
       if (ctx.camera && ctx.renderer) {
         for (const v of island.vendorPads) {

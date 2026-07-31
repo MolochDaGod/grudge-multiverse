@@ -6,7 +6,7 @@
   "description": "Grudge Multiverse — multiplayer GLTF FPS/TPS (three-player-controller + Firebase rooms)",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/strip-map-glb.mjs",
     "preview": "vite preview",
     "deploy": "npm run build && npx vercel deploy --prod --yes"
   },

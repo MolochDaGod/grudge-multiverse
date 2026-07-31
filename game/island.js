@@ -1,5 +1,6 @@
 /**
  * Bermuda Free Fire island: layered map + water ring + harvest classification.
+ * Map binary lives on R2 CDN (GitHub 50 MB warning); local public/maps is dev fallback.
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -7,7 +8,12 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
 const BASE = import.meta.env.BASE_URL || "/";
 
-export const MAP_URL = BASE + "maps/bermuda.glb";
+/** Production R2 CDN (assets.grudge-studio.com → grudge-assets bucket). */
+export const MAP_CDN_URL = "https://assets.grudge-studio.com/models/maps/bermuda.glb";
+/** Local/dev fallback when CDN unavailable. */
+export const MAP_LOCAL_URL = BASE + "maps/bermuda.glb";
+/** Preferred load URL: CDN first. */
+export const MAP_URL = MAP_CDN_URL;
 
 /** World SI: fit island ~120 m across for human 1.8 m */
 export const ISLAND_TARGET_WIDTH_M = 120;
@@ -30,6 +36,24 @@ export function classifyMeshName(name) {
   return "prop";
 }
 
+async function loadIslandGltf(loader, preferredUrl) {
+  const candidates = [preferredUrl, MAP_CDN_URL, MAP_LOCAL_URL].filter(
+    (u, i, a) => u && a.indexOf(u) === i,
+  );
+  let lastErr;
+  for (const url of candidates) {
+    try {
+      const gltf = await loader.loadAsync(url);
+      console.info("[island] loaded", url);
+      return { gltf, url };
+    } catch (e) {
+      lastErr = e;
+      console.warn("[island] load fail", url, e?.message || e);
+    }
+  }
+  throw lastErr || new Error("bermuda.glb load failed");
+}
+
 /**
  * Load Bermuda GLB, SI-scale, build water border, return harvest roots.
  */
@@ -39,9 +63,11 @@ export async function loadBermudaIsland(scene, opts = {}) {
     const draco = new DRACOLoader();
     draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
     loader.setDRACOLoader(draco);
-  } catch { /* optional */ }
+  } catch {
+    /* optional */
+  }
 
-  const gltf = await loader.loadAsync(opts.url || MAP_URL);
+  const { gltf } = await loadIslandGltf(loader, opts.url || MAP_URL);
   const root = gltf.scene;
   root.name = "bermuda-island";
 
@@ -101,7 +127,6 @@ export async function loadBermudaIsland(scene, opts = {}) {
     if (!obj.isMesh) return;
     const kind = classifyMeshName(obj.name);
     if (kind !== "tree" && kind !== "rock") return;
-    // Prefer LOD parent
     let host = obj;
     if (obj.parent && /LOD0|pinecone|Rock_big|stone_01/i.test(obj.parent.name)) {
       host = obj.parent;
@@ -117,7 +142,7 @@ export async function loadBermudaIsland(scene, opts = {}) {
 
     harvestNodes.push({
       id: `hrv_${kind}_${harvestNodes.length}`,
-      kind, // tree → wood, rock → stone
+      kind,
       materialId: kind === "tree" ? "t0_wood" : "t0_stone",
       object: host,
       position: c.clone(),
@@ -130,11 +155,9 @@ export async function loadBermudaIsland(scene, opts = {}) {
     host.userData.harvestKind = kind;
   });
 
-  // Cap for perf
   const maxH = opts.maxHarvest ?? 80;
   const capped = harvestNodes.slice(0, maxH);
 
-  // Spawns around island center ring
   const spawns = [];
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
@@ -142,13 +165,11 @@ export async function loadBermudaIsland(scene, opts = {}) {
     spawns.push(new THREE.Vector3(Math.cos(a) * r, box.max.y * 0.05 + 1.2, Math.sin(a) * r));
   }
 
-  // Boss pads E / W
   const bossPads = [
     { id: "boss_east", position: new THREE.Vector3(halfW * 0.55, 1.5, 0), name: "East Colossus" },
     { id: "boss_west", position: new THREE.Vector3(-halfW * 0.55, 1.5, 0), name: "West Colossus" },
   ];
 
-  // Vendor pads near center
   const vendorPads = [
     { id: "armor", position: new THREE.Vector3(4, 1.2, 6), label: "Armourer" },
     { id: "weapon", position: new THREE.Vector3(-4, 1.2, 6), label: "Weaponsmith" },
