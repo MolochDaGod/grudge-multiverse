@@ -41,3 +41,15 @@ npm run deploy
 | Open | https://open.grudge-studio.com |
 
 Source controller: `F:\GitHub\three-player-controller` (upstream example).
+
+## DNS (Cloudflare)
+
+`grudge-studio.com` is on Cloudflare. Add:
+
+| Type | Name | Target | Proxy |
+|------|------|--------|-------|
+| CNAME | multiverse | `fda20071bf6d8a6d.vercel-dns-016.com` | DNS only (grey cloud) |
+
+Or A record: `multiverse` ? `76.76.21.21`
+
+Until DNS propagates: **https://grudge-multiverse.vercel.app**
