@@ -16,10 +16,17 @@ import { getDatabase, ref, set, onValue, onDisconnect, remove, get, onChildAdded
 import {
   setupClassSelectUI,
   attachWarlordsWorld,
-  enhanceMainPanel,
 } from "./game/warlordsBootstrap.js";
 import { loadBag } from "./game/inventory.js";
 import { mountWarlordsHud } from "./game/warlordsHud.js";
+import {
+  mountMainPanelShell,
+  renderMainPanelTab,
+  setMainPanelSocialApi,
+  showFriendRequestUI,
+  refreshOpenTab,
+  wireInventoryBuys,
+} from "./game/mainPanel.js";
 
 const BASE = import.meta.env.BASE_URL;
 /** @type {Awaited<ReturnType<typeof attachWarlordsWorld>> | null} */
@@ -744,15 +751,20 @@ function sendState() {
     });
 }
 
-// ---------- Players panel: friend / enemy relations ----------
+// ---------- Server tab: friend / enemy social ----------
 /** @type {Map<string, 'friend'|'enemy'>} */
-const playerRelations = new Map(); // targetId → relation (default enemy)
+const playerRelations = new Map();
+/** Outgoing pending friend requests (targetId) */
+const pendingOut = new Set();
+/** Incoming pending request fromId → true */
+const pendingIn = new Set();
+/** Incoming already shown toast once */
+const pendingInShown = new Set();
 const REL_STORAGE_KEY = "mv_player_relations_v1";
 
 function loadRelations() {
     try {
         const raw = JSON.parse(localStorage.getItem(REL_STORAGE_KEY) || "{}");
-        // raw: { [nameOrId]: 'friend'|'enemy' }
         for (const [k, v] of Object.entries(raw)) {
             if (v === "friend" || v === "enemy") playerRelations.set(k, v);
         }
@@ -765,24 +777,116 @@ function saveRelations() {
 }
 function getRelation(targetId) {
     if (!targetId || targetId === playerId) return "self";
+    // Friends first
     const byId = playerRelations.get(targetId);
-    if (byId) return byId;
+    if (byId === "friend") return "friend";
+    if (pendingIn.has(targetId)) return "pending_in";
+    if (pendingOut.has(targetId)) return "pending_out";
+    if (byId === "enemy") return "enemy";
     const name = remotePlayers.get(targetId)?.name;
     if (name) {
         const byName = playerRelations.get(`name:${name}`);
         if (byName) return byName;
     }
-    return "enemy"; // default: PvP
+    return "enemy"; // default: open PvP
 }
-function setRelation(targetId, rel) {
+function setRelation(targetId, rel, { sync = true } = {}) {
     if (!targetId || targetId === playerId) return;
     if (rel !== "friend" && rel !== "enemy") return;
     playerRelations.set(targetId, rel);
     const name = remotePlayers.get(targetId)?.name;
     if (name) playerRelations.set(`name:${name}`, rel);
+    pendingOut.delete(targetId);
     saveRelations();
     updateNameLabelRelation(targetId);
-    renderPlayersPanel();
+    if (sync) pushRelationRemote(targetId, rel);
+    if (mainPanelOpen) refreshOpenTab();
+    else renderPlayersPanel();
+}
+function pushRelationRemote(targetId, rel) {
+    try {
+        set(ref(db, `rooms/${roomId}/social/relations/${playerId}/${targetId}`), {
+            rel, t: Date.now(), name: myName,
+        });
+        // mirror so peer can read our stance
+        set(ref(db, `rooms/${roomId}/social/relations/${targetId}/${playerId}`), {
+            rel, t: Date.now(), name: myName, peer: true,
+        });
+    } catch (e) { console.warn("[social] push relation", e); }
+}
+function requestFriend(targetId) {
+    if (!targetId || targetId === playerId) return;
+    if (getRelation(targetId) === "friend") return;
+    pendingOut.add(targetId);
+    try {
+        set(ref(db, `rooms/${roomId}/social/requests/${targetId}/${playerId}`), {
+            fromId: playerId,
+            fromName: myName || playerId,
+            t: Date.now(),
+        });
+        addRoomNotify(remotePlayers.get(targetId)?.name || targetId, "friend request sent");
+    } catch (e) { console.warn("[social] request", e); }
+    if (mainPanelOpen) refreshOpenTab();
+}
+function declareEnemy(targetId) {
+    pendingOut.delete(targetId);
+    try {
+        remove(ref(db, `rooms/${roomId}/social/requests/${targetId}/${playerId}`));
+        remove(ref(db, `rooms/${roomId}/social/requests/${playerId}/${targetId}`));
+    } catch { /* ignore */ }
+    setRelation(targetId, "enemy");
+}
+function unfriend(targetId) {
+    setRelation(targetId, "enemy");
+    addRoomNotify(remotePlayers.get(targetId)?.name || targetId, "unfriended");
+}
+function acceptFriend(fromId) {
+    pendingOut.delete(fromId);
+    pendingIn.delete(fromId);
+    pendingInShown.delete(fromId);
+    try {
+        remove(ref(db, `rooms/${roomId}/social/requests/${playerId}/${fromId}`));
+        remove(ref(db, `rooms/${roomId}/social/requests/${fromId}/${playerId}`));
+    } catch { /* ignore */ }
+    setRelation(fromId, "friend");
+    addRoomNotify(remotePlayers.get(fromId)?.name || fromId, "is now your friend");
+}
+function declineFriend(fromId) {
+    pendingOut.delete(fromId);
+    pendingIn.delete(fromId);
+    pendingInShown.delete(fromId);
+    try {
+        remove(ref(db, `rooms/${roomId}/social/requests/${playerId}/${fromId}`));
+    } catch { /* ignore */ }
+    setRelation(fromId, "enemy");
+    addRoomNotify(remotePlayers.get(fromId)?.name || fromId, "declined — now hostile");
+}
+
+function wireMainPanelSocial() {
+    setMainPanelSocialApi({
+        getLocal: () => ({
+            id: playerId,
+            name: myName || "You",
+            kills: localKills,
+            deaths: localDeaths,
+            hp: myHp,
+        }),
+        getRemotes: () =>
+            [...remotePlayers.entries()].map(([id, rp]) => ({
+                id,
+                name: rp.name || id,
+                kills: rp.kills ?? 0,
+                deaths: rp.deaths ?? 0,
+                hp: rp._lastHp ?? "—",
+            })),
+        getRelation,
+        requestFriend,
+        declareEnemy,
+        unfriend,
+        acceptFriend,
+        declineFriend,
+        roomLabel: () => roomId.replace(/^gltf-/, "#"),
+    });
 }
 
 // Enemy areas (map zones). Inside zone → treat others as enemy for damage even if friend? 
@@ -850,72 +954,13 @@ function updateNameLabelRelation(targetId) {
 }
 
 function renderPlayersPanel() {
-    const list = document.getElementById("players-list");
-    if (!list) return;
-    const rows = [];
-
-    // Local player
-    rows.push({
-        id: playerId,
-        name: myName || "You",
-        local: true,
-        kills: localKills,
-        deaths: localDeaths,
-        hp: myHp,
-        rel: "self",
-    });
-    for (const [id, rp] of remotePlayers) {
-        rows.push({
-            id,
-            name: rp.name || id,
-            local: false,
-            kills: rp.kills ?? 0,
-            deaths: rp.deaths ?? 0,
-            hp: rp._lastHp ?? "—",
-            rel: getRelation(id),
-        });
-    }
-
-    list.innerHTML = rows.map((r) => {
-        if (r.local) {
-            return `<div class="pl-row is-local">
-                <div>
-                    <div class="pl-name">${escapeHtml(r.name)}<span class="tag">you</span></div>
-                    <div class="pl-meta">K ${r.kills} · D ${r.deaths} · HP ${r.hp}</div>
-                </div>
-                <div></div>
-                <div class="pl-rel"><button type="button" disabled>Self</button></div>
-            </div>`;
+    // Server tab is rendered by mainPanel.js when open
+    if (mainPanelOpen) {
+        refreshOpenTab();
+        const body = document.getElementById("mp-body");
+        if (document.querySelector("#main-panel-tabs button.on")?.dataset?.tab === "inventory") {
+            wireInventoryBuys(body);
         }
-        const fOn = r.rel === "friend" ? "on" : "";
-        const eOn = r.rel === "enemy" ? "on" : "";
-        return `<div class="pl-row" data-pid="${escapeHtml(r.id)}">
-            <div>
-                <div class="pl-name">${escapeHtml(r.name)}</div>
-                <div class="pl-meta">K ${r.kills} · D ${r.deaths}</div>
-            </div>
-            <div></div>
-            <div class="pl-rel">
-                <button type="button" class="friend ${fOn}" data-rel="friend" data-pid="${escapeHtml(r.id)}">Friend</button>
-                <button type="button" class="enemy ${eOn}" data-rel="enemy" data-pid="${escapeHtml(r.id)}">Enemy</button>
-            </div>
-        </div>`;
-    }).join("");
-
-    list.querySelectorAll("button[data-rel]").forEach((btn) => {
-        btn.addEventListener("click", (ev) => {
-            ev.preventDefault();
-            const id = btn.getAttribute("data-pid");
-            const rel = btn.getAttribute("data-rel");
-            setRelation(id, rel);
-        });
-    });
-
-    const areasList = document.getElementById("enemy-areas-list");
-    if (areasList) {
-        areasList.innerHTML = ENEMY_AREAS.map((a) =>
-            `<li><strong style="color:#ff8a8a">${escapeHtml(a.name)}</strong> — force PvP while inside${inEnemyArea && isInEnemyArea(localPlayer?._player?.getPlayerCapsule?.()?.position)?.id === a.id ? ' <em style="color:#f4c542">(you are here)</em>' : ""}</li>`
-        ).join("");
     }
 }
 
@@ -933,7 +978,13 @@ function openMainPanel() {
     mainPanelOpen = true;
     el.classList.add("open");
     el.setAttribute("aria-hidden", "false");
-    renderPlayersPanel();
+    wireMainPanelSocial();
+    // Default to Server tab (roster + friend/enemy)
+    const tabs = document.getElementById("main-panel-tabs");
+    tabs?.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.tab === "server");
+    });
+    renderMainPanelTab("server");
     document.exitPointerLock?.();
     localPlayer?.offAllEvent?.();
 }
@@ -949,6 +1000,7 @@ function toggleMainPanel() {
     if (mainPanelOpen) closeMainPanel();
     else openMainPanel();
 }
+window.__mvCloseMainPanel = closeMainPanel;
 
 function updateEnemyAreaBadge() {
     const badge = document.getElementById("enemy-area-badge");
@@ -1048,12 +1100,55 @@ function initFirebaseSync() {
         // Friend label: do not take damage from that player (unless enemy area)
         if (by && !canTakeDamageFrom(by)) return;
         if (by) lastAttackerOnMe = by;
-        // noGun characters ignore gun damage
-        if (!isDead && !PLAYER_MODEL.noGun) {
+        // Friends blocked above; everyone else can damage (incl. warlords noGun)
+        if (!isDead) {
             myHp = Math.max(0, myHp - (damage || 0));
             updateMyHPUI();
             if (myHp <= 0) triggerDeath();
         }
+    });
+
+    // Friend requests addressed to us
+    const reqRef = ref(db, `rooms/${roomId}/social/requests/${playerId}`);
+    onChildAdded(reqRef, (snap) => {
+        const data = snap.val() || {};
+        const fromId = data.fromId || snap.key;
+        if (!fromId || fromId === playerId) return;
+        if (playerRelations.get(fromId) === "friend") {
+            remove(snap.ref);
+            return;
+        }
+        pendingIn.add(fromId);
+        if (!pendingInShown.has(fromId)) {
+            pendingInShown.add(fromId);
+            const fromName = data.fromName || remotePlayers.get(fromId)?.name || fromId;
+            showFriendRequestUI(
+                fromId,
+                fromName,
+                () => acceptFriend(fromId),
+                () => declineFriend(fromId),
+            );
+        }
+        if (mainPanelOpen) refreshOpenTab();
+    });
+
+    // Peer relations sync (they accepted / unfriended)
+    const relRef = ref(db, `rooms/${roomId}/social/relations/${playerId}`);
+    onValue(relRef, (snap) => {
+        const data = snap.val() || {};
+        for (const [otherId, st] of Object.entries(data)) {
+            if (!st?.rel) continue;
+            if (st.rel === "friend" || st.rel === "enemy") {
+                const cur = playerRelations.get(otherId);
+                if (cur !== st.rel) {
+                    playerRelations.set(otherId, st.rel);
+                    pendingOut.delete(otherId);
+                    updateNameLabelRelation(otherId);
+                }
+            }
+        }
+        saveRelations();
+        if (mainPanelOpen) refreshOpenTab();
     });
 }
 
@@ -1587,7 +1682,8 @@ async function init() {
 
     // UI
     initUI();
-    enhanceMainPanel();
+    mountMainPanelShell();
+    wireMainPanelSocial();
     updateMyHPUI();
     const nameEl = document.getElementById("local-player-name");
     if (nameEl) nameEl.textContent = myName;

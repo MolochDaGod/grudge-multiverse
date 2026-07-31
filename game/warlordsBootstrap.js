@@ -54,68 +54,9 @@ export function setupClassSelectUI() {
   };
 }
 
+/** @deprecated use mountMainPanelShell from mainPanel.js (fleet main-panel layout). */
 export function enhanceMainPanel() {
-  const tabs = document.getElementById("main-panel-tabs");
-  if (!tabs) return;
-  tabs.innerHTML = `
-    <button type="button" class="on" data-tab="players">Players</button>
-    <button type="button" data-tab="bag">Bag</button>
-    <button type="button" data-tab="craft">Craft</button>
-    <button type="button" data-tab="vendors">Vendors</button>
-    <button type="button" data-tab="areas">Enemy Areas</button>
-  `;
-  let bagPanel = document.getElementById("bag-panel");
-  if (!bagPanel) {
-    bagPanel = document.createElement("div");
-    bagPanel.id = "bag-panel";
-    bagPanel.style.cssText =
-      "display:none;padding:12px 16px;overflow:auto;max-height:40vh;font-size:12px;color:#ccc;";
-    document.getElementById("players-list")?.parentElement?.insertBefore(
-      bagPanel,
-      document.getElementById("main-panel-foot"),
-    );
-  }
-  let craftPanel = document.getElementById("craft-panel");
-  if (!craftPanel) {
-    craftPanel = document.createElement("div");
-    craftPanel.id = "craft-panel";
-    craftPanel.style.cssText = bagPanel.style.cssText;
-    bagPanel.after(craftPanel);
-  }
-  let vendorPanel = document.getElementById("vendor-panel");
-  if (!vendorPanel) {
-    vendorPanel = document.createElement("div");
-    vendorPanel.id = "vendor-panel";
-    vendorPanel.style.cssText = bagPanel.style.cssText;
-    craftPanel.after(vendorPanel);
-  }
-
-  const show = (id) => {
-    const map = {
-      players: "players-list",
-      areas: "areas-panel",
-      bag: "bag-panel",
-      craft: "craft-panel",
-      vendors: "vendor-panel",
-    };
-    Object.values(map).forEach((pid) => {
-      const el = document.getElementById(pid);
-      if (el) el.style.display = "none";
-    });
-    const el = document.getElementById(map[id]);
-    if (el) el.style.display = "block";
-    if (id === "bag") renderBag();
-    if (id === "craft") renderCraft();
-    if (id === "vendors") renderVendors();
-  };
-
-  tabs.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      tabs.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
-      btn.classList.add("on");
-      show(btn.dataset.tab);
-    });
-  });
+  // no-op — multiplayer-gltf mounts fleet main panel
 }
 
 export function renderBag() {
@@ -486,8 +427,6 @@ export async function attachWarlordsWorld(ctx) {
       for (const [id, st] of Object.entries(data)) bosses.applyRemote(id, st);
     });
   }
-
-  enhanceMainPanel();
 
   const getClassState = () => ({
     classId,
