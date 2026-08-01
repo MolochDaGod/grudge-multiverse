@@ -1,14 +1,26 @@
 /**
- * Danger Room multiplayer relay client — fleet SSOT protocol (@workspace/danger-net).
- * Connects to Railway gameopen-api: wss://gameopen-production.up.railway.app/api/danger
+ * Multiverse realtime client — **dedicated Multiverse Railway room server**.
  *
- * Multiverse uses this as PRIMARY realtime presence; Firebase remains fallback.
+ * Fleet rule: each game has its own Railway service.
+ *   Multiverse → grudge-multiverse-room (this file)
+ *   NOT gameopen-production /api/danger (404 / wrong game)
+ *   Firebase is optional social/harvest only — never the multiplayer authority.
+ *
+ * Production WS: wss://<multiverse-railway>/api/mv?room=room1
  */
-export const WS_PATH = "/api/danger";
+export const WS_PATH = "/api/mv";
 export const STATE_REPORT_MS = 50;
 
-/** Production Railway host for Danger relay (from gameopen .env.example). */
-export const DEFAULT_DANGER_ORIGIN = "https://gameopen-production.up.railway.app";
+/**
+ * Dedicated Multiverse Railway origin.
+ * Override: VITE_MV_GAME_SERVER_URL or window.__MV_GAME_SERVER_URL
+ * Never fall back to gameopen-production (different game).
+ */
+export const DEFAULT_MV_RAILWAY =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_MV_GAME_SERVER_URL?.trim()) ||
+  (typeof window !== "undefined" && window.__MV_GAME_SERVER_URL) ||
+  // Set after first deploy; also try common public host names
+  "https://grudge-multiverse-room-production.up.railway.app";
 
 export function encode(msg) {
   return JSON.stringify(msg);
@@ -24,23 +36,35 @@ export function decodeServer(raw) {
   return null;
 }
 
-function relayUrl() {
-  const configured =
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_GAME_SERVER_URL?.trim()) ||
-    (typeof window !== "undefined" && window.__MV_GAME_SERVER_URL) ||
-    DEFAULT_DANGER_ORIGIN;
-  const base = String(configured).replace(/\/+$/, "");
-  const wsBase = base.replace(/^http(s?):\/\//i, (_m, s) => `ws${s || ""}://`);
-  // already ws?
-  if (/^wss?:\/\//i.test(base)) return `${base.replace(/\/+$/, "")}${WS_PATH}`;
-  return `${wsBase}${WS_PATH}`;
+function httpToWs(base) {
+  const b = String(base).replace(/\/+$/, "");
+  if (/^wss?:\/\//i.test(b)) return b;
+  return b.replace(/^http(s?):\/\//i, (_m, s) => `ws${s || ""}://`);
 }
 
 /**
- * Thin DangerClient clone for Multiverse (no monorepo dep).
+ * Build WS URL for Multiverse room server.
+ * @param {string} roomHint e.g. room1 / MVROOM1
+ */
+export function multiverseWsUrl(roomHint) {
+  const room = String(roomHint || "room1")
+    .replace(/^MV/i, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .toLowerCase()
+    .slice(0, 32) || "room1";
+  const origin =
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_MV_GAME_SERVER_URL?.trim()) ||
+    (typeof window !== "undefined" && window.__MV_GAME_SERVER_URL) ||
+    DEFAULT_MV_RAILWAY;
+  const wsBase = httpToWs(origin);
+  return `${wsBase}${WS_PATH}?room=${encodeURIComponent(room)}`;
+}
+
+/**
+ * Multiverse room client (own Railway).
  */
 export class DangerRelay {
-  constructor() {
+  constructor(roomHint = "room1") {
     this.ws = null;
     this.wantOpen = false;
     this.reconnectTimer = null;
@@ -49,6 +73,11 @@ export class DangerRelay {
     this.roomCode = null;
     this.hostId = null;
     this.mode = "coop";
+    this.roomHint = roomHint;
+    this.playerName = "Player";
+    this.classId = "warrior";
+    this.raceId = "western-kingdoms";
+    this.backend = "multiverse-railway";
     this.listeners = {
       open: new Set(),
       close: new Set(),
@@ -58,9 +87,10 @@ export class DangerRelay {
       joined: new Set(),
       left: new Set(),
       combat: new Set(),
+      chat: new Set(),
       error: new Set(),
     };
-    this._url = relayUrl();
+    this._url = multiverseWsUrl(roomHint);
   }
 
   on(event, cb) {
@@ -73,7 +103,7 @@ export class DangerRelay {
       try {
         cb(...args);
       } catch (e) {
-        console.warn("[DangerRelay]", event, e);
+        console.warn("[MvRelay]", event, e);
       }
     }
   }
@@ -87,6 +117,7 @@ export class DangerRelay {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
+    this._url = multiverseWsUrl(this.roomHint);
     let ws;
     try {
       ws = new WebSocket(this._url);
@@ -95,10 +126,25 @@ export class DangerRelay {
       return;
     }
     this.ws = ws;
-    console.info("[DangerRelay] connecting", this._url);
+    console.info("[MvRelay] connecting Multiverse Railway", this._url);
 
     ws.onopen = () => {
-      for (const f of this.outbox.splice(0)) ws.send(f);
+      // Identify to room server
+      this.send(
+        encode({
+          t: "hello",
+          name: this.playerName,
+          classId: this.classId,
+          raceId: this.raceId,
+        }),
+      );
+      for (const f of this.outbox.splice(0)) {
+        try {
+          ws.send(f);
+        } catch {
+          /* */
+        }
+      }
       this.emit("open");
     };
     ws.onclose = () => {
@@ -127,14 +173,11 @@ export class DangerRelay {
     const msg = decodeServer(raw);
     if (!msg) return;
     switch (msg.t) {
-      case "rooms":
-        this.emit("rooms", msg.rooms);
-        break;
       case "welcome":
         this.selfId = msg.self;
         this.roomCode = msg.code;
         this.hostId = msg.hostId;
-        this.mode = msg.mode;
+        this.mode = msg.mode || "coop";
         this.emit("welcome", msg);
         break;
       case "snapshot":
@@ -148,6 +191,9 @@ export class DangerRelay {
         break;
       case "combat":
         this.emit("combat", msg.ev);
+        break;
+      case "chat":
+        this.emit("chat", msg);
         break;
       case "error":
         this.emit("error", msg.code, msg.message);
@@ -168,26 +214,10 @@ export class DangerRelay {
     }
   }
 
-  list() {
-    this.send(encode({ t: "list" }));
-  }
-
-  create(opts) {
-    this.send(
-      encode({
-        t: "create",
-        player: opts.player,
-        name: (opts.name || "Multiverse").slice(0, 60),
-        mode: opts.mode === "pvp" ? "pvp" : "coop",
-        visibility: opts.visibility === "private" ? "private" : "public",
-        content: opts.content || { kind: "arena", name: "Multiverse Bermuda", preset: "bermuda" },
-      }),
-    );
-  }
-
-  join(code, player) {
-    this.send(encode({ t: "join", code: String(code).toUpperCase(), player }));
-  }
+  /** @deprecated Multiverse Railway uses query room= ; keep no-ops for API compat */
+  list() {}
+  create() {}
+  join() {}
 
   leave() {
     this.roomCode = null;
@@ -196,7 +226,15 @@ export class DangerRelay {
   }
 
   sendState(snap) {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(encode({ t: "state", snap }));
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        encode({
+          t: "state",
+          name: this.playerName,
+          snap,
+        }),
+      );
+    }
   }
 
   sendCombat(ev) {
@@ -219,52 +257,59 @@ export class DangerRelay {
 }
 
 /**
- * Join Multiverse room on Danger relay.
- * Room code from hash (#room1 → MVROOM1) or create public Multiverse room.
+ * Connect to **Multiverse Railway** room (not Firebase, not gameopen).
+ * @param {string} playerName
+ * @param {string} roomHint hash room e.g. room1 or MVroom1
+ * @param {{ classId?: string, raceId?: string }} [meta]
  */
-export async function connectMultiverseDanger(playerName, roomHint) {
-  const client = new DangerRelay();
-  const code = (roomHint || "MV1").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 8) || "MV1";
+export async function connectMultiverseDanger(playerName, roomHint, meta = {}) {
+  const hint = (roomHint || "room1").replace(/^MV/i, "") || "room1";
+  const client = new DangerRelay(hint);
+  client.playerName = String(playerName || "Player").slice(0, 24);
+  client.classId = meta.classId || localStorage.getItem("mv_class_id") || "warrior";
+  client.raceId = meta.raceId || localStorage.getItem("mv_race_id") || "western-kingdoms";
 
   return new Promise((resolve) => {
     let settled = false;
     const done = (ok, err) => {
       if (settled) return;
       settled = true;
-      resolve({ client, ok, err, code });
+      resolve({
+        client,
+        ok,
+        err,
+        code: client.roomCode || hint,
+        backend: "multiverse-railway",
+      });
     };
 
     const t = setTimeout(() => {
       done(false, "timeout");
-    }, 8000);
-
-    client.on("open", () => {
-      // Prefer join existing Multiverse code; if fail, create
-      client.join(code, playerName);
-    });
+    }, 10000);
 
     client.on("welcome", (msg) => {
       clearTimeout(t);
       done(true);
-      console.info("[DangerRelay] welcome", msg.code, "players", msg.players?.length);
+      console.info(
+        "[MvRelay] welcome Multiverse Railway room=",
+        msg.code,
+        "self=",
+        msg.self,
+        "peers=",
+        msg.players?.length,
+      );
     });
 
     client.on("error", (c, message) => {
-      if (c === "not_found" || c === "room_full") {
-        client.create({
-          player: playerName,
-          name: `Multiverse ${code}`,
-          mode: "coop",
-          visibility: "public",
-          content: { kind: "arena", name: "Bermuda", preset: "bermuda" },
-        });
-      } else {
-        console.warn("[DangerRelay] error", c, message);
+      console.warn("[MvRelay] error", c, message);
+      if (c === "room_full") {
+        clearTimeout(t);
+        done(false, "room_full");
       }
     });
 
     client.on("close", () => {
-      /* reconnect handles */
+      /* reconnect loop; only fail if never welcomed */
     });
 
     try {

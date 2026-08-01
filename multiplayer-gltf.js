@@ -1728,18 +1728,23 @@ async function init() {
     const nameEl = document.getElementById("local-player-name");
     if (nameEl) nameEl.textContent = myName;
 
-    // B — Railway Danger Room relay (primary presence); Firebase still for social/harvest
+    // ── Multiverse Railway (own service) — NOT gameopen-production ──────────
+    // Fleet rule: each game → its own Railway. Firebase is harvest/chat optional only.
     let dangerNet = null;
     try {
-        setNetStatus("Net · Railway Danger…", false);
-        window.setLoaderStatus?.("Connecting Railway Danger room…");
+        setNetStatus("Net · Multiverse Railway…", false);
+        window.setLoaderStatus?.("Connecting Multiverse Railway room…");
         const roomHint = (location.hash || "#room1").slice(1) || "room1";
-        const { client, ok, err, code } = await connectMultiverseDanger(myName, `MV${roomHint}`);
+        const sel = loadSelection();
+        const { client, ok, err, code, backend } = await connectMultiverseDanger(myName, roomHint, {
+            classId: sel.classId,
+            raceId: sel.raceId,
+        });
         dangerNet = client;
         window.__mvDangerNet = client;
+        window.__mvNetBackend = backend || "multiverse-railway";
         if (ok) {
-            setNetStatus(`Net · Danger ${code || "OK"}`, true);
-            // Report SI capsule state at STATE_REPORT_MS
+            setNetStatus(`Net · Railway ${code || roomHint}`, true);
             let lastReport = 0;
             const reportState = () => {
                 if (!dangerNet?.connected) return;
@@ -1750,46 +1755,52 @@ async function init() {
                 lastReport = now;
                 const vel = localPlayer._player.getVelocity?.() || { x: 0, y: 0, z: 0 };
                 const moving = Math.hypot(vel.x, vel.z) > 0.05;
-                const sel = loadSelection();
+                const sel2 = loadSelection();
                 dangerNet.sendState({
                     px: cap.position.x,
                     py: cap.position.y,
                     pz: cap.position.z,
                     ry: cap.rotation?.y ?? 0,
                     clip: moving ? "run" : "idle",
-                    weapon: sel.classId || "none",
+                    weapon: sel2.classId || "none",
                     hp: myHp,
                     moving,
                     grounded: !!localPlayer._player.getIsOnGround?.(),
                     guard: "open",
                 });
             };
-            // Hook into warlords update via shared interval
             setInterval(reportState, STATE_REPORT_MS);
             dangerNet.on("snapshot", (players) => {
-                // Lightweight: update remote name tags if Firebase remotes exist
                 for (const p of players || []) {
                     if (p.id === dangerNet.selfId) continue;
-                    const rp = [...remotePlayers.values()].find((r) => r.name === p.name);
+                    // Prefer match by remote id tag if present, else name
+                    let rp = remotePlayers.get(p.id);
+                    if (!rp) {
+                        rp = [...remotePlayers.values()].find((r) => r.name === p.name);
+                    }
                     if (rp && typeof p.px === "number") {
                         try {
                             rp.applyState?.({
                                 x: p.px, y: p.py, z: p.pz,
                                 ry: p.ry, name: p.name, t: Date.now(),
                             });
-                        } catch { /* remote may use different state shape */ }
+                        } catch { /* remote shape */ }
                     }
                 }
             });
-            dangerNet.on("close", () => setNetStatus("Net · Danger reconnect…", false));
-            dangerNet.on("open", () => setNetStatus(`Net · Danger ${dangerNet.roomCode || "live"}`, true));
+            dangerNet.on("close", () => setNetStatus("Net · Railway reconnect…", false));
+            dangerNet.on("open", () => setNetStatus(`Net · Railway ${dangerNet.roomCode || "live"}`, true));
         } else {
-            setNetStatus(`Net · Firebase fallback (${err || "no danger"})`, false);
-            console.warn("[net] Danger relay unavailable, Firebase presence only", err);
+            // Do NOT claim "Firebase multiplayer" — presence is degraded
+            setNetStatus(`Net · offline (${err || "no railway"})`, false);
+            console.warn(
+                "[net] Multiverse Railway unavailable — start server/ on Railway. Firebase is not multiplayer authority.",
+                err,
+            );
         }
     } catch (e) {
-        setNetStatus("Net · Firebase only", false);
-        console.warn("[net] Danger connect failed", e);
+        setNetStatus("Net · offline", false);
+        console.warn("[net] Multiverse Railway connect failed", e);
     }
 
     // Warlords: Bermuda island + grudge6 + harvest + bosses + skills + soft-lock

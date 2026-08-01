@@ -1,0 +1,11 @@
+# Multiverse dedicated Railway service lives in ./server
+# Fleet rule: each game = its own Railway project/service (not gameopen-production).
+[build]
+builder = "NIXPACKS"
+buildCommand = "cd server && npm install --omit=dev"
+
+[deploy]
+startCommand = "cd server && npm start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
