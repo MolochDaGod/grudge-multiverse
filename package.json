@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Grudge Multiverse — race→class grudge6 + Danger systems; Railway Danger relay + Firebase social fallback",
+  "description": "Grudge Multiverse — RTS Toon grudge6 + Bermuda CDN map + dedicated Railway room (/api/mv)",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/strip-map-glb.mjs",

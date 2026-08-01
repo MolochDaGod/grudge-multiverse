@@ -1456,35 +1456,62 @@ function animate() {
 // ==================== åˆå§‹åŒ– ====================
 // åˆå§‹åŒ–åœºæ™¯ã€æœ¬åœ°çŽ©å®¶ã€æ­¦å™¨ç³»ç»Ÿã€Firebase åŒæ­¥
 async function init() {
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Three.js production (r185+): sRGB + ACES, cap DPR, high-performance GPU
+    renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance",
+        stencil: false,
+        preserveDrawingBuffer: false,
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
+    renderer.toneMappingExposure = 1.05;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setAnimationLoop(animate);
     document.getElementById("container").appendChild(renderer.domElement);
 
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 1000);
+    // Far plane sized for Bermuda island (~800 m), not infinite draw
+    camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1200);
 
     controls = new MapControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
+    controls.maxPolarAngle = Math.PI * 0.48;
+    controls.minDistance = 2;
+    controls.maxDistance = 80;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 4));
-    const dir = new THREE.DirectionalLight(0xffffff, 6);
-    dir.position.set(10, 20, 10);
+    // Hemi + key sun (few lights — production lighting budget)
+    scene.add(new THREE.HemisphereLight(0xb8d0ff, 0x3a2818, 0.55));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const dir = new THREE.DirectionalLight(0xfff1d0, 1.65);
+    dir.position.set(40, 80, 30);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(1024, 1024);
+    dir.shadow.camera.near = 1;
+    dir.shadow.camera.far = 200;
+    const sc = dir.shadow.camera;
+    sc.left = sc.bottom = -50;
+    sc.right = sc.top = 50;
     scene.add(dir);
+    scene.fog = new THREE.FogExp2(0x0c1018, 0.0045);
 
-    // èƒŒæ™¯
+    // Background / IBL (optional HDR; solid fallback if missing)
+    scene.background = new THREE.Color(0x0a0e16);
     new HDRLoader().load(
         "./img/1.hdr",
         (texture) => {
+            // HDR is linear data — do not force sRGB colorSpace
             texture.mapping = THREE.EquirectangularReflectionMapping;
             scene.background = texture;
+            scene.environment = texture;
         },
         undefined,
         (err) => {
-            console.warn("HDR åŠ è½½å¤±è´¥ï¼š", err);
+            console.warn("[init] HDR optional failed — solid sky", err?.message || err);
         }
     );
 

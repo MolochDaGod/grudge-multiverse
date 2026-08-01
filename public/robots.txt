@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://grudge-multiverse.vercel.app/

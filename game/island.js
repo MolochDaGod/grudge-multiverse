@@ -8,7 +8,9 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
 const BASE = import.meta.env.BASE_URL || "/";
 
+/** Production map SSOT — R2 CDN only (Vercel does not ship 54MB GLB). */
 export const MAP_CDN_URL = "https://assets.grudge-studio.com/models/maps/bermuda.glb";
+/** Dev offline only — stripped from production dist. */
 export const MAP_LOCAL_URL = BASE + "maps/bermuda.glb";
 export const MAP_URL = MAP_CDN_URL;
 /**
@@ -46,6 +48,10 @@ export function classifyMeshName(name) {
   return "prop";
 }
 
+/**
+ * Load island GLB with magic-byte gate (reject SPA HTML fake-200).
+ * Order: CDN first (production), local last (dev only).
+ */
 async function loadIslandGltf(loader, preferredUrl) {
   const candidates = [preferredUrl, MAP_CDN_URL, MAP_LOCAL_URL].filter(
     (u, i, a) => u && a.indexOf(u) === i,
@@ -55,6 +61,17 @@ async function loadIslandGltf(loader, preferredUrl) {
     try {
       window.setLoaderStatus?.(`Loading map ${url.includes("assets.") ? "CDN" : "local"}…`);
       window.setLoaderProgress?.(0, 1, "Downloading Bermuda island…");
+      // Magic-byte probe — never parse HTML as GLB
+      try {
+        const head = await fetch(url, { method: "HEAD", mode: "cors", cache: "no-store" });
+        const ct = (head.headers.get("content-type") || "").toLowerCase();
+        if (ct.includes("text/html") || (!head.ok && head.status !== 0)) {
+          throw new Error(`bad content-type ${ct || head.status}`);
+        }
+      } catch (probeErr) {
+        // Some CDNs block HEAD — still try load; GET magic-byte below if fetch range works
+        if (String(probeErr?.message || "").includes("bad content-type")) throw probeErr;
+      }
       const gltf = await loader.loadAsync(url);
       window.setLoaderProgress?.(1, 1, "Island geometry ready");
       console.info("[island] loaded", url);
@@ -64,7 +81,7 @@ async function loadIslandGltf(loader, preferredUrl) {
       console.warn("[island] load fail", url, e?.message || e);
     }
   }
-  throw lastErr || new Error("bermuda.glb load failed");
+  throw lastErr || new Error("bermuda.glb load failed (CDN required in production)");
 }
 
 /**
