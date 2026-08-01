@@ -91,6 +91,11 @@ function ensureHudStyles() {
       display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: #ddd;
     }
     #mv-combat-frame .cf-boss { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,100,60,0.25); }
+    #mv-combat-frame .cf-telegraph {
+      margin-top: 4px; font-size: 10px; font-weight: 700; color: #ffb070;
+      letter-spacing: 0.04em; animation: mv-tel-pulse 0.45s ease-in-out infinite alternate;
+    }
+    @keyframes mv-tel-pulse { from { opacity: 0.65; } to { opacity: 1; } }
     #mv-combat-frame .cf-mats { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
     #mv-combat-frame .cf-mat {
       display: flex; align-items: center; gap: 4px; padding: 2px 6px;
@@ -155,13 +160,20 @@ export function refreshCombatFrame(extra = {}) {
     ? `<div class="cf-wep">${iconHtml(wep.id || wep.name, 18, wep.name)}<span>${escapeHtml(wep.name)}${wep.dmg ? ` · ${wep.dmg} dmg` : ""}</span></div>`
     : `<div class="cf-meta" style="margin-top:4px;opacity:0.7">No weapon · open <kbd>I</kbd> Equipment</div>`;
   const boss = window.__mvBossTarget;
+  const tel = window.__mvBossTelegraph;
+  const telHtml = tel
+    ? `<div class="cf-telegraph">⚠ ${escapeHtml(tel.boss || "")} · ${escapeHtml(tel.attack || "Attack")}</div>`
+    : "";
   const bossHtml =
     boss && boss.hp > 0
       ? `<div class="cf-boss">
           <div class="cf-meta"><span>${escapeHtml(boss.name || "Boss")}</span><span>${Math.round(boss.hp)}/${Math.round(boss.maxHp || 1)}</span></div>
           <div class="cf-bar cf-boss-hp"><i style="width:${Math.max(0, Math.min(100, (boss.hp / Math.max(1, boss.maxHp || 1)) * 100))}%"></i></div>
+          ${telHtml}
         </div>`
-      : "";
+      : telHtml
+        ? `<div class="cf-boss">${telHtml}</div>`
+        : "";
   el.innerHTML = `
     <div class="cf-name">${escapeHtml(name)}${classLabel ? ` · ${escapeHtml(classLabel)}` : ""} · L${bag.level || 1}${scaleNote}</div>
     <div class="cf-meta"><span>HP</span><span>${Math.round(hp)} / ${Math.round(maxHp)}</span></div>

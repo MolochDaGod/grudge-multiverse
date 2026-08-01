@@ -347,23 +347,24 @@ export async function attachWarlordsWorld(ctx) {
     },
   });
 
-  // World bosses — real Warlords / Hellmaw GLBs (Shadow Flame Mantis + Ash Ghast)
-  // Ground pads to terrain (SI) so colliders/range match map
-  const groundedPads = (island.bossPads || []).map((p, i) => {
+  // World bosses — Mantis + Ash Ghast (projectiles) + Werelephant (real GLB)
+  // Elden Ring-style: deterministic rotation, ground telegraphs, then hit
+  const groundedPads = (island.bossPads || []).map((p) => {
     const pos = p.position.clone();
     pos.y = (groundAt(pos.x, pos.z) ?? 0) + 0.05;
-    // East = Mantis world boss · West = Ash Ghast (uMMORPG island world-boss line)
-    const defId = i === 0 || /east/i.test(p.id) ? "shadow_flame_mantis" : "volcano_ghast";
-    const name =
-      defId === "shadow_flame_mantis" ? "Shadow Flame Mantis" : "Ash Ghast";
-    return { ...p, position: pos, defId, name };
+    return {
+      ...p,
+      position: pos,
+      defId: p.defId || "shadow_flame_mantis",
+      name: p.name,
+    };
   });
-  window.setLoaderStatus?.("Loading world bosses (Mantis · Ghast)…");
+  window.setLoaderStatus?.("Loading bosses (Mantis · Ghast · Werelephant)…");
   const bosses = new BossFight(scene, groundedPads);
   await bosses.load();
   flash?.(
     `Bosses ready · ${bosses.bosses.map((b) => `${b.name} ${b.heightM?.toFixed?.(1) || "?"}m`).join(" · ")}`,
-    1.6,
+    1.8,
   );
   // Mark bosses hostile for soft-lock select
   for (const b of bosses.bosses || []) {
@@ -697,6 +698,16 @@ export async function attachWarlordsWorld(ctx) {
       const attacks = bosses.update(dt, pos);
       for (const a of attacks) {
         ctx.onBossHitLocal?.(a.damage, a.name);
+      }
+      // Refresh HUD when boss telegraph changes
+      if (window.__mvBossTelegraph || window.__mvBossTarget) {
+        /* combat frame reads globals — light refresh throttle */
+        if (!this._hudAcc) this._hudAcc = 0;
+        this._hudAcc += dt;
+        if (this._hudAcc > 0.2) {
+          this._hudAcc = 0;
+          refreshCombatFrame();
+        }
       }
     },
     onPlayerKillEnemy(isBoss) {
