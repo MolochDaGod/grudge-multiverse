@@ -18,6 +18,13 @@ import {
 } from "./inventory.js";
 import { QUICK_RECIPES, craft } from "./crafting.js";
 import { VENDORS, buy } from "./vendors.js";
+import { spawnVendorProp } from "./vendorProps.js";
+import {
+  openVendorShop,
+  closeVendorShop,
+  setVendorPrompt,
+  isVendorShopOpen,
+} from "./vendorShopUi.js";
 import { FleetSkillVfx, vfxKindForSkill } from "./fleetVfx.js";
 import {
   aim,
@@ -474,36 +481,60 @@ export async function attachWarlordsWorld(ctx) {
     );
   }
 
+  // Weapon / armor booths — real weaponvendor.glb (SI fit ~4.5 m)
+  window.setLoaderStatus?.("Loading weapon vendor booth…");
+  /** @type {Awaited<ReturnType<typeof spawnVendorProp>>[]} */
+  const vendorProps = [];
   for (const v of island.vendorPads) {
-    const m = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.4, 0.5, 1.6, 10),
-      new THREE.MeshStandardMaterial({ color: v.id === "armor" ? 0x4a90d9 : 0xc8a84b }),
-    );
-    const vy = groundAt(v.position.x, v.position.z) ?? 0;
-    m.position.set(v.position.x, vy + 0.8, v.position.z);
-    m.castShadow = true;
-    scene.add(m);
-    const label = document.createElement("div");
-    label.className = "player-name-label";
-    label.style.display = "block";
-    label.textContent = v.label;
-    document.body.appendChild(label);
-    v._mesh = m;
-    v._label = label;
+    try {
+      const prop = await spawnVendorProp(scene, v, groundAt);
+      vendorProps.push(prop);
+      v._mesh = prop.root;
+      v._interactR = prop.interactRadius;
+      v._kind = prop.kind;
+      const label = document.createElement("div");
+      label.className = "player-name-label";
+      label.style.display = "block";
+      label.textContent = v.label;
+      document.body.appendChild(label);
+      v._label = label;
+    } catch (e) {
+      console.warn("[vendor] spawn failed", v.id, e);
+    }
   }
+  flash?.(
+    `Vendors ready · walk near booth · E to trade`,
+    1.2,
+  );
 
   document.addEventListener("keydown", (e) => {
+    if (e.code === "Escape" && isVendorShopOpen()) {
+      closeVendorShop();
+      return;
+    }
     if (e.code !== "KeyE" || e.repeat) return;
     const cam = ctx.camera;
     if (!cam || !capsule) return;
 
-    // Prefer loot pickup if standing on a drop
+    // 1) Vendor booth (very near)
+    for (const v of island.vendorPads) {
+      if (!v._mesh) continue;
+      const d = capsule.position.distanceTo(v._mesh.position);
+      if (d <= (v._interactR || 2.8)) {
+        openVendorShop(v.id === "armor" ? "armor" : "weapon");
+        flash?.(`${v.label} · shop open`, 0.6);
+        return;
+      }
+    }
+
+    // 2) Loot pickup
     const nearLoot = loot.pickNearest(capsule.position, 2.6);
     if (nearLoot) {
       loot.collect(nearLoot.id);
       return;
     }
 
+    // 3) Harvest
     const origin = cam.position.clone();
     const dir = new THREE.Vector3();
     cam.getWorldDirection(dir);
@@ -516,12 +547,6 @@ export async function attachWarlordsWorld(ctx) {
           broken: node.broken,
           t: Date.now(),
         });
-      }
-    } else {
-      for (const v of island.vendorPads) {
-        if (v._mesh && capsule.position.distanceTo(v._mesh.position) < 3) {
-          flash?.(`${v.label}: open panel (I) → Inventory / Vendors`, 1);
-        }
       }
     }
   });
@@ -588,24 +613,39 @@ export async function attachWarlordsWorld(ctx) {
         }
       }
 
-      // Loot / harvest proximity prompts
-      const nearLoot = loot.pickNearest(pos, 2.8);
-      if (nearLoot) {
-        setHarvestPrompt(true, nearLoot.item?.name || "loot", "loot");
+      // Vendor / loot / harvest proximity prompts (priority: vendor → loot → harvest)
+      let nearVendor = null;
+      for (const v of island.vendorPads) {
+        if (!v._mesh) continue;
+        const d = pos.distanceTo(v._mesh.position);
+        if (d <= (v._interactR || 2.8)) {
+          nearVendor = v;
+          break;
+        }
+      }
+      if (nearVendor) {
+        setVendorPrompt(true, nearVendor.label || "Vendor");
+        setHarvestPrompt(false);
       } else {
-        let nearHarvest = null;
-        let bestD = 3.2;
-        if (harvest.nodes && typeof harvest.nodes.values === "function") {
-          for (const n of harvest.nodes.values()) {
-            if (n.broken || !n.position) continue;
-            const d = Math.hypot(n.position.x - pos.x, n.position.z - pos.z);
-            if (d < bestD) {
-              bestD = d;
-              nearHarvest = n;
+        setVendorPrompt(false);
+        const nearLoot = loot.pickNearest(pos, 2.8);
+        if (nearLoot) {
+          setHarvestPrompt(true, nearLoot.item?.name || "loot", "loot");
+        } else {
+          let nearHarvest = null;
+          let bestD = 3.2;
+          if (harvest.nodes && typeof harvest.nodes.values === "function") {
+            for (const n of harvest.nodes.values()) {
+              if (n.broken || !n.position) continue;
+              const d = Math.hypot(n.position.x - pos.x, n.position.z - pos.z);
+              if (d < bestD) {
+                bestD = d;
+                nearHarvest = n;
+              }
             }
           }
+          setHarvestPrompt(!!nearHarvest, nearHarvest?.kind || "resource", "harvest");
         }
-        setHarvestPrompt(!!nearHarvest, nearHarvest?.kind || "resource", "harvest");
       }
 
       // Nearest living boss for HUD target strip

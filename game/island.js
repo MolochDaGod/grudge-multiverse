@@ -321,10 +321,10 @@ export async function loadBermudaIsland(scene, opts = {}) {
     },
   ];
 
-  // Vendors near origin hub (SI metres)
+  // Vendors near hub — weapon booth uses weaponvendor.glb (spawned in warlordsBootstrap)
   const vendorPads = [
-    { id: "armor", position: new THREE.Vector3(8, 1.2, 10), label: "Armourer" },
-    { id: "weapon", position: new THREE.Vector3(-8, 1.2, 10), label: "Weaponsmith" },
+    { id: "weapon", position: new THREE.Vector3(10, 1.2, 12), label: "Weaponsmith" },
+    { id: "armor", position: new THREE.Vector3(-10, 1.2, 12), label: "Armourer" },
   ];
 
   // Invisible large ground plane under island as physics safety net

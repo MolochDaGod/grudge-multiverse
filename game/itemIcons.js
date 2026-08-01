@@ -1,18 +1,21 @@
 /**
- * Item / skill icons — fleet catalog + resilient fallbacks.
- * Catalog SSOT: info.grudge-studio.com/api/v1/master-items.json
- * Binary icons often 404 on github.io — map to Open public icons + glyph chips.
+ * Item / skill / unit / building icons.
+ *
+ * Priority:
+ *  1. Desktop pack shipped at /ui/icons/ (weapons, armor, entities, resources…)
+ *  2. info.grudge-studio.com master-items catalog (iconUrl)
+ *  3. assets.grudge-studio.com/game-assets/icons
+ *  4. gameopen.vercel.app/icons
  */
 
 export const MASTER_ITEMS_URL = "https://info.grudge-studio.com/api/v1/master-items.json";
-export const MASTER_ITEMS_FALLBACK =
-  "https://assets.grudge-studio.com/api/v1/grudge6-gear-presets.json";
-/** Open ships a stable icon pack used by Danger Room. */
+export const INFO_ICONS = "https://info.grudge-studio.com/icons";
+export const CDN_ICONS = "https://assets.grudge-studio.com/game-assets/icons";
 export const OPEN_ICONS = "https://gameopen.vercel.app/icons";
+/** Multiverse-local Desktop pack (curated from C:\\Users\\…\\Desktop\\icons\\icons) */
 
 /** @type {Map<string, { id: string, name: string, iconUrl: string, tier?: number, type?: string }>} */
 const byId = new Map();
-/** @type {Map<string, { id: string, name: string, iconUrl: string }>} */
 const byName = new Map();
 
 let loadPromise = null;
@@ -24,27 +27,80 @@ function norm(s) {
     .replace(/[^a-z0-9]+/g, "");
 }
 
-/** Prefer Open icons; rewrite dead github ObjectStore hosts. */
+/** Map Multiverse / catalog ids → Desktop pack relative paths */
+const DESKTOP_MAP = {
+  t0_sword: "weapons/Sword_01.png",
+  "t0-sword": "weapons/Sword_01.png",
+  t1_sword: "weapons/Sword_05.png",
+  t0_bow: "weapons/Bow_01.png",
+  "t0-bow": "weapons/Bow_01.png",
+  t1_bow: "weapons/Bow_05.png",
+  t0_staff: "weapons/staff_1.png",
+  t1_staff: "weapons/staff_5.png",
+  t0_axe: "weapons/Axe_01.png",
+  t1_axe: "weapons/Axe_05.png",
+  t0_shield: "weapons/shield_01.png",
+  t1_shield: "weapons/shield_05.png",
+  t0_mail: "armor/Chest_01.png",
+  t1_mail: "armor/Chest_05.png",
+  t0_leather: "armor/Chest_02.png",
+  t1_leather: "armor/Chest_06.png",
+  t0_robe: "armor/Chest_03.png",
+  t1_robe: "armor/Chest_07.png",
+  t0_wood: "resources/Loot_01.png",
+  t0_stone: "resources/Loot_02.png",
+  t0_scrap: "resources/Loot_03.png",
+  t0_hide_scrap: "resources/Loot_04.png",
+  t0_hide: "resources/Loot_04.png",
+  vendor_weapon: "entities/Blacksmith Icon.png",
+  vendor_armor: "entities/Armory Icon.png",
+  blacksmith: "entities/Blacksmith Icon.png",
+  armory: "entities/Armory Icon.png",
+  arsenal: "entities/Arsenal Icon.png",
+  foundry: "entities/Foundry Icon.png",
+};
+
+export function desktopIconUrl(rel) {
+  if (!rel) return null;
+  const clean = String(rel).replace(/^\/+/, "");
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+  return `${base}ui/icons/${clean}`;
+}
+
 export function rewriteIconUrl(url, hint = "") {
   if (!url || typeof url !== "string") return localIconFor(hint);
-  if (/molochdagod\.github\.io|raw\.githubusercontent\.com.*ObjectStore/i.test(url)) {
-    return localIconFor(hint || url);
+  // Dead github.io → info.grudge-studio.com (same /icons paths)
+  if (/molochdagod\.github\.io\/ObjectStore\//i.test(url)) {
+    return url.replace(
+      /https?:\/\/molochdagod\.github\.io\/ObjectStore\//i,
+      "https://info.grudge-studio.com/",
+    );
   }
   return url;
 }
 
 function localIconFor(hint) {
   const h = String(hint || "").toLowerCase();
-  if (/bow|longbow|arrow|ranger|yew/.test(h)) return `${OPEN_ICONS}/attack.png`;
-  if (/staff|mage|magic|arcane|bolt|meteor/.test(h)) return `${OPEN_ICONS}/charge.png`;
-  if (/axe|worge|smash|cleave/.test(h)) return `${OPEN_ICONS}/ambush.png`;
-  if (/shield|block|fortify|guard|bash/.test(h)) return `${OPEN_ICONS}/defend.png`;
-  if (/sword|slash|blade|melee|execute|rend/.test(h)) return `${OPEN_ICONS}/attack.png`;
-  if (/wood|tree|harvest|plant/.test(h)) return `${OPEN_ICONS}/harvest.png`;
-  if (/stone|ore|rock|scrap|mine/.test(h)) return `${OPEN_ICONS}/build.png`;
-  if (/armor|mail|leather|robe|hide|chest/.test(h)) return `${OPEN_ICONS}/equip.png`;
-  if (/gold|coin|currency/.test(h)) return `${OPEN_ICONS}/loot.png`;
-  if (/skill|buff|howl|cry|enrage|mark/.test(h)) return `${OPEN_ICONS}/combat-pad.png`;
+  const idTry = DESKTOP_MAP[h] || DESKTOP_MAP[h.replace(/-/g, "_")];
+  if (idTry) return desktopIconUrl(idTry);
+
+  if (/sword|blade|melee|slash/.test(h)) return desktopIconUrl("weapons/Sword_01.png");
+  if (/bow|arrow|ranger|yew/.test(h)) return desktopIconUrl("weapons/Bow_01.png");
+  if (/staff|mage|magic|arcane/.test(h)) return desktopIconUrl("weapons/staff_1.png");
+  if (/axe|worge|cleave/.test(h)) return desktopIconUrl("weapons/Axe_01.png");
+  if (/shield|block|guard/.test(h)) return desktopIconUrl("weapons/shield_01.png");
+  if (/wood|tree|harvest/.test(h)) return desktopIconUrl("resources/Loot_01.png");
+  if (/stone|ore|rock|scrap/.test(h)) return desktopIconUrl("resources/Loot_02.png");
+  if (/armor|mail|leather|robe|chest/.test(h)) return desktopIconUrl("armor/Chest_01.png");
+  if (/potion|heal|mana/.test(h)) return desktopIconUrl("potions/P_Red03.png");
+  if (/blacksmith|weapon.?smith|vendor.?weapon/.test(h))
+    return desktopIconUrl("entities/Blacksmith Icon.png");
+  if (/armou?r|armory|vendor.?armor/.test(h)) return desktopIconUrl("entities/Armory Icon.png");
+  if (/house|cabin|building|castle|wall|gate/.test(h))
+    return desktopIconUrl("entities/Castle Wall Icon.png");
+  if (/ship|boat|catapult|siege/.test(h)) return desktopIconUrl("entities/Catapult.png");
+  if (/warrior|archer|mage|paladin|merc|unit/.test(h))
+    return desktopIconUrl("entities/barb warrior.png");
   return `${OPEN_ICONS}/gear-trial.png`;
 }
 
@@ -52,15 +108,16 @@ function indexItem(it) {
   if (!it) return;
   const id = it.id || it.uuid;
   const name = it.name || it.baseName || id;
+  // Prefer desktop map for known Multiverse ids
+  const desk =
+    (id && DESKTOP_MAP[id]) ||
+    (id && DESKTOP_MAP[String(id).toLowerCase()]) ||
+    (id && DESKTOP_MAP[String(id).toLowerCase().replace(/-/g, "_")]);
   const rawIcon = it.iconUrl || it.icon || it.image || "";
-  const iconUrl = rewriteIconUrl(rawIcon, `${id} ${name} ${it.category || ""} ${it.weaponType || ""}`);
-  const row = {
-    id,
-    name,
-    iconUrl,
-    tier: it.tier,
-    type: it.type || it.category,
-  };
+  const iconUrl = desk
+    ? desktopIconUrl(desk)
+    : rewriteIconUrl(rawIcon, `${id} ${name} ${it.category || ""}`);
+  const row = { id, name, iconUrl, tier: it.tier, type: it.type || it.category };
   if (id) {
     byId.set(String(id).toLowerCase(), row);
     byId.set(norm(id), row);
@@ -84,10 +141,10 @@ export async function ensureItemCatalog() {
         for (const it of items) indexItem(it);
       }
       loaded = true;
-      console.info(`[itemIcons] indexed catalog keys=${byId.size} from info.grudge-studio.com`);
+      console.info(`[itemIcons] catalog keys=${byId.size} (desktop pack + info.*)`);
       return true;
     } catch (e) {
-      console.warn("[itemIcons] catalog load failed — local fallbacks only", e?.message || e);
+      console.warn("[itemIcons] catalog failed — desktop pack only", e?.message || e);
       loaded = true;
       return false;
     }
@@ -96,31 +153,14 @@ export async function ensureItemCatalog() {
 }
 
 function seedLocalFallbacks() {
-  const local = [
-    { id: "t0_wood", name: "Wood", iconUrl: localIconFor("wood") },
-    { id: "t0_stone", name: "Stone", iconUrl: localIconFor("stone") },
-    { id: "t0_scrap", name: "Scrap Ore", iconUrl: localIconFor("ore") },
-    { id: "t0_hide_scrap", name: "Hide Scrap", iconUrl: localIconFor("hide") },
-    { id: "t0_sword", name: "Recruit Sword", iconUrl: localIconFor("sword") },
-    { id: "t0-sword", name: "Training Sword", iconUrl: localIconFor("sword") },
-    { id: "t0_bow", name: "Recruit Bow", iconUrl: localIconFor("bow") },
-    { id: "t0_staff", name: "Apprentice Staff", iconUrl: localIconFor("staff") },
-    { id: "t0_axe", name: "Worge Axe", iconUrl: localIconFor("axe") },
-    { id: "t0_shield", name: "Wood Shield", iconUrl: localIconFor("shield") },
-    { id: "t0_mail", name: "Recruit Mail", iconUrl: localIconFor("mail") },
-    { id: "t0_leather", name: "Scout Leather", iconUrl: localIconFor("leather") },
-    { id: "t0_robe", name: "Apprentice Robe", iconUrl: localIconFor("robe") },
-    { id: "t0_hide", name: "Hide Harness", iconUrl: localIconFor("hide armor") },
-    { id: "t1_sword", name: "Iron Sword", iconUrl: localIconFor("sword") },
-    { id: "t1_bow", name: "Yew Bow", iconUrl: localIconFor("bow") },
-    { id: "t1_staff", name: "Oak Staff", iconUrl: localIconFor("staff") },
-    { id: "t1_mail", name: "Iron Mail", iconUrl: localIconFor("mail") },
-    { id: "t1_leather", name: "Hardened Leather", iconUrl: localIconFor("leather") },
-    { id: "t1_robe", name: "Woven Robe", iconUrl: localIconFor("robe") },
-    { id: "t1_shield", name: "Iron Shield", iconUrl: localIconFor("shield") },
-  ];
-  for (const it of local) {
-    if (!byId.has(it.id.toLowerCase())) indexItem(it);
+  for (const [id, rel] of Object.entries(DESKTOP_MAP)) {
+    if (id.includes("vendor") || id.includes("blacksmith")) continue;
+    indexItem({
+      id,
+      name: id.replace(/[_-]/g, " "),
+      iconUrl: desktopIconUrl(rel),
+      slot: /sword|bow|staff|axe/.test(id) ? "weapon" : /mail|leather|robe/.test(id) ? "armor" : "mat",
+    });
   }
 }
 
@@ -146,15 +186,28 @@ export function itemIconUrl(idOrName) {
 export function skillIconUrl(skill, classId) {
   if (!skill) return localIconFor("skill");
   const hint = `${skill.id || ""} ${skill.name || ""} ${skill.kind || ""} ${classId || ""}`;
-  // Prefer catalog by skill id / name
   const row = resolveItem(skill.id) || resolveItem(skill.name);
   if (row?.iconUrl) return rewriteIconUrl(row.iconUrl, hint);
   return localIconFor(hint);
 }
 
-/**
- * HTML for an icon (img + onerror glyph).
- */
+/** Building / unit icons from Desktop entities pack */
+export function entityIconUrl(name) {
+  const n = String(name || "");
+  // Try exact file in entities
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+  const tryNames = [
+    n,
+    `${n}.png`,
+    `${n}.PNG`,
+    n.replace(/\s+/g, " "),
+  ];
+  // Known aliases
+  if (/blacksmith|weapon/i.test(n)) return desktopIconUrl("entities/Blacksmith Icon.png");
+  if (/armou?ry|armor/i.test(n)) return desktopIconUrl("entities/Armory Icon.png");
+  return desktopIconUrl(`entities/${tryNames[0]}.png`) || localIconFor(n);
+}
+
 export function iconHtml(idOrName, size = 20, label = "") {
   const url = itemIconUrl(idOrName);
   const alt = escapeAttr(label || idOrName || "");
