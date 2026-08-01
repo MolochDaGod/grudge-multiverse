@@ -6,10 +6,11 @@
  *
  * Endpoints:
  *   GET  /health  /api/health  /api/healthz  → JSON ok
- *   WS   /api/mv?room=ROOM1                  → Multiverse room relay (primary)
- *   WS   /api/carrier?room=CODE              → alias (same protocol)
+ *   WS   /api/mv?room=ROOM1                  → Multiverse rooms only
  *
- * Wire protocol (JSON, `t` tag) — Multiverse client dangerRelay carrier mode:
+ * NOT Carrier (/api/carrier) — Carrier is GRUDOX space / RTS. Multiverse is separate.
+ *
+ * Wire protocol (JSON, `t` tag) — Multiverse room client:
  *   Client → Server: { t: "hello", id, name, classId, raceId }
  *                    { t: "state", id, name, snap }
  *                    { t: "combat", id, ev }
@@ -193,7 +194,7 @@ const server = http.createServer((req, res) => {
       rooms: rooms.size,
       players: [...rooms.values()].reduce((n, r) => n + r.players.size, 0),
       time: new Date().toISOString(),
-      ws: ["/api/mv", "/api/carrier"],
+      ws: ["/api/mv"],
     });
     return;
   }
@@ -204,7 +205,7 @@ const server = http.createServer((req, res) => {
       game: "grudge-multiverse",
       health: "/api/health",
       ws: "wss://<host>/api/mv?room=room1",
-      note: "Dedicated Multiverse Railway — not gameopen-production",
+      note: "Dedicated Multiverse Railway only — not Carrier, not gameopen",
     });
     return;
   }
@@ -217,7 +218,8 @@ const wss = new WebSocketServer({ noServer: true });
 server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   const path = url.pathname;
-  if (path !== "/api/mv" && path !== "/api/carrier" && path !== "/api/realtime") {
+  // Multiverse rooms only — never Carrier (space/RTS) or Open gameopen paths
+  if (path !== "/api/mv") {
     socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
     socket.destroy();
     return;
@@ -298,7 +300,7 @@ wss.on("connection", (ws, _req, url) => {
     }
 
     if (!selfId) {
-      // Auto-hello if client only sends state (carrier simplicity)
+      // Auto-hello if client only sends state (late first packet)
       const res = room.add(ws, { name: msg.name || "Player" });
       if (!res.ok) {
         ws.send(JSON.stringify({ t: "error", code: res.error, message: "Room full" }));

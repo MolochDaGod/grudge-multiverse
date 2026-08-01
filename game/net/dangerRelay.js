@@ -214,7 +214,7 @@ export class DangerRelay {
     }
   }
 
-  /** @deprecated Multiverse Railway uses query room= ; keep no-ops for API compat */
+  /** Room is selected via ?room= on the WS URL — no lobby create/join messages. */
   list() {}
   create() {}
   join() {}

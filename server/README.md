@@ -12,8 +12,9 @@
 | Path | Role |
 |------|------|
 | `GET /api/health` | Healthcheck |
-| `WS /api/mv?room=room1` | Primary Multiverse room |
-| `WS /api/carrier?room=CODE` | Alias |
+| `WS /api/mv?room=room1` | Multiverse rooms only |
+
+**Not Carrier.** Carrier (`/api/carrier`) is GRUDOX space / RTS. Multiverse never shares that path.
 
 ## Deploy (new Railway project)
 
