@@ -13,8 +13,8 @@ export function mountWarlordsHud() {
         <span class="hud-sep"></span><span class="hint-text">Sprint</span> <kbd>Shift</kbd>
         <span class="hud-sep"></span><span class="hint-text">Jump</span> <kbd>Space</kbd></div>
       <div class="row"><span class="hint-text">Attack</span> <kbd>F</kbd>
-        <span class="hud-sep"></span><span class="hint-text">Skills</span> <kbd>⇧1</kbd>–<kbd>⇧5</kbd>
-        <span class="hud-sep"></span><span class="hint-text">Harvest</span> <kbd>E</kbd></div>
+        <span class="hud-sep"></span><span class="hint-text">Skills</span> <kbd>1</kbd>–<kbd>5</kbd>
+        <span class="hud-sep"></span><span class="hint-text">Harvest / loot</span> <kbd>E</kbd></div>
       <div class="row"><span class="hint-text">Select</span> <kbd>LMB</kbd>
         <span class="hud-sep"></span><span class="hint-text">Focus soft-lock</span> <kbd>RMB</kbd>
         <span class="hud-sep"></span><span class="hint-text">Main panel</span> <kbd>I</kbd>

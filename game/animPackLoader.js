@@ -9,8 +9,10 @@ import * as THREE from "three";
 
 import { ANIMS_BAKED } from "./grudge6SSOT.js";
 
-/** Primary: Open baked Bip001 packs (stone SSOT). */
-export const OPEN_ANIMS = ANIMS_BAKED;
+/** Primary hosts for Bip001 baked clips (per-clip JSON under pack folders). */
+export const OPEN_ANIMS = ANIMS_BAKED; // open.grudge-studio.com/anims/baked
+/** gameopen ships the full baked set — prefer first for reliability. */
+export const GAMEOPEN_ANIMS = "https://gameopen.vercel.app/anims/baked";
 export const CDN_ANIMS = "https://assets.grudge-studio.com/prod/anims";
 export const ARENA_ANIMS = "https://grudge-arena.grudge-studio.com/anims/baked";
 export const DANGER_ANIMS =
@@ -148,7 +150,9 @@ function encodeRel(rel) {
 
 export function bakedCandidates(rel) {
   const clean = encodeRel(rel);
+  // gameopen first (full pack mirror), then Open domain, then archives
   return [
+    `${GAMEOPEN_ANIMS}/${clean}.json`,
     `${OPEN_ANIMS}/${clean}.json`,
     `${DANGER_ANIMS}/${clean}.json`,
     `${ARENA_ANIMS}/${clean}.json`,

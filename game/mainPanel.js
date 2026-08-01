@@ -6,7 +6,14 @@
  * Crafting: local recipes with correct mat counts + optional Puter suite embed.
  */
 import { getClass } from "./classes.js";
-import { loadBag, saveBag, countMat } from "./inventory.js";
+import {
+  loadBag,
+  saveBag,
+  countMat,
+  loadLoadout,
+  equipItem,
+  unequipSlot,
+} from "./inventory.js";
 import { QUICK_RECIPES, craft, canCraft } from "./crafting.js";
 import { VENDORS, buy } from "./vendors.js";
 import { ensureItemCatalog, iconHtml, skillIconUrl } from "./itemIcons.js";
@@ -90,8 +97,10 @@ export function mountMainPanelShell() {
 export function renderMainPanelTab(tab = "server") {
   const body = document.getElementById("mp-body");
   if (!body) return;
-  if (tab === "equipment") body.innerHTML = renderEquipment();
-  else if (tab === "inventory") {
+  if (tab === "equipment") {
+    body.innerHTML = renderEquipment();
+    wireEquipment(body);
+  } else if (tab === "inventory") {
     body.innerHTML = renderInventory();
     wireInventoryBuys(body);
   } else if (tab === "skills") body.innerHTML = renderSkills();
@@ -104,6 +113,22 @@ export function renderMainPanelTab(tab = "server") {
   }
 }
 
+function wireEquipment(root) {
+  root.querySelectorAll("[data-equip]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const res = equipItem(btn.getAttribute("data-equip"));
+      if (res.ok) renderMainPanelTab("equipment");
+      else alert(res.error === "missing" ? "Item not in bag" : "Cannot equip");
+    });
+  });
+  root.querySelectorAll("[data-unequip]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      unequipSlot(btn.getAttribute("data-unequip"));
+      renderMainPanelTab("equipment");
+    });
+  });
+}
+
 function classDef() {
   const id = localStorage.getItem("mv_class_id") || "warrior";
   return getClass(id);
@@ -112,16 +137,19 @@ function classDef() {
 function renderEquipment() {
   const c = classDef();
   const bag = loadBag();
-  const gear = c.starterGear || {};
+  const loadout = loadLoadout();
   const slots = [
-    { key: "weapon", label: "Mainhand", item: gear.weapon },
-    { key: "offhand", label: "Offhand", item: gear.offhand },
-    { key: "armor", label: "Chest", item: gear.armor },
+    { key: "weapon", label: "Mainhand", item: loadout.weapon },
+    { key: "offhand", label: "Offhand", item: loadout.offhand },
+    { key: "armor", label: "Chest", item: loadout.armor },
   ];
-  const bagWeapons = bag.items.filter((i) => i.slot === "weapon" || i.slot === "armor" || i.slot === "shield");
+  const bagWeapons = bag.items.filter(
+    (i) => i.slot === "weapon" || i.slot === "armor" || i.slot === "shield",
+  );
   return `
     <div class="mp-section">
-      <div class="mp-section-title">${escape(c.label)} · loadout</div>
+      <div class="mp-section-title">${escape(c.label)} · equipped</div>
+      <p class="mp-hint">RTS Toon loadout · equip bag gear to swap weapons on your mesh · F / 1–5 skills</p>
       <div class="mp-eq-grid">
         ${slots
           .map(
@@ -130,22 +158,27 @@ function renderEquipment() {
             <div class="mp-eq-label">${s.label}</div>
             <div class="mp-eq-item mp-eq-with-icon">${
               s.item
-                ? `${iconHtml(s.item.id || s.item.name, 32, s.item.name)}<span>${escape(s.item.name)}${s.item.dmg ? ` · ${s.item.dmg} dmg` : ""}${s.item.armor ? ` · ${s.item.armor} ar` : ""}</span>`
+                ? `${iconHtml(s.item.id || s.item.name, 32, s.item.name)}<span>${escape(s.item.name)}${s.item.dmg ? ` · ${s.item.dmg} dmg` : ""}${s.item.armor ? ` · ${s.item.armor} ar` : ""}</span>
+                   <button type="button" class="mp-unequip" data-unequip="${s.key}">Unequip</button>`
                 : "— empty —"
             }</div>
           </div>`,
           )
           .join("")}
       </div>
-      <div class="mp-section-title" style="margin-top:14px">Bag gear</div>
+      <div class="mp-section-title" style="margin-top:14px">Bag gear · click Equip</div>
       <ul class="mp-list">
         ${
           bagWeapons
             .map(
               (i) =>
-                `<li class="mp-li-icon">${iconHtml(i.id || i.name, 22, i.name)} ${escape(i.name)} <span class="mp-muted">T${i.tier} ${i.slot}</span></li>`,
+                `<li class="mp-li-icon">${iconHtml(i.id || i.name, 22, i.name)}
+                  <span>${escape(i.name)} <span class="mp-muted">T${i.tier} ${i.slot}</span></span>
+                  <button type="button" class="mp-equip" data-equip="${escape(i.id)}">Equip</button>
+                </li>`,
             )
-            .join("") || "<li class='mp-muted'>No extra gear yet — craft or buy</li>"
+            .join("") ||
+          "<li class='mp-muted'>No gear yet — harvest (E), kill bosses, craft, or buy vendors</li>"
         }
       </ul>
     </div>`;
@@ -214,7 +247,7 @@ function renderSkills() {
         ${(c.skills || [])
           .map((s) => {
             const locked = level < (s.level || 1);
-            const key = s.key === "KeyF" ? "F" : s.shift ? `⇧${s.key.replace("Digit", "")}` : s.key;
+            const key = s.key === "KeyF" ? "F" : s.key.replace("Digit", "");
             const ic = skillIconUrl(s, c.id);
             const icon = ic
               ? `<img src="${ic}" width="28" height="28" alt="" style="border-radius:6px;object-fit:contain" />`

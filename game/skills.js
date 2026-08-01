@@ -37,10 +37,11 @@ export class SkillBar {
     const level = this.getLevel();
     const skills = unlockedSkills(this.classDef, level);
     let skill = null;
-    if (e.code === "KeyF" && !e.shiftKey) {
+    // F = basic · 1–5 (with or without Shift) = weapon skills
+    if (e.code === "KeyF" && !e.shiftKey && !e.ctrlKey && !e.altKey) {
       skill = skills.find((s) => s.key === "KeyF");
-    } else if (e.shiftKey && /^Digit[1-5]$/.test(e.code)) {
-      skill = skills.find((s) => s.shift && s.key === e.code);
+    } else if (/^Digit[1-5]$/.test(e.code) && !e.ctrlKey && !e.altKey) {
+      skill = skills.find((s) => s.key === e.code);
     }
     if (!skill) return;
     e.preventDefault();
@@ -76,7 +77,7 @@ export class SkillBar {
     el.innerHTML = skills
       .map((s) => {
         const left = Math.max(0, (this.cds.get(s.id) || 0) - now);
-        const key = s.key === "KeyF" ? "F" : s.key.replace("Digit", "⇧");
+        const key = s.key === "KeyF" ? "F" : s.key.replace("Digit", "");
         const icon = skillIconUrl(s, classId);
         const iconHtml = icon
           ? `<img class="sk-icon" src="${icon}" alt="" width="28" height="28" loading="lazy" />`

@@ -9,7 +9,13 @@ import { HarvestSystem } from "./harvest.js";
 import { BossFight } from "./bosses.js";
 import { loadGrudge6Class } from "./grudge6Loader.js";
 import { SkillBar } from "./skills.js";
-import { loadBag, rollKillReward } from "./inventory.js";
+import {
+  loadBag,
+  rollKillReward,
+  ensureStarterGear,
+  loadLoadout,
+  equippedWeaponDmg,
+} from "./inventory.js";
 import { QUICK_RECIPES, craft } from "./crafting.js";
 import { VENDORS, buy } from "./vendors.js";
 import { FleetSkillVfx, vfxKindForSkill } from "./fleetVfx.js";
@@ -27,6 +33,8 @@ import { setupRaceClassSelectUI } from "./raceClassSelect.js";
 import { loadSelection } from "./fleetGearPresets.js";
 import { ensureItemCatalog } from "./itemIcons.js";
 import { reGroundAfterAnimSample } from "./characterDeploy.js";
+import { LootField } from "./lootField.js";
+import { refreshOpenTab } from "./mainPanel.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -175,6 +183,9 @@ export async function attachWarlordsWorld(ctx) {
     classId === "knight" ? "warrior" : classId === "unarmed" ? "worge" : classId;
   const classDef = getClass(skillClass);
 
+  // Seed RTS starter gear into bag + loadout so Equipment / drops work immediately
+  ensureStarterGear(classDef.starterGear);
+
   mountWarlordsHud();
   ensureItemCatalog().catch(() => {});
   window.setLoaderStatus?.("Loading Bermuda island…");
@@ -271,6 +282,12 @@ export async function attachWarlordsWorld(ctx) {
         `after=${g6.diagnose?.height?.toFixed?.(2)}m | MAP width≈${(island.halfW * 2).toFixed(0)}m ` +
         `| hero should be ~1.8m vs buildings ~5–10m`,
     );
+    // Apply equipped loadout weapon meshes (bag gear)
+    try {
+      g6.applyLoadout?.(loadLoadout());
+    } catch {
+      /* ignore */
+    }
     refreshCombatFrame({ classLabel: window.__mvClassLabel });
     flash?.(
       `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${g6.animPack}`,
@@ -279,6 +296,28 @@ export async function attachWarlordsWorld(ctx) {
   } catch (e) {
     console.warn("grudge6 load failed", e);
   }
+
+  // Live equip from Main Panel → swap Toon weapon meshes
+  const onLoadout = () => {
+    try {
+      g6?.applyLoadout?.(loadLoadout());
+      refreshCombatFrame({ classLabel: window.__mvClassLabel });
+      flash?.("Equipment updated", 0.5);
+    } catch (e) {
+      console.warn("[warlords] loadout apply", e);
+    }
+  };
+  window.addEventListener("mv-loadout", onLoadout);
+  window.addEventListener("mv-bag", () => {
+    refreshCombatFrame();
+    try {
+      refreshOpenTab();
+    } catch {
+      /* panel may be closed */
+    }
+  });
+
+  const loot = new LootField(scene, { flash, groundAt });
 
   const harvest = new HarvestSystem(scene, island.harvestNodes, {
     flash,
@@ -290,6 +329,21 @@ export async function attachWarlordsWorld(ctx) {
         by: playerId,
       });
       refreshCombatFrame();
+      // Rare gear drop sparkle near resource
+      if (Math.random() < 0.12 && n.position) {
+        const gearPool = [
+          { id: "t0_scrap", name: "Scrap Ore", tier: 0, slot: "mat", qty: 1 },
+          { id: "t1_sword", name: "Iron Sword", tier: 1, slot: "weapon", dmg: 18 },
+          { id: "t1_leather", name: "Hardened Leather", tier: 1, slot: "armor", armor: 10 },
+        ];
+        const it = gearPool[Math.floor(Math.random() * gearPool.length)];
+        loot.spawn(n.position.clone?.() || n.position, it);
+      }
+      try {
+        refreshOpenTab();
+      } catch {
+        /* */
+      }
     },
   });
 
@@ -339,7 +393,8 @@ export async function attachWarlordsWorld(ctx) {
               : 0x9fe8ff;
       vfx.play(kind, feet.clone(), dir, color);
 
-      // Range-gated damage (combat-runtime style)
+      // Range-gated damage scaled by equipped weapon
+      const baseDmg = equippedWeaponDmg(14);
       const range =
         skill.kind?.includes("ranged") || skill.kind === "magic"
           ? 22
@@ -350,12 +405,17 @@ export async function attachWarlordsWorld(ctx) {
         if (b.dead) continue;
         const d = b.root.position.distanceTo(pos);
         if (d < range) {
-          const dmg = Math.floor(14 * (skill.dmgMul || 1));
+          const dmg = Math.floor(baseDmg * (skill.dmgMul || 1));
           const res = bosses.hit(b.id, dmg, playerId);
           set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
           if (res.killed) {
             const reward = rollKillReward(true);
             flash?.(`${b.name} defeated! L${reward.level}`, 1.2);
+            // World equipment drops at boss pad
+            if (reward.dropped?.length) {
+              loot.spawnMany(b.root.position.clone(), reward.dropped);
+            }
+            refreshCombatFrame();
           } else flash?.(`${b.name} HP ${res.hp}`, 0.4);
         }
       }
@@ -408,6 +468,14 @@ export async function attachWarlordsWorld(ctx) {
     if (e.code !== "KeyE" || e.repeat) return;
     const cam = ctx.camera;
     if (!cam || !capsule) return;
+
+    // Prefer loot pickup if standing on a drop
+    const nearLoot = loot.pickNearest(capsule.position, 2.6);
+    if (nearLoot) {
+      loot.collect(nearLoot.id);
+      return;
+    }
+
     const origin = cam.position.clone();
     const dir = new THREE.Vector3();
     cam.getWorldDirection(dir);
@@ -424,7 +492,7 @@ export async function attachWarlordsWorld(ctx) {
     } else {
       for (const v of island.vendorPads) {
         if (v._mesh && capsule.position.distanceTo(v._mesh.position) < 3) {
-          flash?.(`${v.label}: open panel (I) → Vendors`, 1);
+          flash?.(`${v.label}: open panel (I) → Inventory / Vendors`, 1);
         }
       }
     }
@@ -461,6 +529,7 @@ export async function attachWarlordsWorld(ctx) {
     bosses,
     skillBar,
     g6,
+    loot,
     vfx,
     aim,
     classDef,
@@ -471,6 +540,7 @@ export async function attachWarlordsWorld(ctx) {
     update(dt) {
       harvest.update();
       vfx.update(dt);
+      if (capsule?.position) loot.update(dt, capsule.position);
       syncFocusCrosshair(crosshairEl);
 
       const pos = capsule?.position;

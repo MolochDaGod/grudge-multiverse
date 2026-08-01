@@ -1,5 +1,5 @@
 /**
- * Grudge6 kit loader — exact gear_presets mesh_ids + Bip001 director packs.
+ * Grudge6 kit loader — exact gear_presets mesh_ids + body atlas + Bip001 packs.
  * Deploy order from grudge-character-correctness (characterDeploy helpers).
  */
 import * as THREE from "three";
@@ -20,6 +20,11 @@ import {
 import { assertAllowedKitUrl, logSSOT } from "./grudge6SSOT.js";
 
 let _loader = null;
+const textureLoader = new THREE.TextureLoader();
+if (typeof textureLoader.setCrossOrigin === "function") {
+  textureLoader.setCrossOrigin("anonymous");
+}
+
 function getLoader() {
   if (_loader) return _loader;
   _loader = new GLTFLoader();
@@ -34,6 +39,7 @@ function getLoader() {
 }
 
 const templateCache = new Map();
+const atlasCache = new Map();
 
 async function loadTemplate(url) {
   if (templateCache.has(url)) return templateCache.get(url);
@@ -41,6 +47,117 @@ async function loadTemplate(url) {
   const gltf = await getLoader().loadAsync(url);
   templateCache.set(url, gltf.scene);
   return gltf.scene;
+}
+
+/** Load Toon RTS body atlas (sRGB, flipY false — FBX/GLB UV contract). */
+async function loadAtlas(url) {
+  if (!url) return null;
+  if (atlasCache.has(url)) return atlasCache.get(url);
+  try {
+    const tex = await textureLoader.loadAsync(url);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.flipY = false;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    atlasCache.set(url, tex);
+    return tex;
+  } catch (e) {
+    console.warn("[grudge6Loader] atlas load failed", url, e?.message || e);
+    return null;
+  }
+}
+
+/** Paint body atlas onto all skinned meshes (weapon meshes keep own maps if present). */
+export function applyBodyAtlas(root, atlas) {
+  if (!root || !atlas) return 0;
+  let n = 0;
+  root.traverse((o) => {
+    if (!o.isMesh && !o.isSkinnedMesh) return;
+    // Weapons / shields often use separate UV islands — still use race atlas on Toon RTS
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (!m) continue;
+      m.map = atlas;
+      m.map.colorSpace = THREE.SRGBColorSpace;
+      m.vertexColors = false;
+      m.metalness = Math.min(m.metalness ?? 0.1, 0.2);
+      m.roughness = Math.max(m.roughness ?? 0.75, 0.55);
+      m.side = THREE.DoubleSide;
+      m.needsUpdate = true;
+      n++;
+    }
+  });
+  return n;
+}
+
+/**
+ * Toggle weapon / shield meshes from equipped item kind.
+ * Hides all weapons first, then shows one mesh per family (prefer gear preset names).
+ * @param {THREE.Object3D} model
+ * @param {string} [_prefix]
+ * @param {{ weapon?: string, offhand?: string, prefer?: string[] }} kinds
+ */
+export function applyEquipMeshes(model, _prefix, kinds = {}) {
+  if (!model) return;
+  const w = String(kinds.weapon || "sword").toLowerCase();
+  const oh = String(kinds.offhand || "").toLowerCase();
+  const prefer = new Set((kinds.prefer || []).map(String));
+
+  /** @type {THREE.Object3D[]} */
+  const weapons = [];
+  model.traverse((o) => {
+    if (!o.isMesh && !o.isSkinnedMesh) return;
+    if (/weapon|sword|bow|staff|axe|quiver|shield/i.test(o.name || "")) {
+      weapons.push(o);
+      o.visible = false;
+    }
+  });
+
+  const matchKind = (name, kind) => {
+    const n = name.toLowerCase();
+    if (kind === "bow" || kind === "longbow") return /bow|quiver/.test(n);
+    if (kind === "staff" || kind === "magic") return /staff/.test(n);
+    if (kind === "axe" || kind === "twohand") return /axe/.test(n);
+    if (kind === "none" || kind === "unarmed") return false;
+    // sword / melee default
+    return /sword/.test(n) || /weapon_sword/.test(n);
+  };
+
+  const pick = (predicate) => {
+    const list = weapons.filter((o) => predicate(o.name || ""));
+    if (!list.length) return null;
+    const preferred = list.find((o) => prefer.has(o.name));
+    return preferred || list[0];
+  };
+
+  if (w !== "none" && w !== "unarmed") {
+    const main = pick((n) => matchKind(n, w));
+    if (main) main.visible = true;
+    // Quiver with bows
+    if (w === "bow" || w === "longbow") {
+      const q = pick((n) => /quiver/i.test(n));
+      if (q) q.visible = true;
+    }
+  }
+  if (oh === "shield" || oh === "offhand" || w === "sword" || w === "sword_shield") {
+    const sh = pick((n) => /shield/i.test(n));
+    if (sh) sh.visible = true;
+  }
+}
+
+/** Map bag item id → weapon kind for mesh swap. */
+export function weaponKindFromItem(item) {
+  if (!item) return "sword";
+  const blob = `${item.id || ""} ${item.name || ""}`.toLowerCase();
+  if (/bow|longbow|yew/.test(blob)) return "bow";
+  if (/staff|wand|oak|arcane/.test(blob)) return "staff";
+  if (/axe|worge/.test(blob)) return "axe";
+  if (/unarmed|fist|glove/.test(blob)) return "none";
+  return "sword";
 }
 
 function normId(name) {
@@ -131,6 +248,13 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
 
   const shownMeshes = applyExactMeshIds(model, visibleMeshes);
 
+  // Race body atlas (Toon RTS polyart) — required for correct colours on CDN kits
+  const atlas = await loadAtlas(kit.atlasUrl);
+  if (atlas) {
+    const painted = applyBodyAtlas(model, atlas);
+    console.info("[grudge6Loader] atlas applied", kit.atlasUrl.split("/").pop(), "mats", painted);
+  }
+
   model.traverse((o) => {
     if (!o.isMesh && !o.isSkinnedMesh) return;
     o.castShadow = true;
@@ -207,7 +331,19 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     classId: kit.classId,
     visibleMeshes,
     shownMeshes,
+    atlas,
     diagnose: diag,
+    /** Re-apply weapon/shield meshes from equipped loadout */
+    applyLoadout(loadout) {
+      const wItem = loadout?.weapon;
+      const ohItem = loadout?.offhand;
+      // Prefer class gear mesh names, then item-driven family
+      applyEquipMeshes(model, kit.prefix, {
+        weapon: weaponKindFromItem(wItem) || animPack,
+        offhand: ohItem ? "shield" : animPack === "sword_shield" ? "shield" : "",
+        prefer: visibleMeshes,
+      });
+    },
   };
 }
 
