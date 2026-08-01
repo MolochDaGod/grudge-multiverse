@@ -17,6 +17,7 @@ import {
   reGroundAfterAnimSample,
   diagnoseCharacterLook,
 } from "./characterDeploy.js";
+import { assertAllowedKitUrl, logSSOT } from "./grudge6SSOT.js";
 
 let _loader = null;
 function getLoader() {
@@ -106,9 +107,10 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     classId === "knight" ? "warrior" : classId === "unarmed" ? "worge" : classId;
   const classDef = getClass(skillClass);
   const kit = race ? resolveRaceClass(race, classId) : resolveClassKit(classId);
-  const kitUrl = kit.kitUrl || classDef.kitUrl;
+  const kitUrl = assertAllowedKitUrl(kit.kitUrl || classDef.kitUrl);
   const animPack = kit.animPack || classDef.animPack || "sword_shield";
   const visibleMeshes = kit.visibleMeshes || [];
+  logSSOT();
 
   let template;
   try {

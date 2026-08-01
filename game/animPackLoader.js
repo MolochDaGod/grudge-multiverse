@@ -7,7 +7,10 @@
  */
 import * as THREE from "three";
 
-export const OPEN_ANIMS = "https://open.grudge-studio.com/anims/baked";
+import { ANIMS_BAKED } from "./grudge6SSOT.js";
+
+/** Primary: Open baked Bip001 packs (stone SSOT). */
+export const OPEN_ANIMS = ANIMS_BAKED;
 export const CDN_ANIMS = "https://assets.grudge-studio.com/prod/anims";
 export const ARENA_ANIMS = "https://grudge-arena.grudge-studio.com/anims/baked";
 export const DANGER_ANIMS =

@@ -1,15 +1,15 @@
 /**
  * Grudge6 RTS Toon classes for Multiverse.
- * CDN SSOT: assets.grudge-studio.com/models/grudge6/races/*
- * Exact mesh_ids: fleetGearPresets.js (gameopen gearPresets.ts / D1)
- * Classes: warrior | ranger | mage | worge
+ * Kits/atlases: game/grudge6SSOT.js ONLY (stone).
+ * mesh_ids: fleetGearPresets.js
  */
 import { resolveClassKit } from "./fleetGearPresets.js";
+import { CDN, kitUrl, atlasUrl } from "./grudge6SSOT.js";
 
-export const CDN = "https://assets.grudge-studio.com";
+export { CDN };
 
 /** @typedef {'warrior'|'ranger'|'mage'|'worge'} ClassId */
-/** @typedef {'human'|'elf'|'undead'|'orc'} RaceId */
+/** @typedef{'human'|'elf'|'undead'|'orc'} RaceId */
 
 export const CLASSES = [
   {
@@ -17,8 +17,8 @@ export const CLASSES = [
     label: "Warrior",
     raceId: "human",
     prefix: "WK_",
-    kitUrl: `${CDN}/models/grudge6/races/WK_Characters.glb`,
-    atlasUrl: `${CDN}/models/grudge6/atlases/WK_Standard_Units.webp`,
+    kitUrl: kitUrl("western-kingdoms"),
+    atlasUrl: atlasUrl("western-kingdoms"),
     animPack: "sword_shield",
     blurb: "Sword & shield · frontline · melee skills",
     starterGear: {
@@ -42,8 +42,8 @@ export const CLASSES = [
     label: "Ranger",
     raceId: "elf",
     prefix: "ELF_",
-    kitUrl: `${CDN}/models/grudge6/races/ELF_Characters.glb`,
-    atlasUrl: `${CDN}/models/grudge6/atlases/ELF_HighElves_Texture.webp`,
+    kitUrl: kitUrl("high-elves"),
+    atlasUrl: atlasUrl("high-elves"),
     animPack: "longbow",
     blurb: "Longbow · kiting · ranged skills",
     starterGear: {
@@ -66,8 +66,8 @@ export const CLASSES = [
     label: "Mage",
     raceId: "undead",
     prefix: "UD_",
-    kitUrl: `${CDN}/models/grudge6/races/UD_Characters.glb`,
-    atlasUrl: `${CDN}/models/grudge6/atlases/UD_Standard_Units.webp`,
+    kitUrl: kitUrl("undead"),
+    atlasUrl: atlasUrl("undead"),
     animPack: "magic",
     blurb: "Staff · bolts · area magic",
     starterGear: {
@@ -90,8 +90,8 @@ export const CLASSES = [
     label: "Worge",
     raceId: "orc",
     prefix: "ORC_",
-    kitUrl: `${CDN}/models/grudge6/races/ORC_Characters.glb`,
-    atlasUrl: `${CDN}/models/grudge6/atlases/ORC_StandardUnits.webp`,
+    kitUrl: kitUrl("orcs"),
+    atlasUrl: atlasUrl("orcs"),
     animPack: "twohand",
     blurb: "Brutal orc · 2H melee · raw power",
     starterGear: {

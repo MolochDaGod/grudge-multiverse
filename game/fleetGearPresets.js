@@ -1,67 +1,29 @@
 /**
- * Exact gear_presets mesh_ids — SSOT from gameopen gearPresets.ts + race kit URLs.
+ * Exact gear_presets mesh_ids — race kits/atlases ONLY from grudge6SSOT (stone).
  * Multiverse: pick race first, then class (preset).
  */
+import {
+  CDN,
+  raceList,
+  getRace as ssotGetRace,
+  resolveRaceId,
+  kitUrl,
+  atlasUrl,
+  assertAllowedKitUrl,
+} from "./grudge6SSOT.js";
 
-export const CDN = "https://assets.grudge-studio.com";
+export { CDN };
 
-/** Fleet race ids (gear_presets keys). */
-export const RACES = [
-  {
-    id: "western-kingdoms",
-    short: "human",
-    label: "Western Kingdoms",
-    prefix: "WK_",
-    kitUrl: `${CDN}/models/grudge6/races/WK_Characters.glb`,
-    atlasUrl: `${CDN}/models/grudge6/atlases/WK_Standard_Units.webp`,
-    color: "#c9a04e",
-  },
-  {
-    id: "high-elves",
-    short: "elf",
-    label: "High Elves",
-    prefix: "ELF_",
-    kitUrl: `${CDN}/models/grudge6/races/ELF_Characters.glb`,
-    atlasUrl: `${CDN}/models/grudge6/atlases/ELF_HighElves_Texture.webp`,
-    color: "#7ec8e3",
-  },
-  {
-    id: "orcs",
-    short: "orc",
-    label: "Orcs",
-    prefix: "ORC_",
-    kitUrl: `${CDN}/models/grudge6/races/ORC_Characters.glb`,
-    atlasUrl: `${CDN}/models/grudge6/atlases/ORC_StandardUnits.webp`,
-    color: "#8b2020",
-  },
-  {
-    id: "undead",
-    short: "undead",
-    label: "Undead",
-    prefix: "UD_",
-    kitUrl: `${CDN}/models/grudge6/races/UD_Characters.glb`,
-    atlasUrl: `${CDN}/models/grudge6/atlases/UD_Standard_Units.webp`,
-    color: "#6a3a8a",
-  },
-  {
-    id: "barbarians",
-    short: "barbarian",
-    label: "Barbarians",
-    prefix: "BRB_",
-    kitUrl: `${CDN}/models/grudge6/races/BRB_Characters.glb`,
-    atlasUrl: `${CDN}/textures/grudge6/barbarians/BRB_StandardUnits_texture.webp`,
-    color: "#c2410c",
-  },
-  {
-    id: "dwarves",
-    short: "dwarf",
-    label: "Dwarves",
-    prefix: "DWF_",
-    kitUrl: `${CDN}/models/grudge6/races/DWF_Characters.glb`,
-    atlasUrl: `${CDN}/textures/grudge6/dwarves/DWF_Standard_Units.webp`,
-    color: "#4a90d9",
-  },
-];
+/** Fleet race list for UI — kitUrl/atlasUrl from stone SSOT (verified textures/ paths). */
+export const RACES = raceList().map((r) => ({
+  id: r.raceId,
+  short: r.short,
+  label: r.label,
+  prefix: r.prefix,
+  kitUrl: r.kitGlb,
+  atlasUrl: r.atlasUrl,
+  color: r.color,
+}));
 
 /** Class presets available for every race (fleet gear_presets ids). */
 export const CLASS_PRESETS = [
@@ -119,7 +81,8 @@ export const RACE_GEAR_PRESETS = {
 };
 
 export function getRace(raceId) {
-  return RACES.find((r) => r.id === raceId || r.short === raceId) || RACES[0];
+  const id = resolveRaceId(raceId);
+  return RACES.find((r) => r.id === id || r.short === raceId) || RACES[0];
 }
 
 export function getPreset(raceId, presetId) {
@@ -128,17 +91,18 @@ export function getPreset(raceId, presetId) {
   return list.find((p) => p.id === presetId) || list.find((p) => p.id === "warrior") || list[0];
 }
 
-/** Primary resolver: race + class preset. */
+/** Primary resolver: race + class preset. Kit/atlas always from stone SSOT. */
 export function resolveRaceClass(raceId, classId) {
   const race = getRace(raceId);
   const preset = getPreset(race.id, classId || "warrior");
+  const url = assertAllowedKitUrl(kitUrl(race.id));
   return {
     raceId: race.id,
     raceShort: race.short,
     raceLabel: race.label,
     classId: preset.id,
-    kitUrl: race.kitUrl,
-    atlasUrl: race.atlasUrl,
+    kitUrl: url,
+    atlasUrl: atlasUrl(race.id),
     prefix: race.prefix,
     color: race.color,
     animPack: preset.animPack,
