@@ -1534,9 +1534,11 @@ async function init() {
         },
         initPos: spawnPos,
         minCamDistance: USE_WARLORDS_ISLAND ? 2.5 : 2,
-        maxCamDistance: USE_WARLORDS_ISLAND ? 14 : 220,
+        maxCamDistance: USE_WARLORDS_ISLAND ? 18 : 220,
         enableOverShoulderView: true,
         staticCollider: sceneModel,
+        // Desktop keyboard/mouse only — do not inject mobile joystick UI
+        isShowMobileControls: false,
     });
     if (USE_WARLORDS_ISLAND) {
         // Hide FPS mixamo immediately; grudge6 attaches later

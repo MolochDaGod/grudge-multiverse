@@ -40,7 +40,7 @@ export class playerController {
     playerFlySpeed = 2100; // 飞行速度
     private curPlayerSpeed = 0; // 当前实际速度
     enableOverShoulderView = false; // 越肩视角开关
-    private isShowMobileControls = true; // 显示移动端控件
+    private isShowMobileControls = false; // Desktop-first; only enable when opts.isShowMobileControls === true
 
     // ==================== 玩家胶囊体 ====================
     private playerCapsuleRadius = 30; // 胶囊体半径
@@ -171,7 +171,8 @@ export class playerController {
         this.cam.originMaxDist = this.cam.maxDist;
         this.cam.epsilon = this.cam.epsilon * s;
 
-        this.isShowMobileControls = (opts.isShowMobileControls ?? this.isShowMobileControls) && isMobileDevice();
+        // Default OFF. Mobile joysticks only when explicitly requested AND device is mobile.
+        this.isShowMobileControls = opts.isShowMobileControls === true && isMobileDevice();
         this.enableOverShoulderView = opts.enableOverShoulderView ?? this.enableOverShoulderView;
         this.isFirstPerson = opts.isFirstPerson ?? this.isFirstPerson;
         this.timeScale = opts.timeScale ?? this.timeScale;

@@ -11,7 +11,13 @@ const BASE = import.meta.env.BASE_URL || "/";
 export const MAP_CDN_URL = "https://assets.grudge-studio.com/models/maps/bermuda.glb";
 export const MAP_LOCAL_URL = BASE + "maps/bermuda.glb";
 export const MAP_URL = MAP_CDN_URL;
-export const ISLAND_TARGET_WIDTH_M = 120;
+/**
+ * Bermuda Free Fire GLB is already authored near SI metres (~840×610 m, buildings ~5–10 m).
+ * NEVER force 120 m — that shrinks buildings under 1.8 m heroes (characters > houses).
+ * null = preserve authored scale (preferred). Pass a number only for unit-decade rescue.
+ */
+export const ISLAND_TARGET_WIDTH_M = null;
+export const HUMAN_HEIGHT_M = 1.8;
 
 /** Layer names for production world stack */
 export const ISLAND_LAYERS = {
@@ -90,13 +96,37 @@ export async function loadBermudaIsland(scene, opts = {}) {
     g.name = ISLAND_LAYERS[k] || `layer-${k}`;
   }
 
-  // SI scale
+  // SI scale — 1 unit = 1 m. Preserve authored metres; only fix 100× errors.
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
   box.getSize(size);
   const maxXZ = Math.max(size.x, size.z) || 1;
-  const scale = (opts.targetWidth || ISLAND_TARGET_WIDTH_M) / maxXZ;
+  const maxY = size.y || 1;
+  let scale = 1;
+  const forced = opts.targetWidth ?? ISLAND_TARGET_WIDTH_M;
+  if (typeof forced === "number" && forced > 0) {
+    // Explicit override only (legacy). Prefer leaving null.
+    scale = forced / maxXZ;
+  } else if (maxXZ > 5000 || maxY > 2000) {
+    // Classic cm-as-m decade
+    scale = 0.01;
+  } else if (maxXZ < 20 && maxY < 5) {
+    // Tiny authored map — enlarge carefully (not character-fit)
+    scale = 100;
+  }
+  // Sanity: after scale, map XZ should be multi-hundred metres for Bermuda, not dollhouse
+  const scaledXZ = maxXZ * scale;
+  if (scaledXZ < 80 && maxXZ > 100) {
+    // Someone forced a tiny targetWidth — refuse squash that makes heroes > buildings
+    console.warn(
+      `[island] refusing dollhouse scale ${scale.toFixed(4)} (would be ${scaledXZ.toFixed(1)} m); keeping authored SI`,
+    );
+    scale = 1;
+  }
   root.scale.setScalar(scale);
+  console.info(
+    `[island] SI scale=${scale.toFixed(4)} rawXZ=${maxXZ.toFixed(1)}m → ${(maxXZ * scale).toFixed(1)}m  rawY=${maxY.toFixed(1)} → ${(maxY * scale).toFixed(1)}m`,
+  );
 
   box.setFromObject(root);
   const center = new THREE.Vector3();

@@ -13,6 +13,7 @@ import { AnimationDirector } from "./bip001Director.js";
 import {
   deployGrudge6Model,
   stripPositionTracks,
+  rematchClipTracks,
   reGroundAfterAnimSample,
   diagnoseCharacterLook,
 } from "./characterDeploy.js";
@@ -164,9 +165,12 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   try {
     window.setLoaderStatus?.(`Loading anim pack ${animPack}…`);
     clips = await loadAnimPack(animPack);
-    // Strip position tracks again for safety
+    // Rematch Bip001 bone names → strip hip/root position (kills hip-float)
+    let bound = 0;
     for (const k of Object.keys(clips)) {
-      if (clips[k]) clips[k] = stripPositionTracks(clips[k]);
+      if (!clips[k]) continue;
+      clips[k] = stripPositionTracks(rematchClipTracks(clips[k], model));
+      bound++;
     }
     const hasAny = Object.values(clips).some(Boolean);
     if (hasAny) {
@@ -176,7 +180,7 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
       reGroundAfterAnimSample(model, 0);
       const d2 = diagnoseCharacterLook(model, 0);
       console.info(
-        `[grudge6Loader] ${classId} pack=${animPack} meshes=${shownMeshes.length} h=${d2.height?.toFixed(2)} feet=${d2.feetMinY?.toFixed(3)}`,
+        `[grudge6Loader] ${classId} pack=${animPack} meshes=${shownMeshes.length} clips=${bound} h=${d2.height?.toFixed(2)} feet=${d2.feetMinY?.toFixed(3)}`,
         d2.ok ? "OK" : d2.errors,
       );
     } else {

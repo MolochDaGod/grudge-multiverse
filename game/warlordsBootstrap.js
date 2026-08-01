@@ -22,9 +22,11 @@ import {
   updateWorldReticle,
   markHostile,
 } from "./combatAim.js";
-import { mountWarlordsHud } from "./warlordsHud.js";
+import { mountWarlordsHud, refreshCombatFrame, setHarvestPrompt } from "./warlordsHud.js";
 import { setupRaceClassSelectUI } from "./raceClassSelect.js";
 import { loadSelection } from "./fleetGearPresets.js";
+import { ensureItemCatalog } from "./itemIcons.js";
+import { reGroundAfterAnimSample } from "./characterDeploy.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -174,10 +176,12 @@ export async function attachWarlordsWorld(ctx) {
   const classDef = getClass(skillClass);
 
   mountWarlordsHud();
+  ensureItemCatalog().catch(() => {});
   window.setLoaderStatus?.("Loading Bermuda island…");
   flash?.("Loading Bermuda island…", 1.2);
 
-  const island = await loadBermudaIsland(scene, { targetWidth: 120, maxHarvest: 70 });
+  // Preserve SI metres (bermuda already ~840 m). Do NOT pass targetWidth: 120 (dollhouse bug).
+  const island = await loadBermudaIsland(scene, { maxHarvest: 70 });
   const groundAt = makeGroundSampler(island.root);
 
   // Place player on grass spawn outside hub
@@ -245,8 +249,12 @@ export async function attachWarlordsWorld(ctx) {
       /* ignore */
     }
 
+    window.__mvClassLabel = g6.kit?.label || classDef.label;
+    window.__mvClassId = classId;
+    window.__mvRaceId = raceId;
+    refreshCombatFrame({ classLabel: window.__mvClassLabel });
     flash?.(
-      `${g6.kit?.label || classDef.label} · ${g6.animPack} · ${g6.shownMeshes?.length || 0} meshes`,
+      `${g6.kit?.label || classDef.label} · ${g6.animPack} · ${g6.shownMeshes?.length || 0} meshes · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m`,
       1.4,
     );
   } catch (e) {
@@ -262,6 +270,7 @@ export async function attachWarlordsWorld(ctx) {
         t: Date.now(),
         by: playerId,
       });
+      refreshCombatFrame();
     },
   });
 
@@ -280,6 +289,10 @@ export async function attachWarlordsWorld(ctx) {
       if (g6?.director) {
         const role = skillAnimRole(skill);
         g6.director.requestOneShot(role) || g6.director.requestOneShot("attack");
+        // Re-ground after skill sample (hip-float kill from residual tracks)
+        setTimeout(() => {
+          if (g6?.model) reGroundAfterAnimSample(g6.model, 0);
+        }, 80);
       }
 
       const cam = ctx.camera;
@@ -457,6 +470,21 @@ export async function attachWarlordsWorld(ctx) {
           /* ignore */
         }
       }
+
+      // Harvest proximity prompt (desktop E) — no mobile UI
+      let nearHarvest = null;
+      let bestD = 3.2;
+      if (harvest.nodes && typeof harvest.nodes.values === "function") {
+        for (const n of harvest.nodes.values()) {
+          if (n.broken || !n.position) continue;
+          const d = Math.hypot(n.position.x - pos.x, n.position.z - pos.z);
+          if (d < bestD) {
+            bestD = d;
+            nearHarvest = n;
+          }
+        }
+      }
+      setHarvestPrompt(!!nearHarvest, nearHarvest?.kind || "resource");
 
       // Body yaw: soft-lock / travel
       let moving = false;

@@ -9,6 +9,10 @@ import { getClass } from "./classes.js";
 import { loadBag, saveBag, countMat } from "./inventory.js";
 import { QUICK_RECIPES, craft, canCraft } from "./crafting.js";
 import { VENDORS, buy } from "./vendors.js";
+import { ensureItemCatalog, iconHtml, skillIconUrl } from "./itemIcons.js";
+
+// Prefetch ObjectStore icons (info.grudge-studio.com catalog)
+ensureItemCatalog().catch(() => {});
 
 export const CRAFTING_SUITE_URL = "https://grudge-crafting.puter.site/";
 
@@ -124,7 +128,11 @@ function renderEquipment() {
             (s) => `
           <div class="mp-eq-slot">
             <div class="mp-eq-label">${s.label}</div>
-            <div class="mp-eq-item">${s.item ? escape(s.item.name) + (s.item.dmg ? ` · ${s.item.dmg} dmg` : "") + (s.item.armor ? ` · ${s.item.armor} ar` : "") : "— empty —"}</div>
+            <div class="mp-eq-item mp-eq-with-icon">${
+              s.item
+                ? `${iconHtml(s.item.id || s.item.name, 32, s.item.name)}<span>${escape(s.item.name)}${s.item.dmg ? ` · ${s.item.dmg} dmg` : ""}${s.item.armor ? ` · ${s.item.armor} ar` : ""}</span>`
+                : "— empty —"
+            }</div>
           </div>`,
           )
           .join("")}
@@ -132,8 +140,12 @@ function renderEquipment() {
       <div class="mp-section-title" style="margin-top:14px">Bag gear</div>
       <ul class="mp-list">
         ${
-          bagWeapons.map((i) => `<li>${escape(i.name)} <span class="mp-muted">T${i.tier} ${i.slot}</span></li>`).join("") ||
-          "<li class='mp-muted'>No extra gear yet — craft or buy</li>"
+          bagWeapons
+            .map(
+              (i) =>
+                `<li class="mp-li-icon">${iconHtml(i.id || i.name, 22, i.name)} ${escape(i.name)} <span class="mp-muted">T${i.tier} ${i.slot}</span></li>`,
+            )
+            .join("") || "<li class='mp-muted'>No extra gear yet — craft or buy</li>"
         }
       </ul>
     </div>`;
@@ -153,15 +165,24 @@ function renderInventory() {
       <div class="mp-section-title">Materials</div>
       <div class="mp-mat-row">
         ${
-          mats.map((m) => `<span class="mp-chip">${escape(m.name)} ×${m.qty || 1}</span>`).join("") ||
+          mats
+            .map(
+              (m) =>
+                `<span class="mp-chip mp-chip-icon">${iconHtml(m.id || m.name, 18, m.name)} ${escape(m.name)} ×${m.qty || 1}</span>`,
+            )
+            .join("") ||
           '<span class="mp-muted">Harvest trees/rocks (E) for wood & stone</span>'
         }
       </div>
       <div class="mp-section-title" style="margin-top:12px">Items</div>
       <ul class="mp-list">
         ${
-          other.map((i) => `<li>${escape(i.name)}${i.qty > 1 ? ` ×${i.qty}` : ""} <span class="mp-muted">T${i.tier} ${i.slot}</span></li>`).join("") ||
-          "<li class='mp-muted'>Empty</li>"
+          other
+            .map(
+              (i) =>
+                `<li class="mp-li-icon">${iconHtml(i.id || i.name, 22, i.name)} ${escape(i.name)}${i.qty > 1 ? ` ×${i.qty}` : ""} <span class="mp-muted">T${i.tier} ${i.slot}</span></li>`,
+            )
+            .join("") || "<li class='mp-muted'>Empty</li>"
         }
       </ul>
       <div class="mp-section-title" style="margin-top:12px">Vendors (near hub)</div>
@@ -194,8 +215,13 @@ function renderSkills() {
           .map((s) => {
             const locked = level < (s.level || 1);
             const key = s.key === "KeyF" ? "F" : s.shift ? `⇧${s.key.replace("Digit", "")}` : s.key;
+            const ic = skillIconUrl(s, c.id);
+            const icon = ic
+              ? `<img src="${ic}" width="28" height="28" alt="" style="border-radius:6px;object-fit:contain" />`
+              : "";
             return `<div class="mp-skill ${locked ? "locked" : ""}">
               <div class="mp-skill-key">${key}</div>
+              ${icon}
               <div class="mp-skill-name">${escape(s.name)}</div>
               <div class="mp-skill-meta">${s.kind} · CD ${s.cd}s${locked ? ` · need L${s.level}` : ""}</div>
             </div>`;

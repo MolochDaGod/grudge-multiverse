@@ -77,7 +77,7 @@ export type PlayerControllerOptions = {
     camLookAtHeightRatio?: number; // 相机看向点高度比例（0=底部 1=顶部），默认 0.8
     staticCollider?: THREE.Object3D | THREE.Object3D[]; // 静态碰撞体来源，不传则遍历整个场景
     dynamicCollider?: THREE.Object3D | THREE.Object3D[]; // 初始化时注册的动态碰撞体
-    isShowMobileControls?: boolean; // 移动端是否显示虚拟控制 UI，默认 true
+    isShowMobileControls?: boolean; // Mobile virtual joystick UI — default false (desktop keyboard/mouse)
     mobileControls?: MobileControlsOptions; // 移动端按钮显隐配置
     thirdMouseMode?: 0 | 1 | 2 | 3 | 4 | 5; // 第三人称鼠标控制模式，默认 1
     enableZoom?: boolean; // 是否允许滚轮缩放，默认 false

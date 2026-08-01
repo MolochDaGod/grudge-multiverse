@@ -1,52 +1,75 @@
 /**
  * Load Bip001 baked packs from fleet hosts (Open same-origin first, then CDN).
- * SSOT: grudge6-combat-runtime + gameopen anims.ts
+ * SSOT: grudge6-combat-runtime + threejs-rapier-react-three-controller anims.ts
+ *
+ * Open hosts use **space names** for many sword_shield / longbow / magic clips
+ * (hyphenated aliases often 404). Always try aliases + dual_wield fallbacks.
  */
 import * as THREE from "three";
 
 export const OPEN_ANIMS = "https://open.grudge-studio.com/anims/baked";
 export const CDN_ANIMS = "https://assets.grudge-studio.com/prod/anims";
 export const ARENA_ANIMS = "https://grudge-arena.grudge-studio.com/anims/baked";
+export const DANGER_ANIMS =
+  "https://threejs-rapier-react-three-controll.vercel.app/anims/baked";
 
-/** Pack role → relative paths under /anims/baked (no .json). */
+/** Pack role → relative paths under /anims/baked (no .json). First hit wins. */
 export const PACK_CLIPS = {
   sword_shield: {
-    idle: ["sword_shield/fight_idle", "dual_wield/idle", "magic/Standing Walk Forward"],
-    walk: ["sword_shield/standing walk forward", "sword_shield/Standing Walk Forward", "dual_wield/walk"],
-    run: ["sword_shield/sword and shield run", "sword_shield/standing run forward", "dual_wield/run"],
-    attack: ["dual_wield/attack", "sword_shield/fight_idle"],
-    skill1: ["dual_wield/attack2", "dual_wield/combo"],
+    idle: [
+      "sword_shield/sword and shield idle",
+      "sword_shield/sword-and-shield-idle",
+      "dual_wield/idle",
+    ],
+    walk: ["locomotion/walking", "dual_wield/walk", "sword_shield/standing walk forward"],
+    run: [
+      "sword_shield/sword and shield run",
+      "sword_shield/sword-and-shield-run",
+      "locomotion/running",
+      "dual_wield/run",
+    ],
+    attack: [
+      "sword_shield/sword and shield attack",
+      "sword_shield/sword-and-shield-attack",
+      "dual_wield/attack",
+    ],
+    skill1: ["dual_wield/attack2", "dual_wield/combo", "sword_shield/sword and shield attack"],
     skill2: ["dual_wield/attack3", "dual_wield/dash"],
     skill3: ["dual_wield/attack4", "dual_wield/flyingKick"],
     skill4: ["dual_wield/attack5", "dual_wield/combo"],
     skill5: ["dual_wield/combo", "dual_wield/attack"],
   },
   longbow: {
-    idle: ["longbow/idle", "dual_wield/idle"],
-    walk: ["longbow/walk", "sword_shield/standing walk forward"],
-    run: ["longbow/run", "sword_shield/standing run forward"],
-    attack: ["longbow/shoot", "longbow/attack", "dual_wield/attack"],
-    skill1: ["longbow/skill1", "dual_wield/attack2"],
-    skill2: ["longbow/skill2", "dual_wield/attack3"],
-    skill3: ["longbow/skill3", "dual_wield/combo"],
-    skill4: ["longbow/skill4", "dual_wield/attack4"],
-    skill5: ["longbow/special", "dual_wield/attack5"],
+    idle: ["longbow/standing idle 01", "longbow/idle", "dual_wield/idle"],
+    walk: ["longbow/standing walk forward", "locomotion/walking", "dual_wield/walk"],
+    run: ["longbow/standing run forward", "locomotion/running", "dual_wield/run"],
+    attack: ["longbow/standing aim recoil", "longbow/draw", "dual_wield/attack"],
+    skill1: ["longbow/standing aim recoil", "dual_wield/attack2"],
+    skill2: ["dual_wield/attack3", "longbow/standing aim recoil"],
+    skill3: ["dual_wield/combo", "dual_wield/attack"],
+    skill4: ["dual_wield/attack4"],
+    skill5: ["dual_wield/attack5", "dual_wield/combo"],
   },
   magic: {
-    idle: ["magic/idle", "dual_wield/idle"],
-    walk: ["magic/Standing Walk Forward", "sword_shield/standing walk forward"],
-    run: ["uploads_2026_06/locomotion/torch run forward", "sword_shield/standing run forward"],
-    attack: ["magic/attack", "magic/cast", "dual_wield/attack"],
-    skill1: ["magic/skill1", "dual_wield/attack2"],
-    skill2: ["magic/skill2", "dual_wield/attack3"],
-    skill3: ["magic/skill3", "dual_wield/combo"],
-    skill4: ["magic/skill4", "dual_wield/dash"],
-    skill5: ["magic/nova", "dual_wield/attack5"],
+    idle: ["magic/standing idle", "magic/idle", "dual_wield/idle"],
+    walk: ["magic/Standing Walk Forward", "locomotion/walking", "dual_wield/walk"],
+    run: [
+      "magic/Standing Run Forward",
+      "uploads_2026_06/locomotion/running",
+      "locomotion/running",
+      "dual_wield/run",
+    ],
+    attack: ["unarmed/punching", "dual_wield/attack", "magic/attack"],
+    skill1: ["dual_wield/attack2", "unarmed/punching"],
+    skill2: ["dual_wield/attack3", "dual_wield/dash"],
+    skill3: ["dual_wield/combo", "dual_wield/attack4"],
+    skill4: ["dual_wield/dash", "dual_wield/flyingKick"],
+    skill5: ["dual_wield/attack5", "dual_wield/combo"],
   },
   twohand: {
-    idle: ["dual_wield/idle", "sword_shield/fight_idle"],
-    walk: ["dual_wield/walk", "sword_shield/standing walk forward"],
-    run: ["dual_wield/run", "sword_shield/standing run forward"],
+    idle: ["dual_wield/idle", "sword_shield/sword and shield idle"],
+    walk: ["dual_wield/walk", "locomotion/walking"],
+    run: ["dual_wield/run", "locomotion/running"],
     attack: ["dual_wield/attack", "dual_wield/combo"],
     skill1: ["dual_wield/attack2"],
     skill2: ["dual_wield/dash"],
@@ -55,10 +78,10 @@ export const PACK_CLIPS = {
     skill5: ["dual_wield/attack5"],
   },
   unarmed: {
-    idle: ["unarmed/idle", "dual_wield/idle"],
-    walk: ["unarmed/walk", "sword_shield/standing walk forward"],
-    run: ["unarmed/run", "sword_shield/standing run forward"],
-    attack: ["unarmed/attack", "dual_wield/attack"],
+    idle: ["unarmed/fight_idle", "dual_wield/idle"],
+    walk: ["locomotion/walking", "dual_wield/walk"],
+    run: ["locomotion/running", "dual_wield/run"],
+    attack: ["unarmed/punching", "dual_wield/attack"],
     skill1: ["dual_wield/attack2"],
     skill2: ["dual_wield/dash"],
     skill3: ["dual_wield/flyingKick"],
@@ -69,16 +92,26 @@ export const PACK_CLIPS = {
 
 function rotationOnlyClip(clip) {
   if (!clip) return clip;
-  // Already rotation-heavy from bake; strip position tracks if present
   const tracks = clip.tracks.filter((t) => /\.quaternion$|\.rotation/.test(t.name));
   if (tracks.length === clip.tracks.length) return clip;
   return new THREE.AnimationClip(clip.name, clip.duration, tracks.length ? tracks : clip.tracks);
 }
 
+/** Encode each path segment (spaces → %20) without breaking slashes. */
+function encodeRel(rel) {
+  return rel
+    .replace(/^\//, "")
+    .replace(/\.json$/i, "")
+    .split("/")
+    .map((s) => encodeURIComponent(s))
+    .join("/");
+}
+
 export function bakedCandidates(rel) {
-  const clean = rel.replace(/^\//, "").replace(/\.json$/i, "");
+  const clean = encodeRel(rel);
   return [
     `${OPEN_ANIMS}/${clean}.json`,
+    `${DANGER_ANIMS}/${clean}.json`,
     `${ARENA_ANIMS}/${clean}.json`,
     `${CDN_ANIMS}/${clean}.json`,
   ];
@@ -138,15 +171,22 @@ export async function loadAnimPack(packId) {
       out[role] = await firstClip(paths);
     }),
   );
-  // Sprint = run clone faster
-  if (out.run) {
-    out.sprint = out.run.clone();
-    out.sprint.name = "sprint";
+  // Sprint prefers dedicated sprint loco when available
+  try {
+    const sprintClip = await loadBakedClip("uploads_2026_06/locomotion/running");
+    out.sprint = sprintClip;
     out.sprint.userData = { ...(out.sprint.userData || {}), locoMult: 1.75 };
-  } else {
-    out.sprint = out.walk;
+  } catch {
+    if (out.run) {
+      out.sprint = out.run.clone();
+      out.sprint.name = "sprint";
+      out.sprint.userData = { ...(out.sprint.userData || {}), locoMult: 1.75 };
+    } else {
+      out.sprint = out.walk;
+    }
   }
-  // Ensure idle exists as last resort synthetic
   if (!out.idle && out.walk) out.idle = out.walk;
+  if (!out.walk && out.run) out.walk = out.run;
+  if (!out.run && out.walk) out.run = out.walk;
   return out;
 }
