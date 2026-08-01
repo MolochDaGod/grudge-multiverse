@@ -61,8 +61,11 @@ window.addEventListener("beforeunload", () => remove(myRef));
 
 // ==================== Scene (Bermuda island via warlordsBootstrap) ====================
 // Legacy burnout path kept as optional fallback only
-const SCENE_URL = BASE + "maps/bermuda.glb";
+/** Local maps/ is stripped from Vercel; CDN is production SSOT. */
+const SCENE_URL = "https://assets.grudge-studio.com/models/maps/bermuda.glb";
 const USE_WARLORDS_ISLAND = true;
+/** Offline / dev fallback only (not shipped on Vercel). */
+const SCENE_URL_LOCAL = BASE + "maps/bermuda.glb";
 // å‡ºç”Ÿç‚¹åˆ—è¡¨ï¼ŒçŽ©å®¶æŒ‰å…¥æˆ¿é¡ºåºä¾æ¬¡åˆ†é…
 const SPAWN_POINTS = [
     new THREE.Vector3(21.500, 3.755, 15.000),
@@ -1030,20 +1033,12 @@ function onHitPlayer(targetId, damage) {
     set(ref(db, `rooms/${roomId}/hits/${targetId}/${Date.now()}`), { damage, by: playerId });
 }
 
-const PLAYER_STALE_MS = 60000; // è¶…è¿‡é˜ˆå€¼æ²¡æœ‰å¿ƒè·³è§†ä¸ºå·²ç¦»çº¿
+const PLAYER_STALE_MS = 60000; // no heartbeat for 60s → offline / ghost seat
 
-// åˆå§‹åŒ– Firebase ç›‘å¬ï¼šçŽ©å®¶çŠ¶æ€åŒæ­¥ + å¿ƒè·³è¶…æ—¶æ¸…ç† + å‘½ä¸­äº‹ä»¶æŽ¥æ”¶
+// Initialize Firebase listeners: presence + stale prune + hit events
 function initFirebaseSync() {
-    // æ¸…ç†ä¸Šæ¬¡æœªæ­£å¸¸é€€å‡ºçš„æ®‹ç•™çŽ©å®¶
-    get(ref(db, `rooms/${roomId}/players`)).then(snap => {
-        if (!snap.exists()) return;
-        const now = Date.now();
-        for (const [id, state] of Object.entries(snap.val())) {
-            if (id !== playerId && now - (state.t ?? 0) > PLAYER_STALE_MS) {
-                remove(ref(db, `rooms/${roomId}/players/${id}`));
-            }
-        }
-    });
+    // Prune leftovers from previous sessions that never disconnected cleanly
+    void pruneAndCountLivePlayers();
 
     // çŽ©å®¶çŠ¶æ€ç›‘å¬
     const roomRef = ref(db, `rooms/${roomId}/players`);
@@ -1233,15 +1228,46 @@ function updateMyHPUI() {
     if (num) num.textContent = String(myHp);
 }
 
-// æ˜¾ç¤ºæˆ¿é—´å·²æ»¡æç¤ºï¼Œé˜»æ­¢è¿›å…¥æ¸¸æˆ
-function showRoomFull() {
+/** Show room-full UI with alternate room links (EN + ZH). */
+function showRoomFull(liveCount = MAX_PLAYERS) {
     const overlay = document.getElementById("room-full-overlay");
     if (overlay) {
         overlay.style.display = "flex";
+        const sub = overlay.querySelector(".rf-sub");
+        if (sub) {
+            sub.textContent = `Room full · ${liveCount}/${MAX_PLAYERS} live · try another room`;
+        }
+        const hint = overlay.querySelector(".rf-hint");
+        if (hint) {
+            hint.textContent = "Ghost seats are auto-pruned after 60s without heartbeat.";
+        }
     } else {
-        alert(`æˆ¿é—´å·²æ»¡ï¼ˆæœ€å¤š ${MAX_PLAYERS} äººï¼‰ï¼Œè¯·æ¢ä¸ªæˆ¿é—´`);
+        alert(`Room full (max ${MAX_PLAYERS}). Try #room2 or #room3`);
     }
     window.hideLoader?.();
+}
+
+/**
+ * Count only live Firebase seats; prune stale ghosts first so room1 is not
+ * permanently locked by crashed tabs that never fired onDisconnect.
+ */
+async function pruneAndCountLivePlayers() {
+    const snap = await get(ref(db, `rooms/${roomId}/players`));
+    if (!snap.exists()) return 0;
+    const now = Date.now();
+    const data = snap.val() || {};
+    let live = 0;
+    const jobs = [];
+    for (const [id, state] of Object.entries(data)) {
+        const t = state?.t ?? 0;
+        if (now - t > PLAYER_STALE_MS) {
+            jobs.push(remove(ref(db, `rooms/${roomId}/players/${id}`)));
+            continue;
+        }
+        live += 1;
+    }
+    if (jobs.length) await Promise.allSettled(jobs);
+    return live;
 }
 
 // ==================== è½¯æŽ’æ–¥ ====================
@@ -1512,9 +1538,12 @@ async function init() {
         scene.add(edges);
     }
 
-    const snap = await get(ref(db, `rooms/${roomId}/players`));
-    const existingCount = snap.exists() ? Object.keys(snap.val()).length : 0;
-    if (existingCount >= MAX_PLAYERS) { showRoomFull(); return; }
+    // Prune ghost seats before capacity check (stale tabs used to permanently lock room1)
+    const existingCount = await pruneAndCountLivePlayers();
+    if (existingCount >= MAX_PLAYERS) {
+        showRoomFull(existingCount);
+        return;
+    }
     spawnIndex = existingCount % SPAWN_POINTS.length;
     const spawnPos = USE_WARLORDS_ISLAND
         ? new THREE.Vector3(0, 2, 0)

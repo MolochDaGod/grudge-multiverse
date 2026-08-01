@@ -569,10 +569,31 @@
         <script src="/loader.js"></script>
     </head>
     <body>
-        <!-- 房间已满提示 -->
+        <!-- Room full — also shown if ghost seats fill Firebase (auto-pruned on reload) -->
         <div id="room-full-overlay">
-            <div class="rf-title">房间已满</div>
+            <div class="rf-title">房间已满 · Room full</div>
+            <div class="rf-sub">Max 10 live players in this room</div>
+            <div class="rf-hint">Try another room below</div>
+            <div class="rf-rooms" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+                <a href="#room2" style="color:#6ecbff;font-size:12px;text-decoration:underline">#room2</a>
+                <a href="#room3" style="color:#6ecbff;font-size:12px;text-decoration:underline">#room3</a>
+                <a href="#room4" style="color:#6ecbff;font-size:12px;text-decoration:underline">#room4</a>
+                <button type="button" id="rf-reload" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid #6ecbff;background:transparent;color:#eaf4ff;cursor:pointer;font-size:11px">Retry this room</button>
+            </div>
         </div>
+        <script>
+          document.getElementById("rf-reload")?.addEventListener("click", function () {
+            location.reload();
+          });
+          // Room links force reload so hash change restarts join
+          document.querySelectorAll("#room-full-overlay a[href^='#']").forEach(function (a) {
+            a.addEventListener("click", function (e) {
+              e.preventDefault();
+              location.hash = a.getAttribute("href");
+              location.reload();
+            });
+          });
+        </script>
 
         <!-- Class + name gate (loyalty brand behind) -->
         <div id="name-overlay">

@@ -5,7 +5,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/room/:path*", "destination": "/index.html" },
-    { "source": "/((?!assets|glb|audio|img|loader.js).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!assets|glb|audio|img|maps|loader\\.js|favicon).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
