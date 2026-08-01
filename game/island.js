@@ -299,9 +299,20 @@ export async function loadBermudaIsland(scene, opts = {}) {
     spawns.push(new THREE.Vector3(Math.cos(a) * r, 2, Math.sin(a) * r));
   }
 
+  // Warlords / uMMORPG island world-boss pins (meshes loaded in bosses.js)
   const bossPads = [
-    { id: "boss_east", position: new THREE.Vector3(halfW * 0.55, 1.5, 0), name: "East Colossus" },
-    { id: "boss_west", position: new THREE.Vector3(-halfW * 0.55, 1.5, 0), name: "West Colossus" },
+    {
+      id: "boss_east",
+      position: new THREE.Vector3(halfW * 0.45, 1.5, halfW * 0.08),
+      name: "Shadow Flame Mantis",
+      defId: "shadow_flame_mantis",
+    },
+    {
+      id: "boss_west",
+      position: new THREE.Vector3(-halfW * 0.42, 1.5, -halfW * 0.06),
+      name: "Ash Ghast",
+      defId: "volcano_ghast",
+    },
   ];
 
   // Vendors near origin hub (SI metres)
