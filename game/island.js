@@ -304,9 +304,10 @@ export async function loadBermudaIsland(scene, opts = {}) {
     { id: "boss_west", position: new THREE.Vector3(-halfW * 0.55, 1.5, 0), name: "West Colossus" },
   ];
 
+  // Vendors near origin hub (SI metres)
   const vendorPads = [
-    { id: "armor", position: new THREE.Vector3(4, 1.2, 6), label: "Armourer" },
-    { id: "weapon", position: new THREE.Vector3(-4, 1.2, 6), label: "Weaponsmith" },
+    { id: "armor", position: new THREE.Vector3(8, 1.2, 10), label: "Armourer" },
+    { id: "weapon", position: new THREE.Vector3(-8, 1.2, 10), label: "Weaponsmith" },
   ];
 
   // Invisible large ground plane under island as physics safety net
@@ -339,23 +340,31 @@ export function makeGroundSampler(islandRoot) {
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
-  const meshes = [];
+  /** Prefer terrain/building/safety; fall back to all solid meshes */
+  const preferred = [];
+  const all = [];
   islandRoot.traverse((o) => {
-    if (o.isMesh && (classifyMeshName(o.name) === "terrain" || o.name === "island-safety-ground")) {
-      meshes.push(o);
+    if (!o.isMesh || !o.visible) return;
+    all.push(o);
+    const kind = classifyMeshName(o.name);
+    if (
+      kind === "terrain" ||
+      kind === "building" ||
+      o.name === "island-safety-ground" ||
+      /ground|floor|road|terrain|cement|grass/i.test(o.name || "")
+    ) {
+      preferred.push(o);
     }
   });
-  if (meshes.length < 2) {
-    islandRoot.traverse((o) => {
-      if (o.isMesh) meshes.push(o);
-    });
-  }
+  const meshes = preferred.length >= 2 ? preferred : all;
   return (x, z) => {
-    origin.set(x, 400, z);
+    origin.set(x, 500, z);
     ray.set(origin, down);
-    ray.far = 800;
-    const hits = ray.intersectObjects(meshes, true);
+    ray.far = 1000;
+    const hits = ray.intersectObjects(meshes, false);
     if (hits[0]) return hits[0].point.y;
-    return 0;
+    // Retry including children graphs
+    const hits2 = ray.intersectObjects(all, true);
+    return hits2[0]?.point.y ?? 0;
   };
 }

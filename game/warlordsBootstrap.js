@@ -28,7 +28,7 @@ import {
   updateWorldReticle,
   markHostile,
 } from "./combatAim.js";
-import { mountWarlordsHud, refreshCombatFrame, setHarvestPrompt } from "./warlordsHud.js";
+import { mountWarlordsHud, refreshCombatFrame, setHarvestPrompt, syncHp } from "./warlordsHud.js";
 import { setupRaceClassSelectUI } from "./raceClassSelect.js";
 import { loadSelection } from "./fleetGearPresets.js";
 import { ensureItemCatalog } from "./itemIcons.js";
@@ -347,7 +347,13 @@ export async function attachWarlordsWorld(ctx) {
     },
   });
 
-  const bosses = new BossFight(scene, island.bossPads);
+  // Ground boss pads to terrain (SI) so colliders/range match map
+  const groundedPads = (island.bossPads || []).map((p) => {
+    const pos = p.position.clone();
+    pos.y = (groundAt(pos.x, pos.z) ?? 0) + 0.05;
+    return { ...p, position: pos };
+  });
+  const bosses = new BossFight(scene, groundedPads);
   // Mark bosses hostile for soft-lock select
   for (const b of bosses.bosses || []) {
     if (b.root) markHostile(b.root, b.id, "boss");
@@ -408,6 +414,11 @@ export async function attachWarlordsWorld(ctx) {
           const dmg = Math.floor(baseDmg * (skill.dmgMul || 1));
           const res = bosses.hit(b.id, dmg, playerId);
           set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
+          window.__mvBossTarget = {
+            name: b.name,
+            hp: b.hp,
+            maxHp: b.maxHp,
+          };
           if (res.killed) {
             const reward = rollKillReward(true);
             flash?.(`${b.name} defeated! L${reward.level}`, 1.2);
@@ -415,8 +426,12 @@ export async function attachWarlordsWorld(ctx) {
             if (reward.dropped?.length) {
               loot.spawnMany(b.root.position.clone(), reward.dropped);
             }
+            window.__mvBossTarget = null;
             refreshCombatFrame();
-          } else flash?.(`${b.name} HP ${res.hp}`, 0.4);
+          } else {
+            flash?.(`${b.name} HP ${res.hp}`, 0.4);
+            refreshCombatFrame();
+          }
         }
       }
     },
@@ -452,8 +467,9 @@ export async function attachWarlordsWorld(ctx) {
       new THREE.CylinderGeometry(0.4, 0.5, 1.6, 10),
       new THREE.MeshStandardMaterial({ color: v.id === "armor" ? 0x4a90d9 : 0xc8a84b }),
     );
-    m.position.copy(v.position);
-    m.position.y = (groundAt(v.position.x, v.position.z) ?? 0) + 0.8;
+    const vy = groundAt(v.position.x, v.position.z) ?? 0;
+    m.position.set(v.position.x, vy + 0.8, v.position.z);
+    m.castShadow = true;
     scene.add(m);
     const label = document.createElement("div");
     label.className = "player-name-label";
@@ -560,20 +576,40 @@ export async function attachWarlordsWorld(ctx) {
         }
       }
 
-      // Harvest proximity prompt (desktop E) — no mobile UI
-      let nearHarvest = null;
-      let bestD = 3.2;
-      if (harvest.nodes && typeof harvest.nodes.values === "function") {
-        for (const n of harvest.nodes.values()) {
-          if (n.broken || !n.position) continue;
-          const d = Math.hypot(n.position.x - pos.x, n.position.z - pos.z);
-          if (d < bestD) {
-            bestD = d;
-            nearHarvest = n;
+      // Loot / harvest proximity prompts
+      const nearLoot = loot.pickNearest(pos, 2.8);
+      if (nearLoot) {
+        setHarvestPrompt(true, nearLoot.item?.name || "loot", "loot");
+      } else {
+        let nearHarvest = null;
+        let bestD = 3.2;
+        if (harvest.nodes && typeof harvest.nodes.values === "function") {
+          for (const n of harvest.nodes.values()) {
+            if (n.broken || !n.position) continue;
+            const d = Math.hypot(n.position.x - pos.x, n.position.z - pos.z);
+            if (d < bestD) {
+              bestD = d;
+              nearHarvest = n;
+            }
           }
         }
+        setHarvestPrompt(!!nearHarvest, nearHarvest?.kind || "resource", "harvest");
       }
-      setHarvestPrompt(!!nearHarvest, nearHarvest?.kind || "resource");
+
+      // Nearest living boss for HUD target strip
+      let nearestBoss = null;
+      let bossD = 22;
+      for (const b of bosses.bosses || []) {
+        if (b.dead || !b.root) continue;
+        const d = b.root.position.distanceTo(pos);
+        if (d < bossD) {
+          bossD = d;
+          nearestBoss = b;
+        }
+      }
+      window.__mvBossTarget = nearestBoss
+        ? { name: nearestBoss.name, hp: nearestBoss.hp, maxHp: nearestBoss.maxHp }
+        : null;
 
       // Body yaw: soft-lock / travel
       let moving = false;
@@ -654,6 +690,10 @@ export async function attachWarlordsWorld(ctx) {
     },
     onPlayerKillEnemy(isBoss) {
       return rollKillReward(!!isBoss);
+    },
+    /** Call when local HP changes so unit frame stays correct */
+    syncPlayerHp(hp, maxHp = 100) {
+      syncHp(hp, maxHp);
     },
   };
 }

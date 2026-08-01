@@ -80,18 +80,26 @@ export class SkillBar {
         const key = s.key === "KeyF" ? "F" : s.key.replace("Digit", "");
         const icon = skillIconUrl(s, classId);
         const iconHtml = icon
-          ? `<img class="sk-icon" src="${icon}" alt="" width="28" height="28" loading="lazy" />`
+          ? `<img class="sk-icon" src="${icon}" alt="" width="28" height="28" loading="lazy"
+               onerror="this.style.display='none'" />`
           : `<span class="sk-icon-fallback">${(s.name || "?").slice(0, 2)}</span>`;
         const pct = left > 0 ? Math.min(100, (left / ((s.cd || 1) * 1000)) * 100) : 0;
-        return `<div class="sk-slot ${left > 0 ? "on-cd" : ""}" title="${s.name} · ${s.kind}">
+        return `<button type="button" class="sk-slot ${left > 0 ? "on-cd" : ""}" data-skill="${s.id}" title="${s.name} · ${s.kind} · ${key}">
           ${iconHtml}
           <span class="sk-key">${key}</span>
           <span class="sk-name">${s.name}</span>
           ${left > 0 ? `<span class="sk-cd">${(left / 1000).toFixed(1)}</span><span class="sk-cd-fill" style="height:${pct}%"></span>` : ""}
-        </div>`;
+        </button>`;
       })
       .join("");
     this.el = el;
+    el.querySelectorAll("[data-skill]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-skill");
+        const skill = skills.find((s) => s.id === id);
+        if (skill) this.cast(skill);
+      });
+    });
     this.ensureStyles();
   }
 
@@ -101,14 +109,17 @@ export class SkillBar {
     s.id = "mv-skillbar-css";
     s.textContent = `
       #skill-hotbar {
-        position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%);
-        z-index: 9995; display: flex; gap: 8px; pointer-events: none;
+        position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%);
+        z-index: 9997; display: flex; gap: 8px; pointer-events: none;
+        padding: 8px 10px; border-radius: 14px;
+        background: rgba(6,8,14,0.55); border: 1px solid rgba(200,168,75,0.22);
       }
       #skill-hotbar .sk-slot {
         position: relative; width: 56px; height: 56px; border-radius: 10px;
-        border: 1px solid rgba(200,168,75,0.5); background: rgba(8,10,16,0.9);
+        border: 1px solid rgba(200,168,75,0.5); background: rgba(8,10,16,0.92);
         box-shadow: 0 4px 16px rgba(0,0,0,0.45); overflow: hidden;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
+        pointer-events: auto; cursor: pointer;
       }
       #skill-hotbar .sk-slot.on-cd { opacity: 0.75; }
       #skill-hotbar .sk-icon { width: 28px; height: 28px; object-fit: contain; image-rendering: auto; }

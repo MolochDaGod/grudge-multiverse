@@ -61,16 +61,18 @@ export class HarvestSystem {
       n.object.visible = false;
       n.respawnAt = performance.now() + 45000;
       const bag = loadBag();
+      const qty = 1 + Math.floor(Math.random() * 2);
       addItem(bag, {
-        id: n.materialId,
+        id: n.materialId || (n.kind === "tree" ? "t0_wood" : "t0_stone"),
         name: n.kind === "tree" ? "Wood" : "Stone",
         tier: 0,
         slot: "mat",
-        qty: 1 + Math.floor(Math.random() * 2),
+        qty,
       });
       saveBag(bag);
+      window.dispatchEvent(new CustomEvent("mv-bag", { detail: bag }));
       this.opts.onBreak?.(n);
-      this.opts.flash?.(`Harvested ${n.kind}!`, 0.8);
+      this.opts.flash?.(`Harvested ${n.kind} ×${qty}!`, 0.8);
       return { ok: true, broken: true, materialId: n.materialId };
     }
     return { ok: true, broken: false, hp: n.hp };

@@ -1226,6 +1226,10 @@ function updateMyHPUI() {
                 : "rgba(255,50,50,0.7)";
     }
     if (num) num.textContent = String(myHp);
+    // Warlords combat frame (unit frame HP / scale meta)
+    window.__mvHp = myHp;
+    window.__mvMaxHp = 100;
+    window.dispatchEvent(new CustomEvent("mv-hp", { detail: { hp: myHp, maxHp: 100 } }));
 }
 
 /** Show room-full UI with alternate room links (EN + ZH). */
@@ -1754,6 +1758,10 @@ async function init() {
     updateMyHPUI();
     const nameEl = document.getElementById("local-player-name");
     if (nameEl) nameEl.textContent = myName;
+    window.__mvPlayerName = myName;
+    window.__mvHp = myHp;
+    window.__mvMaxHp = 100;
+    updateMyHPUI();
 
     // ── Multiverse Railway (own service) — NOT gameopen-production ──────────
     // Fleet rule: each game → its own Railway. Firebase is harvest/chat optional only.

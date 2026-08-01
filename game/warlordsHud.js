@@ -3,7 +3,7 @@
  * Replaces FPS gun legend. No mobile joystick UI.
  */
 import { ensureItemCatalog, iconHtml } from "./itemIcons.js";
-import { loadBag } from "./inventory.js";
+import { loadBag, loadLoadout } from "./inventory.js";
 
 export function mountWarlordsHud() {
   const el = document.querySelector(".hud");
@@ -20,8 +20,17 @@ export function mountWarlordsHud() {
         <span class="hud-sep"></span><span class="hint-text">Main panel</span> <kbd>I</kbd>
         <span class="hud-sep"></span><span class="hint-text">Chat</span> <kbd>Enter</kbd></div>
     `;
-    el.setAttribute("aria-label", "Danger controls");
+    el.setAttribute("aria-label", "Multiverse controls");
   }
+
+  // Keep combat frame HP in sync with gameplay
+  window.addEventListener("mv-bag", () => refreshCombatFrame());
+  window.addEventListener("mv-loadout", () => refreshCombatFrame());
+  window.addEventListener("mv-hp", (e) => {
+    if (e?.detail?.hp != null) window.__mvHp = e.detail.hp;
+    if (e?.detail?.maxHp != null) window.__mvMaxHp = e.detail.maxHp;
+    refreshCombatFrame({ hp: window.__mvHp, maxHp: window.__mvMaxHp });
+  });
 
   // Hide FPS gun chrome
   const br = document.getElementById("br-panel");
@@ -76,7 +85,12 @@ function ensureHudStyles() {
     #mv-combat-frame .cf-bar > i { display: block; height: 100%; border-radius: inherit; }
     #mv-combat-frame .cf-hp > i { background: linear-gradient(90deg,#8b2e2e,#e85d5d); }
     #mv-combat-frame .cf-xp > i { background: linear-gradient(90deg,#2a5a8a,#5aa8e8); width: 0%; }
+    #mv-combat-frame .cf-boss-hp > i { background: linear-gradient(90deg,#5a1a08,#e85a20); }
     #mv-combat-frame .cf-meta { display: flex; justify-content: space-between; color: #888; font-size: 10px; }
+    #mv-combat-frame .cf-wep {
+      display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: #ddd;
+    }
+    #mv-combat-frame .cf-boss { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,100,60,0.25); }
     #mv-combat-frame .cf-mats { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
     #mv-combat-frame .cf-mat {
       display: flex; align-items: center; gap: 4px; padding: 2px 6px;
@@ -117,24 +131,45 @@ export function refreshCombatFrame(extra = {}) {
   const el = document.getElementById("mv-combat-frame");
   if (!el) return;
   const bag = loadBag();
+  const loadout = loadLoadout();
   const hp = typeof extra.hp === "number" ? extra.hp : (window.__mvHp ?? 100);
   const maxHp = typeof extra.maxHp === "number" ? extra.maxHp : (window.__mvMaxHp ?? 100);
   const name = extra.name || window.__mvPlayerName || "Hero";
   const classLabel = extra.classLabel || window.__mvClassLabel || "";
+  const scaleNote = window.__mvCharMeta?.height
+    ? ` · ${Number(window.__mvCharMeta.height).toFixed(2)}m`
+    : "";
+  const mapNote = window.__mvMapMeta?.widthM
+    ? ` · map ~${Math.round(window.__mvMapMeta.widthM)}m`
+    : "";
   const xpInLevel = (bag.xp || 0) % 100;
   const mats = (bag.items || []).filter((i) => i.slot === "mat").slice(0, 4);
   const matHtml = mats
     .map(
       (m) =>
-        `<span class="cf-mat">${iconHtml(m.id || m.name, 16, m.name)}<span>${m.name} ×${m.qty || 1}</span></span>`,
+        `<span class="cf-mat">${iconHtml(m.id || m.name, 16, m.name)}<span>${escapeHtml(m.name)} ×${m.qty || 1}</span></span>`,
     )
     .join("");
+  const wep = loadout.weapon;
+  const wepHtml = wep
+    ? `<div class="cf-wep">${iconHtml(wep.id || wep.name, 18, wep.name)}<span>${escapeHtml(wep.name)}${wep.dmg ? ` · ${wep.dmg} dmg` : ""}</span></div>`
+    : `<div class="cf-meta" style="margin-top:4px;opacity:0.7">No weapon · open <kbd>I</kbd> Equipment</div>`;
+  const boss = window.__mvBossTarget;
+  const bossHtml =
+    boss && boss.hp > 0
+      ? `<div class="cf-boss">
+          <div class="cf-meta"><span>${escapeHtml(boss.name || "Boss")}</span><span>${Math.round(boss.hp)}/${Math.round(boss.maxHp || 1)}</span></div>
+          <div class="cf-bar cf-boss-hp"><i style="width:${Math.max(0, Math.min(100, (boss.hp / Math.max(1, boss.maxHp || 1)) * 100))}%"></i></div>
+        </div>`
+      : "";
   el.innerHTML = `
-    <div class="cf-name">${escapeHtml(name)}${classLabel ? ` · ${escapeHtml(classLabel)}` : ""} · L${bag.level || 1}</div>
+    <div class="cf-name">${escapeHtml(name)}${classLabel ? ` · ${escapeHtml(classLabel)}` : ""} · L${bag.level || 1}${scaleNote}</div>
     <div class="cf-meta"><span>HP</span><span>${Math.round(hp)} / ${Math.round(maxHp)}</span></div>
     <div class="cf-bar cf-hp"><i style="width:${Math.max(0, Math.min(100, (hp / maxHp) * 100))}%"></i></div>
-    <div class="cf-meta"><span>XP</span><span>${bag.xp || 0} · ${bag.gold || 0}g</span></div>
+    <div class="cf-meta"><span>XP</span><span>${bag.xp || 0} · ${bag.gold || 0}g${mapNote}</span></div>
     <div class="cf-bar cf-xp"><i style="width:${xpInLevel}%"></i></div>
+    ${wepHtml}
+    ${bossHtml}
     ${matHtml ? `<div class="cf-mats">${matHtml}</div>` : `<div class="cf-meta" style="margin-top:6px">Harvest with <kbd style="color:#6eec9a">E</kbd></div>`}
   `;
 }
@@ -147,8 +182,8 @@ function mountHarvestPrompt() {
   document.body.appendChild(el);
 }
 
-/** Show/hide proximity harvest prompt. */
-export function setHarvestPrompt(visible, kind = "resource") {
+/** Show/hide proximity harvest / loot prompt. */
+export function setHarvestPrompt(visible, kind = "resource", mode = "harvest") {
   const el = document.getElementById("mv-harvest-prompt");
   if (!el) return;
   if (!visible) {
@@ -156,7 +191,18 @@ export function setHarvestPrompt(visible, kind = "resource") {
     return;
   }
   el.style.display = "block";
-  el.innerHTML = `Press <kbd>E</kbd> to harvest <strong>${escapeHtml(kind)}</strong>`;
+  if (mode === "loot") {
+    el.innerHTML = `Press <kbd>E</kbd> or walk over to pick up <strong>${escapeHtml(kind)}</strong>`;
+  } else {
+    el.innerHTML = `Press <kbd>E</kbd> to harvest <strong>${escapeHtml(kind)}</strong>`;
+  }
+}
+
+/** Push local HP into HUD (call from damage / heal). */
+export function syncHp(hp, maxHp = 100) {
+  window.__mvHp = hp;
+  window.__mvMaxHp = maxHp;
+  window.dispatchEvent(new CustomEvent("mv-hp", { detail: { hp, maxHp } }));
 }
 
 export function setNetStatus(text, ok) {
