@@ -91,6 +91,42 @@ export const PACK_CLIPS = {
     skill4: ["dual_wield/combo"],
     skill5: ["dual_wield/attack5"],
   },
+  /** Pistol — author Mixamo in _anim_packs/pistol; baked under anims/baked/pistol/ */
+  pistol: {
+    idle: ["pistol/pistol idle", "unarmed/fight_idle"],
+    walk: ["pistol/pistol walk", "locomotion/walking"],
+    run: ["pistol/pistol run", "locomotion/running"],
+    attack: ["pistol/pistol idle", "dual_wield/attack"],
+    skill1: ["pistol/pistol kneeling idle", "dual_wield/attack2"],
+    skill2: ["pistol/pistol jump", "dual_wield/dash"],
+    skill3: ["pistol/pistol strafe", "dual_wield/attack3"],
+    skill4: ["pistol/pistol run backward", "dual_wield/combo"],
+    skill5: ["pistol/pistol walk backward", "dual_wield/attack5"],
+  },
+  /** Rifle / gun — author in _anim_packs/rifle */
+  rifle: {
+    idle: ["rifle/rifle aiming idle", "rifle/idle", "unarmed/fight_idle"],
+    walk: ["rifle/walking", "locomotion/walking"],
+    run: ["rifle/rifle run", "rifle/run forward", "locomotion/running"],
+    attack: ["rifle/firing rifle", "dual_wield/attack"],
+    skill1: ["rifle/reloading", "dual_wield/attack2"],
+    skill2: ["rifle/rifle jump", "dual_wield/dash"],
+    skill3: ["rifle/firing rifle", "dual_wield/attack3"],
+    skill4: ["rifle/reloading", "dual_wield/combo"],
+    skill5: ["rifle/firing rifle", "dual_wield/attack5"],
+  },
+  /** Farming / harvest — author in _anim_packs/farming */
+  farming: {
+    idle: ["farming/holding idle", "farming/box idle", "unarmed/fight_idle"],
+    walk: ["farming/holding walk", "locomotion/walking"],
+    run: ["locomotion/running"],
+    attack: ["farming/dig and plant seeds", "farming/pull plant", "farming/watering"],
+    skill1: ["farming/pick fruit", "farming/pull plant"],
+    skill2: ["farming/plant tree", "farming/plant a plant"],
+    skill3: ["farming/watering", "farming/dig and plant seeds"],
+    skill4: ["farming/cow milking", "farming/holding idle"],
+    skill5: ["farming/wheelbarrow dump", "farming/pull plant"],
+  },
 };
 
 function rotationOnlyClip(clip) {
