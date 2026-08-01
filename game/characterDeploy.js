@@ -1,47 +1,91 @@
 /**
- * Character deploy helpers — grudge-character-correctness / characterDeploy SSOT.
- * Box3 feet ground · art-forward · pelvis XZ center · clip rematch.
- * Never use pelvis Y as feet. Never double art-forward yaw.
+ * Character deploy — grudge-character-correctness SSOT.
+ *
+ * Production grudge6 race GLBs on CDN still ship with modular mesh scales
+ * (~2.6) so equipped height measures ~12–22 m, NOT 1.8 m SI.
+ * Map (bermuda) is already SI metres (~843 m, buildings ~5–10 m).
+ *
+ * Rule: ONE uniform scale on the kit root so the hero is human-yardstick.
+ * Never non-uniform stretch. Never race-special scale hacks. Orc uses same path.
+ * Ground feet via Box3 min.y — never pelvis-as-feet.
  */
 import * as THREE from "three";
 
 export const HUMAN_HEIGHT_M = 1.8;
+/** Accept band after unit normalize (all races, same path — orc is just tall in mesh). */
+export const HEIGHT_BAND_MIN = 1.55;
+export const HEIGHT_BAND_MAX = 2.15;
 
-/** Visible skinned body only (ignore hidden wardrobe). */
+/** Visible skinned body only — precise per-mesh (skinned AABB). */
 export function bodyBox(root) {
   const box = new THREE.Box3();
   let any = false;
   root.updateMatrixWorld(true);
   root.traverse((o) => {
     if (!o.isSkinnedMesh || !o.visible) return;
+    const b = new THREE.Box3().setFromObject(o, true);
+    if (b.isEmpty()) return;
     if (!any) {
-      box.setFromObject(o, true);
+      box.copy(b);
       any = true;
-    } else box.expandByObject(o);
+    } else box.union(b);
   });
   if (!any) box.setFromObject(root, true);
   return box;
 }
 
-export function fitToHuman(root, targetH = HUMAN_HEIGHT_M) {
-  let box = bodyBox(root);
+export function measureHeight(root) {
   const size = new THREE.Vector3();
-  box.getSize(size);
-  if (size.y < 1e-4) return 1;
-  // Unclamped unit decade (cm authored as m → ~180 "metres")
-  if (size.y > 50) {
-    root.scale.multiplyScalar(0.01);
-    box = bodyBox(root);
-    box.getSize(size);
-  } else if (size.y < 0.05) {
-    root.scale.multiplyScalar(100);
-    box = bodyBox(root);
-    box.getSize(size);
-  }
-  const s = targetH / size.y;
-  root.scale.multiplyScalar(s);
+  bodyBox(root).getSize(size);
+  return size.y;
+}
+
+/**
+ * Uniform unit normalize only.
+ * - Already SI (1.55–2.15 m): leave scale alone (baked as-is).
+ * - Classic 100× (height 50–400): ×0.01 once, then residual fit if needed.
+ * - Toon RTS leftover (~8–40 m from mesh.scale≈2.6): one uniform fit to target.
+ * Never non-uniform. Same path for every race including orc.
+ */
+export function fitToHuman(root, targetH = HUMAN_HEIGHT_M) {
   root.updateMatrixWorld(true);
-  return s;
+  let h = measureHeight(root);
+  if (h < 1e-4) return 1;
+
+  let factor = 1;
+
+  // Classic cm-as-m decade
+  if (h > 50) {
+    root.scale.multiplyScalar(0.01);
+    root.updateMatrixWorld(true);
+    h = measureHeight(root);
+    factor *= 0.01;
+  } else if (h < 0.05) {
+    root.scale.multiplyScalar(100);
+    root.updateMatrixWorld(true);
+    h = measureHeight(root);
+    factor *= 100;
+  }
+
+  // Already in human band — keep bake, no further scale
+  if (h >= HEIGHT_BAND_MIN && h <= HEIGHT_BAND_MAX) {
+    root.userData.deployScaleFactor = factor;
+    root.userData.deployHeightM = h;
+    return factor;
+  }
+
+  // One uniform residual fit (proportions unchanged)
+  if (h > 1e-4) {
+    const s = targetH / h;
+    root.scale.multiplyScalar(s);
+    factor *= s;
+    root.updateMatrixWorld(true);
+    h = measureHeight(root);
+  }
+
+  root.userData.deployScaleFactor = factor;
+  root.userData.deployHeightM = h;
+  return factor;
 }
 
 function findPelvis(root) {
@@ -71,34 +115,23 @@ export function groundFeetAndCenterXZ(root, groundY = 0) {
       root.position.x -= local.x;
       root.position.z -= local.z;
     } else {
-      // Pelvis world offset from root origin → subtract once (no double-count)
-      const ox = wp.x - root.position.x;
-      const oz = wp.z - root.position.z;
-      root.position.x -= ox;
-      root.position.z -= oz;
+      // Shift root so pelvis world XZ → 0
+      root.position.x -= wp.x;
+      root.position.z -= wp.z;
     }
-  } else {
-    box = bodyBox(root);
-    const c = box.getCenter(new THREE.Vector3());
-    root.position.x -= c.x - root.position.x;
-    root.position.z -= c.z - root.position.z;
   }
   root.updateMatrixWorld(true);
   box = bodyBox(root);
   root.position.y += groundY - box.min.y;
 }
 
-/**
- * Toon RTS FBX art faces +X; controller walks +Z → yaw +π/2 once on model.
- * Idempotent via userData flag.
- */
+/** Toon RTS art faces +X → local +Z once. */
 export function applyArtForwardPlusZ(model) {
   if (!model || model.userData.artForwardSet) return;
   model.rotation.y = Math.PI / 2;
   model.userData.artForwardSet = true;
 }
 
-/** Strip position (+scale) tracks from baked clips when binding to grounded kit. */
 export function stripPositionTracks(clip) {
   if (!clip?.tracks) return clip;
   const tracks = clip.tracks.filter((t) => /\.quaternion$|\.rotation/.test(t.name));
@@ -113,26 +146,21 @@ function normBone(s) {
     .replace(/[^a-z0-9]/g, "");
 }
 
-/**
- * Rematch clip track bone names to skeleton (spaces / underscores / mixamo).
- * Baked Bip001 clips use "Bip001 Pelvis.quaternion".
- */
 export function rematchClipTracks(clip, root) {
   if (!clip?.tracks?.length || !root) return clip;
   const boneMap = new Map();
-  root.traverse((o) => {
-    if (o.isBone || o.type === "Bone" || o.name) {
-      const n = normBone(o.name);
-      if (n && !boneMap.has(n)) boneMap.set(n, o.name);
-    }
-  });
-  // Prefer actual bones
   root.traverse((o) => {
     if (o.isBone) {
       const n = normBone(o.name);
       if (n) boneMap.set(n, o.name);
     }
   });
+  if (boneMap.size === 0) {
+    root.traverse((o) => {
+      const n = normBone(o.name);
+      if (n && !boneMap.has(n)) boneMap.set(n, o.name);
+    });
+  }
 
   let changed = false;
   const tracks = clip.tracks.map((t) => {
@@ -151,9 +179,6 @@ export function rematchClipTracks(clip, root) {
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
-/**
- * After idle/attack sample: re-ground feet (kills hip-float from residual tracks).
- */
 export function reGroundAfterAnimSample(root, groundY = 0) {
   root.updateMatrixWorld(true);
   const box = bodyBox(root);
@@ -161,9 +186,6 @@ export function reGroundAfterAnimSample(root, groundY = 0) {
   root.position.y += groundY - box.min.y;
 }
 
-/**
- * Diagnose look — returns { ok, errors, height, feetMinY }.
- */
 export function diagnoseCharacterLook(root, groundY = 0) {
   const errors = [];
   const box = bodyBox(root);
@@ -171,19 +193,46 @@ export function diagnoseCharacterLook(root, groundY = 0) {
   box.getSize(size);
   const height = size.y;
   const feetMinY = box.min.y;
-  if (height < 1.55 || height > 2.05) errors.push(`height ${height.toFixed(2)} not in 1.55–2.05`);
-  if (Math.abs(feetMinY - groundY) > 0.12) errors.push(`feet minY ${feetMinY.toFixed(3)} off ground`);
-  const pelvis = findPelvis(root);
-  if (!pelvis) errors.push("no Bip001 Pelvis");
-  return { ok: errors.length === 0, errors, height, feetMinY, artForward: !!root.userData?.artForwardSet };
+  if (height < HEIGHT_BAND_MIN || height > HEIGHT_BAND_MAX) {
+    errors.push(`height ${height.toFixed(2)} not in ${HEIGHT_BAND_MIN}–${HEIGHT_BAND_MAX}`);
+  }
+  if (Math.abs(feetMinY - groundY) > 0.12) {
+    errors.push(`feet minY ${feetMinY.toFixed(3)} off ground`);
+  }
+  if (!findPelvis(root)) errors.push("no Bip001 Pelvis");
+  return {
+    ok: errors.length === 0,
+    errors,
+    height,
+    feetMinY,
+    scaleFactor: root.userData.deployScaleFactor ?? 1,
+    artForward: !!root.userData.artForwardSet,
+  };
 }
 
 /**
- * Full deploy order for Multiverse grudge6 kits.
+ * Full deploy: pose skeletons → uniform unit normalize → art-forward → feet ground.
+ * Same for WK / ELF / ORC / UD / BRB / DWF — no special orc path.
  */
 export function deployGrudge6Model(model, opts = {}) {
+  model.traverse((o) => {
+    if (o.isSkinnedMesh && o.skeleton) {
+      o.skeleton.pose();
+      o.skeleton.update();
+    }
+  });
+  model.updateMatrixWorld(true);
+
+  const beforeH = measureHeight(model);
   fitToHuman(model, opts.targetH ?? HUMAN_HEIGHT_M);
   if (opts.facePlusZ !== false) applyArtForwardPlusZ(model);
   groundFeetAndCenterXZ(model, opts.groundY ?? 0);
-  return diagnoseCharacterLook(model, opts.groundY ?? 0);
+  const diag = diagnoseCharacterLook(model, opts.groundY ?? 0);
+  diag.beforeHeight = beforeH;
+  console.info(
+    `[characterDeploy] before=${beforeH.toFixed(2)}m → after=${diag.height?.toFixed(2)}m ` +
+      `factor×${(diag.scaleFactor ?? 1).toFixed(4)} feet=${diag.feetMinY?.toFixed(3)} ` +
+      (diag.ok ? "OK" : diag.errors.join("; ")),
+  );
+  return diag;
 }

@@ -180,9 +180,15 @@ export async function attachWarlordsWorld(ctx) {
   window.setLoaderStatus?.("Loading Bermuda island…");
   flash?.("Loading Bermuda island…", 1.2);
 
-  // Preserve SI metres (bermuda already ~840 m). Do NOT pass targetWidth: 120 (dollhouse bug).
+  // Map is SI metres (bermuda ~843×614 m, buildings ~5–10 m). Never squash to 120 m.
+  // Characters on CDN measure ~12–22 m raw → deploy applies ONE uniform unit normalize to ~1.8 m.
   const island = await loadBermudaIsland(scene, { maxHarvest: 70 });
   const groundAt = makeGroundSampler(island.root);
+  const mapW = island.halfW * 2;
+  console.info(
+    `[warlords] MAP SI ≈ ${mapW.toFixed(0)} m across · hubR=${island.hubRadius?.toFixed?.(1)} · scale=${island.scale}`,
+  );
+  window.__mvMapMeta = { halfW: island.halfW, scale: island.scale, widthM: mapW };
 
   // Place player on grass spawn outside hub
   const spawn = island.spawns[Math.floor(Math.random() * island.spawns.length)].clone();
@@ -252,9 +258,22 @@ export async function attachWarlordsWorld(ctx) {
     window.__mvClassLabel = g6.kit?.label || classDef.label;
     window.__mvClassId = classId;
     window.__mvRaceId = raceId;
+    window.__mvCharMeta = {
+      height: g6.diagnose?.height,
+      beforeHeight: g6.diagnose?.beforeHeight,
+      scaleFactor: g6.diagnose?.scaleFactor,
+      feet: g6.diagnose?.feetMinY,
+      animPack: g6.animPack,
+      meshes: g6.shownMeshes?.length,
+    };
+    console.info(
+      `[warlords] CHAR ${raceId}/${classId} before=${g6.diagnose?.beforeHeight?.toFixed?.(2)}m ` +
+        `after=${g6.diagnose?.height?.toFixed?.(2)}m | MAP width≈${(island.halfW * 2).toFixed(0)}m ` +
+        `| hero should be ~1.8m vs buildings ~5–10m`,
+    );
     refreshCombatFrame({ classLabel: window.__mvClassLabel });
     flash?.(
-      `${g6.kit?.label || classDef.label} · ${g6.animPack} · ${g6.shownMeshes?.length || 0} meshes · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m`,
+      `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${g6.animPack}`,
       1.4,
     );
   } catch (e) {

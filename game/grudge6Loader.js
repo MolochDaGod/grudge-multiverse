@@ -150,9 +150,11 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     }
   });
 
-  // SSOT deploy: fit 1.8m → art-forward +π/2 → feet ground local y=0
+  // Same path all races (incl. orc): pose → uniform unit normalize → face +Z → feet ground.
+  // No non-uniform stretch. CDN kits are ~12–22 m raw; map is SI — one uniform scale to ~1.8 m.
   const diag = deployGrudge6Model(model, { groundY: 0 });
   if (!diag.ok) console.warn("[grudge6Loader] diagnose", diag);
+  else console.info("[grudge6Loader] deploy OK", classId, `${diag.beforeHeight?.toFixed?.(2)}→${diag.height?.toFixed?.(2)}m`);
 
   const root = new THREE.Group();
   root.name = `grudge6_${classDef.id}`;
