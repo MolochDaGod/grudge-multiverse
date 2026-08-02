@@ -231,19 +231,46 @@
             .char-card:hover { border-color: rgba(255,255,255,0.25); }
             .char-card.selected { border-color: rgba(100,180,255,0.7); }
             .char-avatar {
-                width: 100%; height: 72px;
+                width: 100%; height: 88px;
                 background: rgba(255,255,255,0.06);
                 background-size: cover; background-position: center top;
                 display: block;
+                overflow: hidden;
+            }
+            .char-avatar--img {
+                display: block;
+                position: relative;
+            }
+            .char-avatar--img img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                object-position: center 12%;
+                display: block;
+                image-rendering: auto;
+            }
+            .char-avatar--letter {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 800;
+                font-size: 22px;
+                color: #c8a84b;
             }
             .char-name {
                 position: absolute; bottom: 0; left: 0; right: 0;
-                padding: 3px 0;
-                background: rgba(0,0,0,0.55);
-                font-family: system-ui; font-size: 9px; text-align: center;
-                color: #ddd; letter-spacing: 0.02em;
+                padding: 4px 2px 3px;
+                background: linear-gradient(transparent, rgba(0,0,0,0.82));
+                font-family: system-ui; font-size: 10px; text-align: center;
+                color: #eee; letter-spacing: 0.02em; font-weight: 600;
             }
-            .char-card.selected .char-name { color: #6ecbff; }
+            .char-blurb {
+                display: none;
+            }
+            .char-card.selected .char-name { color: #9fd4ff; }
+            .char-card.selected .char-avatar--img img {
+                filter: brightness(1.08) saturate(1.1);
+            }
             .char-divider {
                 grid-column: 1 / -1;
                 font-family: system-ui; font-size: 10px; color: #f4c542;

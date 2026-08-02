@@ -1,14 +1,21 @@
 /**
  * Two-step gate: Race → Class (fleet gear_presets), then name + Enter World.
- * Danger Room style select before systems boot.
+ * Icons: Open race portraits + entity unit icons (selectIcons.js) — no letter tiles.
  */
 import { RACES, CLASS_PRESETS, getPreset, getRace, saveSelection, loadSelection } from "./fleetGearPresets.js";
+import {
+  racePortraitUrl,
+  classIconCandidates,
+  avatarImgHtml,
+  installIconFallbackHandler,
+} from "./selectIcons.js";
 
 /**
  * Mount race → class UI into #char-picker + #name-form.
  * @returns {{ getRaceId: () => string, getClassId: () => string, getSelection: () => object }}
  */
 export function setupRaceClassSelectUI() {
+  installIconFallbackHandler();
   const picker = document.getElementById("char-picker");
   const form = document.getElementById("name-form");
   if (!picker) {
@@ -50,10 +57,9 @@ export function setupRaceClassSelectUI() {
       const card = document.createElement("div");
       card.className = "char-card" + (r.id === raceId ? " selected" : "");
       card.dataset.raceId = r.id;
+      const portrait = racePortraitUrl(r.id);
       card.innerHTML = `
-        <div class="char-avatar" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#1a2030,${r.color}33);color:${r.color};font-size:20px;font-weight:800;">
-          ${r.label.slice(0, 1)}
-        </div>
+        ${avatarImgHtml([portrait], r.label, `linear-gradient(160deg,#1a2030,${r.color}44)`)}
         <span class="char-name">${r.label}</span>`;
       card.title = r.label;
       card.addEventListener("click", () => {
@@ -86,11 +92,11 @@ export function setupRaceClassSelectUI() {
       const card = document.createElement("div");
       card.className = "char-card" + (c.id === classId ? " selected" : "");
       card.dataset.classId = c.id;
+      const icons = classIconCandidates(raceId, c.id);
       card.innerHTML = `
-        <div class="char-avatar" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#1a2030,#0d1018);color:#c8a84b;font-size:18px;font-weight:800;">
-          ${preset.label.slice(0, 1)}
-        </div>
-        <span class="char-name">${preset.label}</span>`;
+        ${avatarImgHtml(icons, preset.label, "linear-gradient(160deg,#1a2030,#0d1018)")}
+        <span class="char-name">${preset.label}</span>
+        <span class="char-blurb">${c.blurb || ""}</span>`;
       card.title = c.blurb;
       card.addEventListener("click", () => {
         classId = c.id;
