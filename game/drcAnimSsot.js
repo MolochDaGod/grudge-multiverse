@@ -1,0 +1,144 @@
+/**
+ * DRC (Danger Room Combat) animation SSOT for Multiverse.
+ * Ported from gameopen grudge6 anims.ts — do NOT reintroduce banned loco.
+ *
+ * BANNED: locomotion/running (run-to-roll), locomotion/walking (tip gait),
+ *         sword_shield/sword and shield run (thin arena wrong-way).
+ * CANONICAL: magic Standing Walk Forward + locomotion/run_forward + samurai 1H.
+ */
+
+export const HUMAN_HEIGHT_M = 1.8;
+
+export const BANNED_LOCOMOTION = [
+  "locomotion/running",
+  "uploads_2026_06/locomotion/running",
+  "uploads/locomotion/Quick_Roll_To_Run",
+  "locomotion/walking",
+  "sword_shield/sword and shield run",
+  "sword_shield/sword-and-shield-run",
+];
+
+export const CANONICAL_LOCO = {
+  walk: "magic/Standing Walk Forward",
+  run: "locomotion/run_forward",
+  runAlt: "greatsword_samurai/gs_samurai_run_sword",
+};
+
+export function isBannedLocomotionClip(rel) {
+  const n = String(rel || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/\.json$/i, "");
+  const base = n.split("/").pop() || n;
+  if (
+    /roll|tumble|somersault|cartwheel/i.test(base) ||
+    /quick[_\s-]?roll/i.test(n) ||
+    /^running$/i.test(base)
+  ) {
+    return true;
+  }
+  return BANNED_LOCOMOTION.some(
+    (b) => n === b || n.endsWith(`/${b}`) || n.includes("Quick_Roll_To_Run"),
+  );
+}
+
+/** Filter candidate path lists — drop banned, keep order. */
+export function filterLocoCandidates(paths) {
+  return (paths || []).filter((p) => !isBannedLocomotionClip(p));
+}
+
+/**
+ * Pack role → relative paths under /anims/baked (no .json). First hit wins.
+ * Aligned with open.grudge-studio.com DRC production.
+ */
+export const DRC_PACK_CLIPS = {
+  sword_shield: {
+    idle: [
+      "greatsword_samurai/gs_samurai_idle_sword",
+      "dual_wield/idle",
+      "sword_shield/sword and shield idle",
+    ],
+    walk: [
+      "greatsword_samurai/gs_samurai_walk_sword",
+      CANONICAL_LOCO.walk,
+      "longbow/standing walk forward",
+    ],
+    run: [CANONICAL_LOCO.run, CANONICAL_LOCO.runAlt, "magic/Standing Run Forward", "dual_wield/run"],
+    attack: [
+      "greatsword_samurai/gs_samurai_combo_a",
+      "dual_wield/attack",
+      "dual_wield/slash",
+    ],
+    skill1: ["greatsword_samurai/gs_samurai_combo_b", "dual_wield/attack2", "dual_wield/combo"],
+    skill2: ["greatsword_samurai/gs_samurai_dash_opener", "dual_wield/dash", "dual_wield/attack3"],
+    skill3: ["greatsword_samurai/gs_samurai_teleport_strike", "dual_wield/sword_dash_attack"],
+    skill4: ["greatsword_samurai/gs_samurai_jump_sword", "dual_wield/attack4"],
+    skill5: ["ghost_rider/quakesmash", "dual_wield/combo"],
+  },
+  longbow: {
+    idle: ["longbow/standing idle 01", "longbow/idle", "dual_wield/idle"],
+    walk: ["longbow/standing walk forward", CANONICAL_LOCO.walk],
+    run: ["longbow/standing run forward", CANONICAL_LOCO.run],
+    attack: ["longbow/standing aim recoil", "longbow/draw", "dual_wield/attack"],
+    skill1: ["longbow/standing aim recoil", "dual_wield/attack2"],
+    skill2: ["longbow/overdraw", "dual_wield/attack3"],
+    skill3: ["dual_wield/dash", "dual_wield/combo"],
+    skill4: ["dual_wield/attack4"],
+    skill5: ["dual_wield/attack5", "dual_wield/combo"],
+  },
+  magic: {
+    idle: ["magic/standing idle", "magic/idle", "dual_wield/idle"],
+    walk: [CANONICAL_LOCO.walk, "dual_wield/walk"],
+    run: ["magic/Standing Run Forward", CANONICAL_LOCO.run],
+    attack: ["magic/standing 1h cast spell 01", "dual_wield/attack", "unarmed/punching"],
+    skill1: ["dual_wield/attack2", "magic/standing 1h cast spell 01"],
+    skill2: ["dual_wield/attack3", "dual_wield/dash"],
+    skill3: ["dual_wield/combo", "dual_wield/attack4"],
+    skill4: ["dual_wield/dash"],
+    skill5: ["dual_wield/attack5", "dual_wield/combo"],
+  },
+  twohand: {
+    idle: ["greatsword_samurai/gs_samurai_idle_sword", "dual_wield/idle"],
+    walk: ["greatsword_samurai/gs_samurai_walk_sword", CANONICAL_LOCO.walk],
+    run: [CANONICAL_LOCO.runAlt, CANONICAL_LOCO.run, "dual_wield/run"],
+    attack: ["greatsword_samurai/gs_samurai_combo_a", "dual_wield/slash", "dual_wield/attack"],
+    skill1: ["greatsword_samurai/gs_samurai_combo_b", "dual_wield/combo"],
+    skill2: ["greatsword_samurai/gs_samurai_dash_opener", "dual_wield/dash"],
+    skill3: ["greatsword_samurai/gs_samurai_teleport_strike", "dual_wield/overhead"],
+    skill4: ["greatsword_samurai/gs_samurai_jump_sword", "dual_wield/sword_dash_attack"],
+    skill5: ["ghost_rider/quakesmash", "dual_wield/combo"],
+  },
+  unarmed: {
+    idle: ["unarmed/fight_idle", "dual_wield/idle"],
+    walk: [CANONICAL_LOCO.walk, "dual_wield/walk"],
+    run: [CANONICAL_LOCO.run, "dual_wield/run"],
+    attack: ["unarmed/punching", "dual_wield/attack"],
+    skill1: ["dual_wield/attack2"],
+    skill2: ["dual_wield/dash"],
+    skill3: ["dual_wield/combo"],
+    skill4: ["dual_wield/overhead"],
+    skill5: ["dual_wield/attack5"],
+  },
+  polearm: {
+    idle: ["polearm/idle", "dual_wield/idle"],
+    walk: [CANONICAL_LOCO.walk, "magic/Standing Walk Forward"],
+    run: [CANONICAL_LOCO.run, "magic/Standing Run Forward"],
+    attack: ["polearm/attack", "dual_wield/thrust"],
+    skill1: ["polearm/skill1", "dual_wield/attack2"],
+    skill2: ["polearm/skill2", "dual_wield/dash"],
+    skill3: ["polearm/skill3", "dual_wield/combo"],
+    skill4: ["polearm/skill4", "dual_wield/overhead"],
+    skill5: ["polearm/special", "dual_wield/attack5"],
+  },
+  twohand_hammer: {
+    idle: ["twohand_hammer/idle", "dual_wield/idle"],
+    walk: [CANONICAL_LOCO.walk],
+    run: [CANONICAL_LOCO.run],
+    attack: ["twohand_hammer/attack", "dual_wield/overhead"],
+    skill1: ["twohand_hammer/attack-charge", "dual_wield/combo"],
+    skill2: ["twohand_hammer/skill1", "dual_wield/dash"],
+    skill3: ["twohand_hammer/skill2", "dual_wield/attack3"],
+    skill4: ["twohand_hammer/jump", "dual_wield/attack4"],
+    skill5: ["ghost_rider/quakesmash", "dual_wield/combo"],
+  },
+};

@@ -5,6 +5,12 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import {
+  tagMeshWorld,
+  buildNavGrid,
+  describeIslandLiteracy,
+  COLLIDER_LAYER,
+} from "./mapLiteracy.js";
 
 const BASE = import.meta.env.BASE_URL || "/";
 
@@ -171,8 +177,7 @@ export async function loadBermudaIsland(scene, opts = {}) {
       }
     }
     const kind = classifyMeshName(o.name);
-    o.userData.layer = kind;
-    o.userData.worldKind = kind;
+    tagMeshWorld(o, kind);
   });
 
   // Water ring
@@ -335,9 +340,43 @@ export async function loadBermudaIsland(scene, opts = {}) {
   safety.rotation.x = -Math.PI / 2;
   safety.position.y = box.min.y - 0.02;
   safety.name = "island-safety-ground";
+  safety.userData.colliderLayer = COLLIDER_LAYER.WALKABLE;
+  safety.userData.walkable = true;
+  safety.userData.worldKind = "terrain";
   root.add(safety);
 
-  return {
+  // Tag water meshes
+  waterGroup.traverse((o) => {
+    if (o.isMesh) {
+      o.userData.worldKind = "water";
+      o.userData.colliderLayer = COLLIDER_LAYER.WATER;
+      o.userData.walkable = false;
+    }
+  });
+
+  // Spawns: sample real ground Y (not floating y=2)
+  const sampleY = makeGroundSampler(root);
+  for (const s of spawns) {
+    const gy = sampleY(s.x, s.z);
+    s.y = (Number.isFinite(gy) ? gy : 0) + 1.0;
+  }
+  for (const b of bossPads) {
+    const gy = sampleY(b.position.x, b.position.z);
+    b.position.y = (Number.isFinite(gy) ? gy : 0) + 0.1;
+  }
+  for (const v of vendorPads) {
+    const gy = sampleY(v.position.x, v.position.z);
+    v.position.y = (Number.isFinite(gy) ? gy : 0) + 0.05;
+  }
+
+  // Heightfield navmesh (walkable grid) — AI + spawn snap
+  const nav = buildNavGrid(
+    { bounds: box, halfW, hubRadius, scale },
+    sampleY,
+    { cellSize: opts.navCellSize ?? 5 },
+  );
+
+  const island = {
     root,
     waterGroup,
     layers,
@@ -349,7 +388,11 @@ export async function loadBermudaIsland(scene, opts = {}) {
     hubRadius,
     bounds: box.clone(),
     scale,
+    nav,
+    sampleY,
   };
+  console.info("[island] literacy", describeIslandLiteracy(island, nav));
+  return island;
 }
 
 /** Ground height via raycast — terrain meshes preferred. */

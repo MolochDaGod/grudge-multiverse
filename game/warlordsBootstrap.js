@@ -147,6 +147,8 @@ export function rebindIslandStaticCollider(localPlayer, islandRoot) {
   }
   try {
     islandRoot.updateMatrixWorld(true);
+    // Prefer walkable + solid only if controller supports mesh list; else full root
+    // (buildStaticCollider typically traverses all meshes — foliage still costly).
     ctrl.buildStaticCollider(islandRoot);
     console.info("[warlords] island static collider rebound");
     return true;
@@ -201,17 +203,35 @@ export async function attachWarlordsWorld(ctx) {
   // Map is SI metres (bermuda ~843×614 m, buildings ~5–10 m). Never squash to 120 m.
   // Characters on CDN measure ~12–22 m raw → deploy applies ONE uniform unit normalize to ~1.8 m.
   const island = await loadBermudaIsland(scene, { maxHarvest: 70 });
-  const groundAt = makeGroundSampler(island.root);
+  const groundAt = island.sampleY || makeGroundSampler(island.root);
   const mapW = island.halfW * 2;
   console.info(
-    `[warlords] MAP SI ≈ ${mapW.toFixed(0)} m across · hubR=${island.hubRadius?.toFixed?.(1)} · scale=${island.scale}`,
+    `[warlords] MAP SI ≈ ${mapW.toFixed(0)} m across · hubR=${island.hubRadius?.toFixed?.(1)} · scale=${island.scale} · nav walkable=${island.nav?.cells?.filter?.((c) => c.walkable).length ?? "?"}`,
   );
-  window.__mvMapMeta = { halfW: island.halfW, scale: island.scale, widthM: mapW };
+  window.__mvMapMeta = {
+    halfW: island.halfW,
+    scale: island.scale,
+    widthM: mapW,
+    nav: island.nav
+      ? {
+          cellSize: island.nav.cellSize,
+          walkable: island.nav.cells.filter((c) => c.walkable).length,
+          total: island.nav.cells.length,
+        }
+      : null,
+  };
+  window.__mvNav = island.nav || null;
+  window.__mvIsland = island;
 
-  // Place player on grass spawn outside hub
-  const spawn = island.spawns[Math.floor(Math.random() * island.spawns.length)].clone();
-  const gy = groundAt(spawn.x, spawn.z);
-  spawn.y = (gy ?? 0) + 1.15;
+  // Place player on grass spawn outside hub — snap to navmesh when available
+  let spawn = island.spawns[Math.floor(Math.random() * island.spawns.length)].clone();
+  if (island.nav?.snap) {
+    const sn = island.nav.snap(spawn.x, spawn.z);
+    spawn = new THREE.Vector3(sn.x, sn.y + 1.0, sn.z);
+  } else {
+    const gy = groundAt(spawn.x, spawn.z);
+    spawn.y = (gy ?? 0) + 1.15;
+  }
   const capsule = localPlayer._player?.getPlayerCapsule?.();
   if (capsule) {
     capsule.position.copy(spawn);

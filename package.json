@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build && node scripts/strip-map-glb.mjs",
     "preview": "vite preview",
-    "deploy": "npm run build && npx vercel deploy --prod --yes",
+    "deploy:gate": "node scripts/deploy-gate.mjs",
+    "deploy": "node scripts/deploy-gate.mjs && npm run build && npx vercel deploy --prod --yes",
     "server": "npm --prefix server start",
     "server:dev": "npm --prefix server run dev",
     "deploy:railway": "cd server && railway up --detach"
