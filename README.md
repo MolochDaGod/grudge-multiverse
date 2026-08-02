@@ -40,12 +40,22 @@ Multiplayer Warlords island on Free Fire **Bermuda** map + grudge6 RTS Toon clas
 
 Firebase RTDB rooms (`#room1`…): players, harvest nodes, bosses, hits, chat, decals.
 
-### Next (Danger-parity)
+### DRC (Danger Room Combat) on Multiverse
 
-- Full Danger Room AnimationDirector + Bip001 baked packs on grudge6  
-- Fleet weapon skill VFX (slash / bolt / nova)  
-- Precise gear_presets mesh_ids from D1  
-- Upload bermuda.glb → R2 CDN (repo is 51 MB — GitHub warned)  
+Multiverse **imports** the same character/anim SSOT as Open Danger Room — no second stack:
+
+| Layer | Module |
+|-------|--------|
+| Kits / atlas | `game/grudge6SSOT.js` → R2 |
+| Deploy ~1.8 m | `game/characterDeploy.js` |
+| Load + mesh_ids | `game/grudge6Loader.js` |
+| Baked packs | `game/drcAnimSsot.js` + `animPackLoader.js` → open…/anims/baked |
+| Mixer | `game/bip001Director.js` |
+| Aim / free mouse | `game/combatAim.js` (no pointer-lock) |
+| Skills VFX | `game/fleetVfx.js` |
+
+Contract: `game/drcContract.js` · console `__mvDrc`  
+
 
 ## Dev
 

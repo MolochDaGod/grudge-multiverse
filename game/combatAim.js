@@ -41,8 +41,10 @@ export function bindCombatAim(canvas, camera, getSelectables, hooks = {}) {
       aim.focusEnabled = !aim.focusEnabled;
       aim.rmb = true;
       hooks.onFocusChange?.(aim.focusEnabled);
+      // NEVER pointer-lock on Multiverse web/embed — browser hides cursor and
+      // OrbitControls + lock fight each other. Free mouse + HUD crosshair always.
       try {
-        canvas.requestPointerLock?.();
+        document.exitPointerLock?.();
       } catch {
         /* ignore */
       }
@@ -130,12 +132,23 @@ export function resolveBodyYaw(opts) {
   return camYaw;
 }
 
-/** Screen crosshair visibility helper for focus mode. */
+/**
+ * Screen crosshair — ALWAYS visible in Multiverse play (DRC open.* rule).
+ * Focus only changes color/size; never hide the reticle.
+ */
 export function syncFocusCrosshair(el) {
   if (!el) return;
-  el.style.display = aim.focusEnabled ? "block" : "none";
-  el.style.borderColor = aim.selectedTarget ? "#ff6a6a" : "rgba(232,200,119,0.85)";
-  el.style.background = aim.selectedTarget ? "rgba(255,80,80,0.35)" : "rgba(255,255,255,0.9)";
+  el.style.display = "block";
+  el.style.opacity = "0.95";
+  if (aim.focusEnabled) {
+    el.classList.add("focus-on");
+    el.style.borderColor = aim.selectedTarget ? "#ff6a6a" : "rgba(255, 180, 80, 0.95)";
+    el.style.background = aim.selectedTarget ? "rgba(255,80,80,0.45)" : "rgba(255,208,120,0.95)";
+  } else {
+    el.classList.remove("focus-on");
+    el.style.borderColor = "rgba(100, 180, 255, 0.75)";
+    el.style.background = "rgba(255, 255, 255, 0.92)";
+  }
 }
 
 /**

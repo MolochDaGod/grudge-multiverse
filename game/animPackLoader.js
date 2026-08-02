@@ -13,16 +13,12 @@ import {
   CANONICAL_LOCO,
 } from "./drcAnimSsot.js";
 
-/** Primary hosts for Bip001 baked clips (per-clip JSON under pack folders). */
+/** Primary hosts for Bip001 baked clips — DRC Open only, then R2. No threejs-rapier. */
 export const OPEN_ANIMS = ANIMS_BAKED; // open.grudge-studio.com/anims/baked
-/** Prefer Open production host for full DRC pack set. */
 export const GAMEOPEN_ANIMS = "https://open.grudge-studio.com/anims/baked";
 export const CDN_ANIMS = "https://assets.grudge-studio.com/prod/anims";
-/** @deprecated arena last resort only */
+/** @deprecated last resort only */
 export const ARENA_ANIMS = "https://grudge-arena.grudge-studio.com/anims/baked";
-/** @deprecated controller demo host — not production SSOT */
-export const DANGER_ANIMS =
-  "https://threejs-rapier-react-three-controll.vercel.app/anims/baked";
 
 /** Pack role → relative paths under /anims/baked (no .json). First hit wins. */
 export const PACK_CLIPS = {
@@ -83,13 +79,12 @@ function encodeRel(rel) {
 
 export function bakedCandidates(rel) {
   const clean = encodeRel(rel);
-  // gameopen first (full pack mirror), then Open domain, then archives
+  // DRC SSOT: Open production baked, then R2 prod/anims, arena last only
   return [
-    `${GAMEOPEN_ANIMS}/${clean}.json`,
     `${OPEN_ANIMS}/${clean}.json`,
-    `${DANGER_ANIMS}/${clean}.json`,
-    `${ARENA_ANIMS}/${clean}.json`,
+    `${GAMEOPEN_ANIMS}/${clean}.json`,
     `${CDN_ANIMS}/${clean}.json`,
+    `${ARENA_ANIMS}/${clean}.json`,
   ];
 }
 

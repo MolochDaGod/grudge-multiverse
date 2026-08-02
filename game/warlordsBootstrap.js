@@ -42,6 +42,7 @@ import { ensureItemCatalog } from "./itemIcons.js";
 import { reGroundAfterAnimSample } from "./characterDeploy.js";
 import { LootField } from "./lootField.js";
 import { refreshOpenTab } from "./mainPanel.js";
+import { logDrcContract, DRC_MULTIVERSE } from "./drcContract.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -132,10 +133,20 @@ export function renderVendors() {
   });
 }
 
+/**
+ * DRC hotbar → baked mixer roles (same as Open Danger / weaponSkillPacks).
+ * F = primary attack · Shift+1–4 = skill1–4 · Shift+5 soft skill5/combo.
+ */
 function skillAnimRole(skill) {
   if (!skill) return "attack";
   if (skill.key === "KeyF") return "attack";
-  const m = { Digit1: "skill1", Digit2: "skill2", Digit3: "skill3", Digit4: "skill4", Digit5: "skill5" };
+  const m = {
+    Digit1: "skill1",
+    Digit2: "skill2",
+    Digit3: "skill3",
+    Digit4: "skill4",
+    Digit5: "skill5",
+  };
   return m[skill.key] || "attack";
 }
 
@@ -192,13 +203,16 @@ export async function attachWarlordsWorld(ctx) {
     classId === "knight" ? "warrior" : classId === "unarmed" ? "worge" : classId;
   const classDef = getClass(skillClass);
 
+  logDrcContract();
+  window.__mvDrc = DRC_MULTIVERSE;
+
   // Seed RTS starter gear into bag + loadout so Equipment / drops work immediately
   ensureStarterGear(classDef.starterGear);
 
   mountWarlordsHud();
   ensureItemCatalog().catch(() => {});
   window.setLoaderStatus?.("Loading Bermuda island…");
-  flash?.("Loading Bermuda island…", 1.2);
+  flash?.("DRC · grudge6 · Bermuda…", 1.2);
 
   // Map is SI metres (bermuda ~843×614 m, buildings ~5–10 m). Never squash to 120 m.
   // Characters on CDN measure ~12–22 m raw → deploy applies ONE uniform unit normalize to ~1.8 m.
@@ -283,9 +297,13 @@ export async function attachWarlordsWorld(ctx) {
     const host = localPlayer._player;
     if (host?.playerModel) host.playerModel.visible = false;
 
-    // World attach — SI independent of mixamo scale
+    // World attach — SI independent of mixamo scale (never parent under 0.001 mesh)
     scene.add(g6.root);
-    g6.root.position.set(spawn.x, gy ?? 0, spawn.z);
+    // root.y = ground; model already feet-grounded at local 0 after deploy
+    const feetY = Number.isFinite(gy) ? gy : 0;
+    g6.root.position.set(spawn.x, feetY, spawn.z);
+    g6.root.rotation.set(0, 0, 0);
+    g6.root.scale.set(1, 1, 1);
 
     try {
       if (host?.animation?.mixer) host.animation.mixer.timeScale = 0;
@@ -477,10 +495,12 @@ export async function attachWarlordsWorld(ctx) {
   });
   skillBar.bind();
 
-  // Soft-lock / focus input
+  // Soft-lock / focus input — free mouse only (no pointer-lock cursor loss)
   const canvas = ctx.renderer?.domElement || document.querySelector("canvas");
   let unbindAim = () => {};
   if (canvas && ctx.camera) {
+    canvas.style.cursor = "crosshair";
+    document.exitPointerLock?.();
     unbindAim = bindCombatAim(
       canvas,
       ctx.camera,
@@ -496,9 +516,14 @@ export async function attachWarlordsWorld(ctx) {
           const f = skills.find((s) => s.key === "KeyF");
           if (f) skillBar.cast(f);
         },
-        onFocusChange: (on) => flash?.(on ? "Focus ON · soft-lock" : "Focus OFF", 0.5),
+        onFocusChange: (on) => flash?.(on ? "Focus ON · free mouse" : "Focus OFF", 0.5),
       },
     );
+  }
+  // Always show DOM crosshair in play (never hide with lock)
+  if (crosshairEl) {
+    crosshairEl.style.display = "block";
+    crosshairEl.style.opacity = "0.95";
   }
 
   // Weapon / armor booths — real weaponvendor.glb (SI fit ~4.5 m)

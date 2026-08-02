@@ -1599,12 +1599,25 @@ async function init() {
         staticCollider: sceneModel,
         // Desktop keyboard/mouse only — do not inject mobile joystick UI
         isShowMobileControls: false,
+        // Free mouse — never force pointer-lock on embed/play
+        mouseSensitivity: USE_WARLORDS_ISLAND ? 2.2 : 5,
     });
     if (USE_WARLORDS_ISLAND) {
         // Hide FPS mixamo immediately; grudge6 attaches later
         try {
             localPlayer.getPlayerModel?.()?.traverse((c) => { c.visible = false; });
             if (localPlayer._player?.playerModel) localPlayer._player.playerModel.visible = false;
+        } catch { /* ignore */ }
+        // Ensure cursor visible (embed iframes + OrbitControls)
+        try {
+            document.exitPointerLock?.();
+            document.body.style.cursor = "crosshair";
+            const ch = document.getElementById("crosshair");
+            if (ch) {
+                ch.style.display = "block";
+                ch.style.opacity = "0.95";
+            }
+            if (renderer?.domElement) renderer.domElement.style.cursor = "crosshair";
         } catch { /* ignore */ }
         mountWarlordsHud();
         window.setLoaderStatus?.("Controller ready · loading world…");

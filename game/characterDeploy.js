@@ -16,13 +16,20 @@ export const HUMAN_HEIGHT_M = 1.8;
 export const HEIGHT_BAND_MIN = 1.55;
 export const HEIGHT_BAND_MAX = 2.15;
 
-/** Visible skinned body only — precise per-mesh (skinned AABB). */
-export function bodyBox(root) {
+/**
+ * Skinned body AABB for height/feet.
+ * @param {boolean} [visibleOnly=false] — NEVER use true for deploy scale (mesh_ids
+ * hide most meshes first and would measure a sword as "height").
+ */
+export function bodyBox(root, visibleOnly = false) {
   const box = new THREE.Box3();
   let any = false;
   root.updateMatrixWorld(true);
   root.traverse((o) => {
-    if (!o.isSkinnedMesh || !o.visible) return;
+    if (!o.isSkinnedMesh) return;
+    if (visibleOnly && !o.visible) return;
+    // Skip pure weapon/shield parts when measuring human height
+    if (!visibleOnly && /weapon|shield|quiver|bag|xtra/i.test(o.name || "")) return;
     const b = new THREE.Box3().setFromObject(o, true);
     if (b.isEmpty()) return;
     if (!any) {
@@ -30,6 +37,17 @@ export function bodyBox(root) {
       any = true;
     } else box.union(b);
   });
+  if (!any) {
+    root.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      const b = new THREE.Box3().setFromObject(o, true);
+      if (b.isEmpty()) return;
+      if (!any) {
+        box.copy(b);
+        any = true;
+      } else box.union(b);
+    });
+  }
   if (!any) box.setFromObject(root, true);
   return box;
 }

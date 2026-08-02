@@ -71,18 +71,23 @@ async function loadAtlas(url) {
   }
 }
 
-/** Paint body atlas onto all skinned meshes (weapon meshes keep own maps if present). */
+/**
+ * Paint body atlas onto body/armor skinned meshes only.
+ * NEVER splat race atlas onto weapons/shields (scrambles UVs → “fucked” kit).
+ */
 export function applyBodyAtlas(root, atlas) {
   if (!root || !atlas) return 0;
   let n = 0;
   root.traverse((o) => {
     if (!o.isMesh && !o.isSkinnedMesh) return;
-    // Weapons / shields often use separate UV islands — still use race atlas on Toon RTS
+    const name = o.name || "";
+    if (/weapon|shield|quiver|bag|xtra|sword|bow|staff|axe/i.test(name)) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     for (const m of mats) {
       if (!m) continue;
       m.map = atlas;
       m.map.colorSpace = THREE.SRGBColorSpace;
+      if (m.map) m.map.flipY = false;
       m.vertexColors = false;
       m.metalness = Math.min(m.metalness ?? 0.1, 0.2);
       m.roughness = Math.max(m.roughness ?? 0.75, 0.55);
@@ -246,9 +251,23 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     }
   });
 
+  // CRITICAL order (DRC / grudge-character-correctness):
+  // 1) SI deploy while ALL body meshes still visible (scale measure)
+  // 2) then mesh_ids hide/show gear
+  // 3) then body-only atlas (never weapons)
+  // Measuring after mesh_ids → sword-height / stretched / floating kits.
+  const diag = deployGrudge6Model(model, { groundY: 0 });
+  if (!diag.ok) console.warn("[grudge6Loader] diagnose", diag);
+  else
+    console.info(
+      "[grudge6Loader] deploy OK",
+      classId,
+      `${diag.beforeHeight?.toFixed?.(2)}→${diag.height?.toFixed?.(2)}m`,
+    );
+
   const shownMeshes = applyExactMeshIds(model, visibleMeshes);
 
-  // Race body atlas (Toon RTS polyart) — required for correct colours on CDN kits
+  // Race body atlas (Toon RTS polyart) — body/armor only
   const atlas = await loadAtlas(kit.atlasUrl);
   if (atlas) {
     const painted = applyBodyAtlas(model, atlas);
@@ -276,14 +295,13 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     }
   });
 
-  // Same path all races (incl. orc): pose → uniform unit normalize → face +Z → feet ground.
-  // No non-uniform stretch. CDN kits are ~12–22 m raw; map is SI — one uniform scale to ~1.8 m.
-  const diag = deployGrudge6Model(model, { groundY: 0 });
-  if (!diag.ok) console.warn("[grudge6Loader] diagnose", diag);
-  else console.info("[grudge6Loader] deploy OK", classId, `${diag.beforeHeight?.toFixed?.(2)}→${diag.height?.toFixed?.(2)}m`);
+  // Re-ground after equip visibility (AABB can change)
+  reGroundAfterAnimSample(model, 0);
 
   const root = new THREE.Group();
   root.name = `grudge6_${classDef.id}`;
+  root.userData.siHuman = true;
+  root.userData.deployHeightM = diag.height;
   root.add(model);
 
   const mixer = new THREE.AnimationMixer(model);
