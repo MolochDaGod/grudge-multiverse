@@ -29,17 +29,40 @@ function norm(s) {
 
 /** Map Multiverse / catalog ids → Desktop pack relative paths */
 const DESKTOP_MAP = {
+  // T0 starters — Desktop pack basenames (match master-items after SSOT normalize)
   t0_sword: "weapons/Sword_01.png",
   "t0-sword": "weapons/Sword_01.png",
-  t1_sword: "weapons/Sword_05.png",
+  t0_axe1h: "weapons/Axe_01.png",
+  "t0-axe1h": "weapons/Axe_01.png",
+  t0_axe: "weapons/Axe_01.png",
+  t0_dagger: "weapons/Dagger_01.png",
+  "t0-dagger": "weapons/Dagger_01.png",
+  t0_hammer1h: "weapons/Hammer_01.png",
+  "t0-hammer1h": "weapons/Hammer_01.png",
+  t0_spear: "weapons/Spear_01.png",
+  "t0-spear": "weapons/Spear_01.png",
+  t0_greatsword: "weapons/Sword_30.png",
+  "t0-greatsword": "weapons/Sword_30.png",
+  t0_greataxe: "weapons/Axe_20.png",
+  "t0-greataxe": "weapons/Axe_20.png",
+  t0_hammer2h: "weapons/Hammer_20.png",
+  "t0-hammer2h": "weapons/Hammer_20.png",
   t0_bow: "weapons/Bow_01.png",
   "t0-bow": "weapons/Bow_01.png",
-  t1_bow: "weapons/Bow_05.png",
+  t0_crossbow: "weapons/Crossbow_01.png",
+  "t0-crossbow": "weapons/Crossbow_01.png",
+  t0_wand: "weapons/staff_1.png",
+  "t0-wand": "weapons/staff_1.png",
+  t0_nature_staff: "weapons/staff_2.png",
+  "t0-nature-staff": "weapons/staff_2.png",
   t0_staff: "weapons/staff_1.png",
-  t1_staff: "weapons/staff_5.png",
-  t0_axe: "weapons/Axe_01.png",
-  t1_axe: "weapons/Axe_05.png",
+  t0_offhand_tome: "weapons/Book_1.png",
+  "t0-offhand-tome": "weapons/Book_1.png",
   t0_shield: "weapons/shield_01.png",
+  t1_sword: "weapons/Sword_05.png",
+  t1_bow: "weapons/Bow_05.png",
+  t1_staff: "weapons/staff_5.png",
+  t1_axe: "weapons/Axe_05.png",
   t1_shield: "weapons/shield_05.png",
   t0_mail: "armor/Chest_01.png",
   t1_mail: "armor/Chest_05.png",
@@ -69,14 +92,27 @@ export function desktopIconUrl(rel) {
 
 export function rewriteIconUrl(url, hint = "") {
   if (!url || typeof url !== "string") return localIconFor(hint);
-  // Dead github.io → info.grudge-studio.com (same /icons paths)
-  if (/molochdagod\.github\.io\/ObjectStore\//i.test(url)) {
-    return url.replace(
+  let u = url;
+  // Dead github.io → assets CDN (info.* category paths return HTML shells)
+  if (/molochdagod\.github\.io\/ObjectStore\//i.test(u)) {
+    u = u.replace(
       /https?:\/\/molochdagod\.github\.io\/ObjectStore\//i,
-      "https://info.grudge-studio.com/",
+      "https://assets.grudge-studio.com/game-assets/",
     );
   }
-  return url;
+  // Dual prefix: pack icons SSOT is game-assets/icons/pack/
+  u = u.replace(
+    /https:\/\/assets\.grudge-studio\.com\/icons\/pack\//i,
+    "https://assets.grudge-studio.com/game-assets/icons/pack/",
+  );
+  u = u.replace(
+    /https:\/\/info\.grudge-studio\.com\/icons\/pack\//i,
+    "https://assets.grudge-studio.com/game-assets/icons/pack/",
+  );
+  // Desktop pack basename quirks
+  u = u.replace(/\/shield_04\.png$/i, "/shield_4.png");
+  u = u.replace(/\/staff_0([1-9])\.png$/i, "/staff_$1.png");
+  return u;
 }
 
 function localIconFor(hint) {
