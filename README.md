@@ -1,71 +1,83 @@
 # Grudge Multiverse (Warlords)
 
 **Live:** https://grudge-multiverse.vercel.app/#room1  
+**Alt:** https://multiverse.grudge-studio.com/#room1  
 
-Multiplayer Warlords island on Free Fire **Bermuda** map + grudge6 RTS Toon classes.
+Multiplayer Warlords island on Free Fire **Bermuda** + **grudge6 Toon RTS ★** race kits (SI ~1.8 m heroes).
+
+## Play mesh SSOT (do not invent CDNs)
+
+| Role | Path |
+|------|------|
+| **★ PLAY kit** | `https://assets.grudge-studio.com/asset-packs/toon-rts-characters/glb/characters/{human\|elf\|orc\|undead\|barbarian\|dwarf}.glb` |
+| Atlas | `https://assets.grudge-studio.com/textures/grudge6/{folder}/*.webp` |
+| Anims | `https://open.grudge-studio.com/anims/baked/*` (Bip001) |
+| Map | `https://assets.grudge-studio.com/models/maps/bermuda.glb` |
+| Legacy fallback only | `models/grudge6/races/*_Characters.glb` — not primary |
+| **Forbidden** | `models/grudge6/metaverse/*`, capsules as final hero |
+
+Contract: `game/grudge6SSOT.js` · version stamp `GRUDGE6_SSOT_VERSION` · deploy gate `npm run deploy:gate`
 
 ## Play
 
 1. Open room URL, enter **name**
-2. Pick class: **Warrior · Ranger · Mage · Worge**
-3. Land on **Bermuda island** (water borders)
+2. Pick race + class: **Warrior · Ranger · Mage · Worge** (Toon RTS modular kit)
+3. Land on **Bermuda island** (water borders, heightfield nav)
 
 ### Controls
 
 | Key | Action |
 |-----|--------|
 | WASD | Move |
-| Mouse | Look / aim |
+| Mouse | Look / aim (no pointer-lock soft aim) |
 | **E** | Harvest tree/rock (look at it) |
-| **F** | Class skill 0 |
-| **Shift+1…5** | Class skills (unlock with level) |
+| **F** / **1–5** | Class skills |
 | **I** | Main panel (Players / Bag / Craft / Vendors / Areas) |
 | **Tab** | Scoreboard |
 | **Enter** | Chat |
 
-### Systems (v1 live)
+### Systems (production)
 
-- **Map:** `public/maps/bermuda.glb` SI-scaled ~120 m, water ring island  
-- **Harvest:** pinecone/common trees → wood; stone/rock → stone (≤70 nodes), Firebase HP sync  
-- **Classes:** CDN grudge6 kits (`WK_ / ELF_ / UD_ / ORC_`), starter T0 gear  
-- **Skills:** hotbar F + Shift tiers by level (XP from kills/harvest)  
-- **Rewards:** T0 mats + T0–T1 gear rolls on kills; bosses = higher loot  
-- **Vendors:** Armourer + Weaponsmith (gold buy)  
-- **Craft:** quick recipes (planks, swords, mail, …)  
-- **Bosses:** East Colossus + West Colossus (phase 2 at 50% HP), MP HP sync  
-- **Players panel:** friend (no damage) / enemy (default PvP)  
-- **Enemy areas:** force PvP zones  
+- **Map:** Bermuda CDN GLB, SI metres, land-only navmesh + A\*  
+- **Hero:** Toon RTS ★ load → SI fit (`characterDeploy`) → mesh_ids equip  
+- **Harvest:** trees/rocks → wood/stone, Firebase HP sync  
+- **Skills + VFX:** hotbar + `fleetVfx` (slash / bolt / nova / **fire** SI stream)  
+- **Bosses:** Mantis / Ash Ghast / Werelephant — pathfind on land, SI height fit  
+- **Death:** lite Bip001 ragdoll (`game/ragdollLite.js`)  
+- **Vendors / craft / bag:** Main panel + T0–T1 gear  
 
 ### Multiplayer
 
-Firebase RTDB rooms (`#room1`…): players, harvest nodes, bosses, hits, chat, decals.
+Firebase RTDB rooms (`#room1`…): players, harvest, bosses, hits, chat.  
+Dedicated room service: Railway `grudge-multiverse` (`/api/mv`).
 
-### DRC (Danger Room Combat) on Multiverse
-
-Multiverse **imports** the same character/anim SSOT as Open Danger Room — no second stack:
+### DRC stack (same as Open Danger — no parallel loader)
 
 | Layer | Module |
 |-------|--------|
-| Kits / atlas | `game/grudge6SSOT.js` → R2 |
+| Kits / atlas | `game/grudge6SSOT.js` → Toon ★ R2 |
 | Deploy ~1.8 m | `game/characterDeploy.js` |
 | Load + mesh_ids | `game/grudge6Loader.js` |
-| Baked packs | `game/drcAnimSsot.js` + `animPackLoader.js` → open…/anims/baked |
+| Baked packs | `game/drcAnimSsot.js` + `animPackLoader.js` |
 | Mixer | `game/bip001Director.js` |
-| Aim / free mouse | `game/combatAim.js` (no pointer-lock) |
+| Aim | `game/combatAim.js` |
 | Skills VFX | `game/fleetVfx.js` |
+| Boss AI / nav | `game/bosses.js` + `mapLiteracy.buildNavGrid` |
 
-Contract: `game/drcContract.js` · console `__mvDrc`  
-
+Console: `__mvDrc` · `__mvCharMeta` (height / kitUrl / playMesh)
 
 ## Dev
 
 ```bash
-cd F:\GitHub\grudge-multiverse
+cd C:\Users\nugye\Documents\grudge-multiverse   # or F:\GitHub\grudge-multiverse
 npm install
+npm run deploy:gate   # HEAD map + 6 Toon kits + atlases + anims
 npm run dev
-npm run deploy
+npm run deploy        # gate + build + vercel --prod
 ```
 
 ## Repo
 
 https://github.com/MolochDaGod/grudge-multiverse  
+Docs: [docs/DEPLOY.md](docs/DEPLOY.md) · [docs/MAP_LITERACY.md](docs/MAP_LITERACY.md)  
+
