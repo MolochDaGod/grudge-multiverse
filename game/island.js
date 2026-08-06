@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
 import {
   tagMeshWorld,
   buildNavGrid,
@@ -12,7 +13,10 @@ import {
   COLLIDER_LAYER,
 } from "./mapLiteracy.js";
 
-const BASE = import.meta.env.BASE_URL || "/";
+// Enable BVH raycasts for ground sampling (same as playerController)
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
+
+const BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.BASE_URL) || "/";
 
 /** Production map SSOT — R2 CDN only (Vercel does not ship 54MB GLB). */
 export const MAP_CDN_URL = "https://assets.grudge-studio.com/models/maps/bermuda.glb";
@@ -39,16 +43,28 @@ export const ISLAND_LAYERS = {
 
 export function classifyMeshName(name) {
   const n = String(name || "");
-  if (/pinecone|Common_trunk|Common_leave|wood_trunk|plant_01|grass|bush/i.test(n) && !/wall|fence|house|power/i.test(n)) {
+  // Foliage first (leaves must not become walkable/solid)
+  if (
+    /leave|leaf|plant_01|Broom_snakeweed|bush|flower|grass(?!_ground)/i.test(n) &&
+    !/wall|fence|house|power|terrain|ground|Floor|road/i.test(n)
+  ) {
     return "tree";
   }
-  if (/Rock_big|stone_01_A|stone_01_B/i.test(n) && !/ruined|house/i.test(n)) {
+  if (/pinecone|Common_trunk|wood_trunk/i.test(n) && !/wall|fence|house/i.test(n)) {
+    return "tree";
+  }
+  if (/Rock_big|stone_01_A|stone_01_B|stone_01_C/i.test(n) && !/ruined|house/i.test(n)) {
     return "rock";
   }
-  if (/^ground|ground\.|Floor|terrain|CementFactory_ground|grass_ground|Road/i.test(n)) {
+  // Free Fire Bermuda: Main_Large_Terrain* is the real island shell (not tiny "ground" props)
+  if (
+    /Main_Large_Terrain|CementFactory_ground|^ground|ground\.|ground_lod|Floor|terrain|grass_ground|MainHighway|UnsurfacedRoad|airport_road|Road_Town|road2Lane|Mesh Object.*floor|floor03/i.test(
+      n,
+    )
+  ) {
     return "terrain";
   }
-  if (/house|building|wall|fence|tower|factory|barn|roof/i.test(n)) {
+  if (/house|building|wall|fence|tower|factory|barn|roof|Hangar|Warehouse|Garage|Airport|Logcabin|Sandbags|Container|Cargo_container/i.test(n)) {
     return "building";
   }
   return "prop";
@@ -395,36 +411,77 @@ export async function loadBermudaIsland(scene, opts = {}) {
   return island;
 }
 
-/** Ground height via raycast — terrain meshes preferred. */
+/**
+ * Ground height via raycast — terrain meshes preferred.
+ * Builds MeshBVH on walk surfaces so acceleratedRaycast is fast on Bermuda-scale maps.
+ */
 export function makeGroundSampler(islandRoot) {
   const ray = new THREE.Raycaster();
+  // three-mesh-bvh firstHitOnly when available
+  try {
+    ray.firstHitOnly = true;
+  } catch {
+    /* older three */
+  }
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
-  /** Prefer terrain/building/safety; fall back to all solid meshes */
-  const preferred = [];
+  /** Prefer Main_Large_Terrain / ground / roads / safety; then buildings; then all solid */
+  const primary = [];
+  const secondary = [];
   const all = [];
   islandRoot.traverse((o) => {
-    if (!o.isMesh || !o.visible) return;
+    if (!o.isMesh || !o.visible || !o.geometry) return;
+    // Skip foliage / high LODs for ground queries
+    if (/leave|leaf|plant_01|bush|flower|LOD[12]/i.test(o.name || "") && !/LOD0/i.test(o.name || "")) {
+      return;
+    }
+    if (/leave|leaf|plant_01|Broom_snakeweed/i.test(o.name || "")) return;
     all.push(o);
-    const kind = classifyMeshName(o.name);
+    const kind = o.userData?.worldKind || classifyMeshName(o.name);
+    const n = o.name || "";
     if (
-      kind === "terrain" ||
-      kind === "building" ||
       o.name === "island-safety-ground" ||
-      /ground|floor|road|terrain|cement|grass/i.test(o.name || "")
+      kind === "terrain" ||
+      /Main_Large_Terrain|^ground|ground\.|Floor|MainHighway|UnsurfacedRoad|airport_road|CementFactory_ground/i.test(n)
     ) {
-      preferred.push(o);
+      primary.push(o);
+    } else if (kind === "building" || /road|Road|Floor/i.test(n)) {
+      secondary.push(o);
     }
   });
-  const meshes = preferred.length >= 2 ? preferred : all;
+
+  // BVH on walk surfaces — required for fast ground raycasts on Main_Large_Terrain*
+  const ensureBvh = (mesh) => {
+    try {
+      const g = mesh.geometry;
+      if (!g || g.boundsTree) return;
+      g.boundsTree = new MeshBVH(g);
+    } catch (e) {
+      console.warn("[island] MeshBVH build skip", mesh.name, e?.message || e);
+    }
+  };
+
+  const preferred = primary.length >= 1 ? primary.concat(secondary) : secondary.length ? secondary : all;
+  for (const m of preferred) ensureBvh(m);
+
+  console.info(
+    `[island] ground sampler meshes primary=${primary.length} secondary=${secondary.length} allSolid=${all.length}`,
+  );
+
+  islandRoot.updateMatrixWorld(true);
+
   return (x, z) => {
-    origin.set(x, 500, z);
+    origin.set(x, 800, z);
     ray.set(origin, down);
-    ray.far = 1000;
-    const hits = ray.intersectObjects(meshes, false);
-    if (hits[0]) return hits[0].point.y;
-    // Retry including children graphs
-    const hits2 = ray.intersectObjects(all, true);
-    return hits2[0]?.point.y ?? 0;
+    ray.far = 1600;
+    // Prefer primary terrain shell first
+    if (primary.length) {
+      const hits = ray.intersectObjects(primary, false);
+      if (hits[0]) return hits[0].point.y;
+    }
+    const hits2 = ray.intersectObjects(preferred, false);
+    if (hits2[0]) return hits2[0].point.y;
+    const hits3 = ray.intersectObjects(all, false);
+    return hits3[0]?.point.y ?? 0;
   };
 }

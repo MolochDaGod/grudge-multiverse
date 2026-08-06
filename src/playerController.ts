@@ -488,32 +488,58 @@ export class playerController {
         return collected;
     }
 
-    // 构建静态碰撞体
-    buildStaticCollider(sources?: THREE.Object3D | THREE.Object3D[]) {
-        this.collected = [];
-        if (this.collider) { this.scene.remove(this.collider); this.collider = null; }
+    /**
+     * Build / replace static collider BVH.
+     * Does NOT clear the previous collider until the new merge succeeds
+     * (so island rebind failures never leave collider=null → frozen player).
+     * Skips meshes tagged ignore/water/harvest/trigger when userData is present.
+     * @returns true if a collider is ready after the call
+     */
+    buildStaticCollider(sources?: THREE.Object3D | THREE.Object3D[]): boolean {
+        const prevCollider = this.collider;
+        const prevViz = this.visualizer;
+        const nextCollected: THREE.BufferGeometry[] = [];
+
+        const skipByLayer = (obj: THREE.Object3D): boolean => {
+            const layer = (obj.userData as any)?.colliderLayer as string | undefined;
+            if (!layer) return false;
+            return layer === "ignore" || layer === "water" || layer === "trigger" || layer === "harvest";
+        };
 
         const collectMesh = (mesh: THREE.Mesh | THREE.LineSegments) => {
+            if (mesh.name === "capsule") return;
+            if (skipByLayer(mesh)) return;
+            // Foliage name guard (legacy maps without userData)
+            if (/leave|leaf|plant_01|Broom_snakeweed|WeaponBox/i.test(mesh.name || "")) return;
             try {
                 let geom = mesh.geometry.clone();
                 geom.applyMatrix4(mesh.matrixWorld);
                 if (geom.index) geom = geom.toNonIndexed();
                 const safe = this.ensureAttributesMinimal(geom);
-                if (safe) this.collected.push(safe);
+                if (safe) nextCollected.push(safe);
             } catch (e) {
                 console.warn("处理网格时出错：", mesh, e);
             }
         };
 
-        // 收集碰撞网格：传入则用指定对象，否则遍历整个场景
+        // Collect: mesh array (island rebind) or traverse group/scene
         if (sources) {
             const list = Array.isArray(sources) ? sources : [sources];
             for (const obj of list) {
+                if (!obj) continue;
                 obj.updateMatrixWorld(true);
-                obj.traverse(c => {
-                    const a = c as any;
-                    if ((a.isMesh || a.isLineSegments) && a.geometry && c.name !== "capsule") collectMesh(a);
-                });
+                const a = obj as any;
+                // Pre-filtered mesh list from collectColliderMeshes — take mesh only, no deep foliage
+                if (a.isMesh && a.geometry) {
+                    collectMesh(a);
+                } else if (a.isLineSegments && a.geometry) {
+                    collectMesh(a);
+                } else {
+                    obj.traverse(c => {
+                        const m = c as any;
+                        if ((m.isMesh || m.isLineSegments) && m.geometry && c.name !== "capsule") collectMesh(m);
+                    });
+                }
             }
         } else {
             this.scene.traverse(c => {
@@ -522,22 +548,61 @@ export class playerController {
             });
         }
 
-        if (!this.collected.length) return;
-        this.collected = this.unifiedAttribute(this.collected);
+        if (!nextCollected.length) {
+            console.error("[playerController] buildStaticCollider: no geometries — keeping previous");
+            return !!this.collider;
+        }
 
-        // 合并并构建BVH
-        const merged = BufferGeometryUtils.mergeGeometries(this.collected, false);
-        if (!merged) { console.error("合并几何失败"); return; }
-        (merged as any).boundsTree = new MeshBVH(merged, { maxDepth: 100 });
-        this.collider = new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ opacity: 0.5, transparent: true, wireframe: true, depthTest: true, side: THREE.DoubleSide }));
+        const unified = this.unifiedAttribute(nextCollected);
+        const merged = BufferGeometryUtils.mergeGeometries(unified, false);
+        if (!merged) {
+            console.error("[playerController] mergeGeometries failed — keeping previous collider");
+            for (const g of nextCollected) g.dispose();
+            return !!this.collider;
+        }
+
+        try {
+            (merged as any).boundsTree = new MeshBVH(merged, { maxDepth: 100 });
+        } catch (e) {
+            console.error("[playerController] MeshBVH failed — keeping previous", e);
+            merged.dispose();
+            return !!this.collider;
+        }
+
+        // Success — swap in new collider
+        this.collected = unified;
+        if (prevCollider) {
+            this.scene.remove(prevCollider);
+            prevCollider.geometry?.dispose();
+            (prevCollider.material as THREE.Material)?.dispose?.();
+        }
+        if (prevViz) {
+            this.scene.remove(prevViz);
+            this.visualizer = null;
+        }
+
+        this.collider = new THREE.Mesh(
+            merged,
+            new THREE.MeshBasicMaterial({
+                opacity: 0.5,
+                transparent: true,
+                wireframe: true,
+                depthTest: true,
+                side: THREE.DoubleSide,
+            }),
+        );
+        this.collider.name = "static-collider-bvh";
         this.collider.layers.enable(1);
 
         if (this.displayCollider) this.scene.add(this.collider);
         if (this.displayVisualizer) {
-            if (this.visualizer) this.scene.remove(this.visualizer);
             this.visualizer = new BVHHelper(this.collider, 10);
             this.scene.add(this.visualizer);
         }
+        console.info(
+            `[playerController] static collider ready tris≈${Math.floor((merged.attributes.position?.count || 0) / 3)} geoms=${unified.length}`,
+        );
+        return true;
     }
 
     // 注册动态碰撞体

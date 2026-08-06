@@ -63,6 +63,11 @@ export class SkillBar {
   }
 
   mountHud() {
+    // DRC tight HUD replaces the flat skill strip when present
+    if (document.getElementById("mv-tightbar")) {
+      this.el = null;
+      return;
+    }
     let el = document.getElementById("skill-hotbar");
     if (!el) {
       el = document.createElement("div");

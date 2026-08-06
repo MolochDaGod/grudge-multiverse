@@ -984,19 +984,21 @@ function escapeHtml(s) {
         .replace(/"/g, "&quot;");
 }
 
-function openMainPanel() {
+function openMainPanel(tab = "equipment") {
     const el = document.getElementById("main-panel");
     if (!el) return;
     mainPanelOpen = true;
     el.classList.add("open");
     el.setAttribute("aria-hidden", "false");
     wireMainPanelSocial();
-    // Default to Server tab (roster + friend/enemy)
+    // Fleet SSOT: Equipment first (paperdoll + right inv grid); bag FAB may pass "inventory" but
+    // inventory lives in the right rail — open Equipment so paperdoll + bag are both visible.
+    const t = tab === "inventory" ? "equipment" : tab || "equipment";
     const tabs = document.getElementById("main-panel-tabs");
     tabs?.querySelectorAll("button").forEach((b) => {
-        b.classList.toggle("on", b.dataset.tab === "server");
+        b.classList.toggle("on", b.dataset.tab === t);
     });
-    renderMainPanelTab("server");
+    renderMainPanelTab(t);
     document.exitPointerLock?.();
     localPlayer?.offAllEvent?.();
 }
@@ -1010,9 +1012,10 @@ function closeMainPanel() {
 }
 function toggleMainPanel() {
     if (mainPanelOpen) closeMainPanel();
-    else openMainPanel();
+    else openMainPanel("equipment");
 }
 window.__mvCloseMainPanel = closeMainPanel;
+window.__mvOpenMainPanel = openMainPanel;
 
 function updateEnemyAreaBadge() {
     const badge = document.getElementById("enemy-area-badge");
@@ -1527,20 +1530,25 @@ async function init() {
     // Collider / visual scene: Bermuda island (Warlords) or legacy burnout
     let sceneModel = new THREE.Group();
     sceneModel.name = "scene-root";
+    /** @type {THREE.Mesh | null} temp pad until Bermuda static BVH rebinds */
+    let tempGround = null;
     if (!USE_WARLORDS_ISLAND) {
         const gltf = await gltfLoader.loadAsync(BASE + "glb/burnout_revenge_-_central_route_crash_junction.glb");
         sceneModel = gltf.scene;
         sceneModel.scale.set(10, 10, 10);
         scene.add(sceneModel);
     } else {
-        // Temporary ground until island attaches (grudge6 SI)
-        const ground = new THREE.Mesh(
+        // Temporary ground until island attaches — removed in attachWarlordsWorld
+        tempGround = new THREE.Mesh(
             new THREE.CircleGeometry(40, 48),
             new THREE.MeshStandardMaterial({ color: 0x2a3a28, roughness: 0.95 }),
         );
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        sceneModel.add(ground);
+        tempGround.name = "temp-boot-ground";
+        tempGround.rotation.x = -Math.PI / 2;
+        tempGround.receiveShadow = true;
+        tempGround.userData.colliderLayer = "walkable";
+        tempGround.userData.walkable = true;
+        sceneModel.add(tempGround);
         scene.add(sceneModel);
     }
 
@@ -1861,6 +1869,7 @@ async function init() {
                 renderer,
                 controls,
                 localPlayer,
+                tempGround,
                 db,
                 roomId,
                 playerId,

@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { getClass } from "./classes.js";
 import { loadBermudaIsland, makeGroundSampler } from "./island.js";
+import { collectColliderMeshes, COLLIDER_LAYER } from "./mapLiteracy.js";
 import { HarvestSystem } from "./harvest.js";
 import { BossFight } from "./bosses.js";
 import { loadGrudge6Class } from "./grudge6Loader.js";
@@ -36,6 +37,7 @@ import {
   markHostile,
 } from "./combatAim.js";
 import { mountWarlordsHud, refreshCombatFrame, setHarvestPrompt, syncHp } from "./warlordsHud.js";
+import { setTightHudSkillBar } from "./drcTightHud.js";
 import { setupRaceClassSelectUI } from "./raceClassSelect.js";
 import { loadSelection } from "./fleetGearPresets.js";
 import { ensureItemCatalog } from "./itemIcons.js";
@@ -150,6 +152,11 @@ function skillAnimRole(skill) {
   return m[skill.key] || "attack";
 }
 
+/**
+ * Rebuild PlayerController static BVH from island walkable + solid only.
+ * NEVER pass the full GLB root — ~1500 meshes (leaves/props) hang mergeGeometries
+ * and leave collider=null so update() early-exits (void / frozen).
+ */
 export function rebindIslandStaticCollider(localPlayer, islandRoot) {
   const ctrl = localPlayer?._player;
   if (!ctrl?.buildStaticCollider || !islandRoot) {
@@ -158,10 +165,46 @@ export function rebindIslandStaticCollider(localPlayer, islandRoot) {
   }
   try {
     islandRoot.updateMatrixWorld(true);
-    // Prefer walkable + solid only if controller supports mesh list; else full root
-    // (buildStaticCollider typically traverses all meshes — foliage still costly).
-    ctrl.buildStaticCollider(islandRoot);
-    console.info("[warlords] island static collider rebound");
+    let meshes = collectColliderMeshes(
+      islandRoot,
+      [COLLIDER_LAYER.WALKABLE, COLLIDER_LAYER.SOLID],
+      { maxMeshes: 420 },
+    );
+    // Fallback: name-based walk surfaces if tagging missed (should not happen after loadBermudaIsland)
+    if (meshes.length < 2) {
+      meshes = [];
+      islandRoot.traverse((o) => {
+        if (!o.isMesh || !o.visible || !o.geometry) return;
+        if (/leave|leaf|plant_01|bush|flower|LOD[12]|WeaponBox|Table|Bed/i.test(o.name || "")) return;
+        if (
+          /Main_Large_Terrain|ground|Floor|road|Road|terrain|CementFactory|house|building|wall|fence|Hangar|island-safety/i.test(
+            o.name || "",
+          )
+        ) {
+          meshes.push(o);
+        }
+      });
+      console.warn("[warlords] collider fallback name-filter", meshes.length);
+    }
+    if (!meshes.length) {
+      console.error("[warlords] no collider meshes — keeping previous static collider");
+      return false;
+    }
+    const walkN = meshes.filter(
+      (m) => m.userData?.walkable || m.userData?.colliderLayer === COLLIDER_LAYER.WALKABLE,
+    ).length;
+    console.info(
+      `[warlords] building static BVH from ${meshes.length} meshes (walkable~${walkN})`,
+    );
+    const ok = ctrl.buildStaticCollider(meshes);
+    if (ok === false) {
+      console.warn("[warlords] static collider rebuild failed — previous collider retained if any");
+      return false;
+    }
+    console.info("[warlords] island static collider rebound OK", {
+      meshes: meshes.length,
+      hasCollider: !!ctrl.collider || !!ctrl.getCollider?.(),
+    });
     return true;
   } catch (e) {
     console.warn("[warlords] static collider rebind failed", e);
@@ -239,17 +282,39 @@ export async function attachWarlordsWorld(ctx) {
 
   // Place player on grass spawn outside hub — snap to navmesh when available
   let spawn = island.spawns[Math.floor(Math.random() * island.spawns.length)].clone();
+  let spawnGroundY = groundAt(spawn.x, spawn.z);
   if (island.nav?.snap) {
     const sn = island.nav.snap(spawn.x, spawn.z);
     spawn = new THREE.Vector3(sn.x, sn.y + 1.0, sn.z);
+    spawnGroundY = sn.y;
   } else {
-    const gy = groundAt(spawn.x, spawn.z);
-    spawn.y = (gy ?? 0) + 1.15;
+    spawn.y = (Number.isFinite(spawnGroundY) ? spawnGroundY : 0) + 1.15;
   }
+
+  // Drop temporary 40 m pad from multiplayer-gltf once real island is up
+  if (ctx.tempGround) {
+    try {
+      ctx.tempGround.parent?.remove(ctx.tempGround);
+      ctx.tempGround.geometry?.dispose?.();
+      ctx.tempGround.material?.dispose?.();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // #5 static collider rebind BEFORE placing player (so ground ray + capsule work)
+  const colliderOk = rebindIslandStaticCollider(localPlayer, island.root);
+  if (!colliderOk) {
+    console.error("[warlords] island collider missing — player may void; safety ground still on root");
+    flash?.("Map colliders failed — safety ground only", 2.5);
+  }
+
   const capsule = localPlayer._player?.getPlayerCapsule?.();
   if (capsule) {
+    // Re-sample after collider/BVH ready
+    const gy2 = groundAt(spawn.x, spawn.z);
+    spawn.y = (Number.isFinite(gy2) ? gy2 : spawnGroundY || 0) + 1.15;
     capsule.position.copy(spawn);
-    // Zero velocity so we don't punch through on first frame
     try {
       localPlayer._player.playerVelocity?.set(0, 0, 0);
     } catch {
@@ -264,8 +329,12 @@ export async function attachWarlordsWorld(ctx) {
     ctx.controls.update?.();
   }
 
-  // #5 static collider rebind
-  rebindIslandStaticCollider(localPlayer, island.root);
+  window.__mvCollider = {
+    ok: colliderOk,
+    at: Date.now(),
+    spawn: spawn.toArray(),
+    groundY: groundAt(spawn.x, spawn.z),
+  };
 
   // Soft-lock world reticle
   const reticle = new THREE.Mesh(
@@ -300,7 +369,10 @@ export async function attachWarlordsWorld(ctx) {
     // World attach — SI independent of mixamo scale (never parent under 0.001 mesh)
     scene.add(g6.root);
     // root.y = ground; model already feet-grounded at local 0 after deploy
-    const feetY = Number.isFinite(gy) ? gy : 0;
+    const feetY = (() => {
+      const gy = groundAt(spawn.x, spawn.z);
+      return Number.isFinite(gy) ? gy : 0;
+    })();
     g6.root.position.set(spawn.x, feetY, spawn.z);
     g6.root.rotation.set(0, 0, 0);
     g6.root.scale.set(1, 1, 1);
@@ -494,6 +566,8 @@ export async function attachWarlordsWorld(ctx) {
     },
   });
   skillBar.bind();
+  // DRC tight HUD owns visual slots; feed skill CDs + cast
+  setTightHudSkillBar(skillBar, classDef);
 
   // Soft-lock / focus input — free mouse only (no pointer-lock cursor loss)
   const canvas = ctx.renderer?.domElement || document.querySelector("canvas");
