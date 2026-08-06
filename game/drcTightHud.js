@@ -9,6 +9,7 @@ import { loadBag, loadLoadout } from "./inventory.js";
 import { unlockedSkills } from "./classes.js";
 import { ensureItemCatalog, itemIconUrl, skillIconUrl } from "./itemIcons.js";
 import { racePortraitUrl } from "./selectIcons.js";
+import { ensureMvUiTheme } from "./mvUiTheme.js";
 
 /** SSOT: HUD tight.psd export — local first, then Open CDN */
 const TIGHT_BAR_CANDIDATES = [
@@ -73,6 +74,11 @@ let listenersBound = false;
  */
 export function mountDrcTightHud(opts = {}) {
   ctx = { ...(ctx || {}), ...opts };
+  try {
+    ensureMvUiTheme();
+  } catch {
+    /* */
+  }
   ensureStyles();
   ensureItemCatalog().then(() => refreshDrcTightHud());
 
@@ -238,6 +244,7 @@ export function refreshDrcTightHud(opts = {}) {
       name: skill.name,
       key,
       icon,
+      tip: `${skill.name} · ${skill.kind || "skill"} · CD ${skill.cd || 0}s`,
       onCd: left > 0,
       cdLeft: left / 1000,
       frac: left > 0 ? Math.min(1, left / cdMax) : 0,
@@ -326,7 +333,8 @@ export function refreshDrcTightHud(opts = {}) {
         : s.openTab
           ? `data-open-tab="${esc(s.openTab)}"`
           : "";
-      return `<div class="${cls}" style="${slotStyle(i)}" title="${esc(s.name)}${s.key ? ` — ${s.key}` : ""}" ${data}>
+      const tip = s.tip || s.name || "";
+      return `<div class="${cls} mv-slot" style="${slotStyle(i)}" title="${esc(s.name)}${s.key ? ` — ${s.key}` : ""}" data-tip="${esc(tip)}" data-tip-title="${esc(s.name || "")}" ${data}>
         ${img}
         ${cd}
         <span class="tb-key">${esc(s.key || "")}</span>

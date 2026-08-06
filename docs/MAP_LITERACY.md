@@ -60,7 +60,8 @@ How an agent or engineer **knows where things are** and **what layer each part u
 
 | Step | Source |
 |------|--------|
-| Mesh | `assets…/models/grudge6/races/*_Characters.glb` |
+| Mesh ★ | `assets…/asset-packs/toon-rts-characters/glb/characters/{race}.glb` |
+| Legacy fallback | `models/grudge6/races/*_Characters.glb` (not primary) |
 | Atlas | `textures/grudge6/…` |
 | Deploy | `characterDeploy.js` → ~1.8 m uniform |
 | Anims | `drcAnimSsot.js` → Open `/anims/baked` |

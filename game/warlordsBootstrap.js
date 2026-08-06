@@ -38,6 +38,7 @@ import {
 } from "./combatAim.js";
 import { mountWarlordsHud, refreshCombatFrame, setHarvestPrompt, syncHp } from "./warlordsHud.js";
 import { setTightHudSkillBar } from "./drcTightHud.js";
+import { startRagdollLite, updateRagdollLite, restoreRagdollLite } from "./ragdollLite.js";
 import { setupRaceClassSelectUI } from "./raceClassSelect.js";
 import { loadSelection } from "./fleetGearPresets.js";
 import { ensureItemCatalog } from "./itemIcons.js";
@@ -45,6 +46,18 @@ import { reGroundAfterAnimSample } from "./characterDeploy.js";
 import { LootField } from "./lootField.js";
 import { refreshOpenTab } from "./mainPanel.js";
 import { logDrcContract, DRC_MULTIVERSE } from "./drcContract.js";
+import { DrcCombatController, DRC_COMBAT_LEGEND } from "./drcCombat.js";
+import { refreshDrcTightHud } from "./drcTightHud.js";
+import { ImpactFx, impactKindForSkill } from "./impactFx.js";
+import {
+  ensureMvUiTheme,
+  mountGameMenu,
+  bindTooltipDelegation,
+  setGameCursor,
+  cursorFromContext,
+  showCastBar,
+  actionIconForSkill,
+} from "./mvUiTheme.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -253,9 +266,17 @@ export async function attachWarlordsWorld(ctx) {
   ensureStarterGear(classDef.starterGear);
 
   mountWarlordsHud();
+  ensureMvUiTheme();
+  bindTooltipDelegation(document.body);
+  mountGameMenu({
+    bag: () => window.dispatchEvent(new CustomEvent("mv-open-tab", { detail: { tab: "bag" } })),
+    skills: () => window.dispatchEvent(new CustomEvent("mv-open-tab", { detail: { tab: "skills" } })),
+    help: () => document.dispatchEvent(new KeyboardEvent("keydown", { code: "F1", bubbles: true })),
+  });
+  setGameCursor("combat");
   ensureItemCatalog().catch(() => {});
   window.setLoaderStatus?.("Loading Bermuda island…");
-  flash?.("DRC · grudge6 · Bermuda…", 1.2);
+  flash?.("DRC · Toon RTS · Bermuda…", 1.2);
 
   // Map is SI metres (bermuda ~843×614 m, buildings ~5–10 m). Never squash to 120 m.
   // Characters on CDN measure ~12–22 m raw → deploy applies ONE uniform unit normalize to ~1.8 m.
@@ -393,6 +414,8 @@ export async function attachWarlordsWorld(ctx) {
   scene.add(reticle);
 
   const vfx = new FleetSkillVfx(scene);
+  const impacts = new ImpactFx(scene);
+  window.__mvImpacts = impacts;
   const crosshairEl = document.getElementById("crosshair");
 
   // grudge6 character
@@ -407,9 +430,8 @@ export async function attachWarlordsWorld(ctx) {
     const host = localPlayer._player;
     if (host?.playerModel) host.playerModel.visible = false;
 
-    // World attach — SI independent of mixamo scale (never parent under 0.001 mesh)
+    // World attach — Toon RTS root at feet SI; never parent under Mixamo/proxy scale
     scene.add(g6.root);
-    // root.y = ground; model already feet-grounded at local 0 after deploy
     const feetY = (() => {
       const gy = groundAt(spawn.x, spawn.z);
       return Number.isFinite(gy) ? gy : 0;
@@ -418,8 +440,41 @@ export async function attachWarlordsWorld(ctx) {
     g6.root.rotation.set(0, 0, 0);
     g6.root.scale.set(1, 1, 1);
 
+    // Kill Mixamo/proxy mixer; Toon RTS uses AnimationDirector only
     try {
       if (host?.animation?.mixer) host.animation.mixer.timeScale = 0;
+      if (host?.playerModel) host.playerModel.visible = false;
+    } catch {
+      /* ignore */
+    }
+
+    // TPS camera: look at chest of SI hero (~1.3 m above feet), orbit 4–10 m
+    try {
+      if (host?.cam) {
+        host.cam.minDist = 3.2;
+        host.cam.maxDist = 10.5;
+        host.cam.originMaxDist = 10.5;
+        host.cam.lookAtHeightRatio = 0.72;
+        host.cam.overShoulderOffsetRatio = 0.1;
+        host.cam.epsilon = 0.4;
+        host.cam.zoomEnabled = true;
+        host.isFirstPerson = false;
+        host.enableOverShoulderView = true;
+        host.cam.setOverShoulder(true);
+        host.cam.setCamPos?.();
+      }
+      if (ctx.camera && capsule) {
+        const lookY = feetY + 1.35;
+        ctx.camera.position.set(spawn.x + 0.8, lookY + 1.2, spawn.z + 6.5);
+        if (ctx.controls) {
+          ctx.controls.target.set(spawn.x, lookY, spawn.z);
+          ctx.controls.minDistance = 3.2;
+          ctx.controls.maxDistance = 11;
+          ctx.controls.enablePan = false;
+          ctx.controls.update?.();
+        }
+        ctx.camera.lookAt(spawn.x, lookY, spawn.z);
+      }
     } catch {
       /* ignore */
     }
@@ -578,6 +633,10 @@ export async function attachWarlordsWorld(ctx) {
               ? 0xff6a3a
               : 0x9fe8ff;
       vfx.play(kind, feet.clone(), dir, color);
+      // Cast bar for long CDs / magic
+      if ((skill.cd || 0) >= 6 || skill.kind?.includes("magic") || skill.kind?.includes("aoe")) {
+        showCastBar(skill.name || "Skill", Math.min(900, (skill.cd || 1) * 90));
+      }
 
       // Range-gated damage scaled by equipped weapon
       const baseDmg = equippedWeaponDmg(14);
@@ -587,11 +646,29 @@ export async function attachWarlordsWorld(ctx) {
           : skill.kind?.includes("aoe")
             ? 4.5
             : 2.8;
+      const ikind = impactKindForSkill(skill);
       for (const b of bosses.bosses) {
         if (b.dead) continue;
         const d = b.root.position.distanceTo(pos);
         if (d < range) {
           const dmg = Math.floor(baseDmg * (skill.dmgMul || 1));
+          const hitPos = b.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+          impacts.play(ikind === "hit" && dmg > 30 ? "crit" : ikind, hitPos, {
+            radius: skill.kind?.includes("aoe") ? 2.8 : 1.4,
+            yLift: 0.2,
+          });
+          // Hit-react ragdoll (non-death)
+          try {
+            const knock = hitPos.clone().sub(feet).setY(0.2).normalize().multiplyScalar(2.2);
+            startRagdollLite(b.root, {
+              impulse: knock,
+              power: Math.min(1.4, 0.4 + dmg / 80),
+              death: false,
+              groundAt,
+            });
+          } catch {
+            /* */
+          }
           const res = bosses.hit(b.id, dmg, playerId);
           set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
           window.__mvBossTarget = {
@@ -602,7 +679,17 @@ export async function attachWarlordsWorld(ctx) {
           if (res.killed) {
             const reward = rollKillReward(true);
             flash?.(`${b.name} defeated! L${reward.level}`, 1.2);
-            // World equipment drops at boss pad
+            impacts.play("explode", hitPos, { radius: 2.6, color: 0xff8844 });
+            try {
+              startRagdollLite(b.root, {
+                impulse: hitPos.clone().sub(feet).setY(0.8).normalize().multiplyScalar(4),
+                power: 1.5,
+                death: true,
+                groundAt,
+              });
+            } catch {
+              /* */
+            }
             if (reward.dropped?.length) {
               loot.spawnMany(b.root.position.clone(), reward.dropped);
             }
@@ -619,6 +706,40 @@ export async function attachWarlordsWorld(ctx) {
   skillBar.bind();
   // DRC tight HUD owns visual slots; feed skill CDs + cast
   setTightHudSkillBar(skillBar, classDef);
+
+  // ── DRC fleet combat: C parry · X dodge · E block · Alt dash · double jump ──
+  const tmpFwd = new THREE.Vector3();
+  const combat = new DrcCombatController({
+    getCapsule: () => localPlayer._player?.getPlayerCapsule?.() || null,
+    getCtrl: () => localPlayer._player,
+    getDirector: () => g6?.director,
+    getForward: () => {
+      const c = ctx.camera;
+      if (c) {
+        c.getWorldDirection(tmpFwd);
+        tmpFwd.y = 0;
+        if (tmpFwd.lengthSq() > 1e-6) return tmpFwd.normalize();
+      }
+      tmpFwd.set(Math.sin(bodyYaw), 0, Math.cos(bodyYaw));
+      return tmpFwd;
+    },
+    groundAt,
+    isWater: (x, z) => !!island.nav?.isWaterWorld?.(x, z),
+    flash,
+    vfx,
+    onCombatEvent: (ev) => {
+      try {
+        ctx.onCombatEvent?.(ev);
+      } catch {
+        /* */
+      }
+    },
+  });
+  combat.bind();
+  window.__mvCombat = combat;
+  window.__mvMaxStamina = combat.maxStamina;
+  window.__mvStamina = combat.stamina;
+  flash?.(DRC_COMBAT_LEGEND, 2.2);
 
   // Soft-lock / focus input — free mouse only (no pointer-lock cursor loss)
   const canvas = ctx.renderer?.domElement || document.querySelector("canvas");
@@ -673,8 +794,8 @@ export async function attachWarlordsWorld(ctx) {
     }
   }
   flash?.(
-    `Vendors ready · walk near booth · E to trade`,
-    1.2,
+    `Vendors ready · near booth E trades · elsewhere E = block`,
+    1.4,
   );
 
   document.addEventListener("keydown", (e) => {
@@ -686,11 +807,12 @@ export async function attachWarlordsWorld(ctx) {
     const cam = ctx.camera;
     if (!cam || !capsule) return;
 
-    // 1) Vendor booth (very near)
+    // 1) Vendor booth (very near) — trade; else combat block via DrcCombat
     for (const v of island.vendorPads) {
       if (!v._mesh) continue;
       const d = capsule.position.distanceTo(v._mesh.position);
       if (d <= (v._interactR || 2.8)) {
+        window.__mvNearVendor = true;
         openVendorShop(v.id === "armor" ? "armor" : "weapon");
         flash?.(`${v.label} · shop open`, 0.6);
         return;
@@ -751,6 +873,7 @@ export async function attachWarlordsWorld(ctx) {
     harvest,
     bosses,
     skillBar,
+    combat,
     g6,
     loot,
     vfx,
@@ -760,6 +883,10 @@ export async function attachWarlordsWorld(ctx) {
     getClassState,
     unbindAim,
     rebindCollider: () => rebindIslandStaticCollider(localPlayer, island.root),
+    /** Boss / PvP damage through defense pipeline */
+    resolveDamage(baseDmg, meta) {
+      return combat.resolveIncomingHit(baseDmg, meta || {});
+    },
     update(dt) {
       harvest.update();
       vfx.update(dt);
@@ -769,6 +896,49 @@ export async function attachWarlordsWorld(ctx) {
       const pos = capsule?.position;
       const ctrl = localPlayer?._player;
       if (!pos) return;
+
+      // Near vendor flag for E = trade vs block
+      let nearV = false;
+      for (const v of island.vendorPads || []) {
+        if (!v._mesh) continue;
+        if (pos.distanceTo(v._mesh.position) <= (v._interactR || 2.8)) {
+          nearV = true;
+          break;
+        }
+      }
+      window.__mvNearVendor = nearV;
+
+      // DRC combat tick (dodge travel, stam, water-aware dash)
+      combat.update(dt, { nav: island.nav, waterPhysics: island.waterPhysics });
+      impacts.update(dt);
+      // Cursor from context (hostile / harvest / vendor)
+      if (!this._curAcc) this._curAcc = 0;
+      this._curAcc += dt;
+      if (this._curAcc > 0.12) {
+        this._curAcc = 0;
+        try {
+          cursorFromContext({
+            classId,
+            hostile: !!window.__mvBossTarget || !!aim.focusEnabled,
+            harvest: !!document.querySelector?.(".mv-harvest-prompt") || false,
+            vendor: !!window.__mvNearVendor,
+            loot: false,
+            busy: combat.state === "dodge" || combat.state === "slide",
+          });
+        } catch {
+          /* */
+        }
+      }
+      if (!this._stamAcc) this._stamAcc = 0;
+      this._stamAcc += dt;
+      if (this._stamAcc > 0.15) {
+        this._stamAcc = 0;
+        try {
+          refreshDrcTightHud({ light: true });
+        } catch {
+          /* */
+        }
+      }
 
       // Feet IK / snap — same height field as nav (SI raycast)
       let groundY = groundAt(pos.x, pos.z) ?? 0;
@@ -924,16 +1094,62 @@ export async function attachWarlordsWorld(ctx) {
         }
       }
 
-      const attacks = bosses.update(dt, pos);
+      // Boss AI: heightfield A* pathfinding + Elden telegraphs
+      const attacks = bosses.update(dt, pos, island.nav || null);
       for (const a of attacks) {
-        ctx.onBossHitLocal?.(a.damage, a.name);
+        const res = combat.resolveIncomingHit(a.damage || 0, {
+          boss: a.name,
+          attack: a.attack || a.kind,
+        });
+        const impactAt = pos.clone().add(new THREE.Vector3(0, 1.1, 0));
+        if (res.dmg > 0) {
+          impacts.play(res.dmg > 40 ? "crit" : "hit", impactAt, { color: 0xff6644 });
+          // Player hit-react flop (non-death)
+          if (g6?.root && res.dmg > 18) {
+            try {
+              const fromBoss = impactAt
+                .clone()
+                .sub(a.pos || impactAt)
+                .setY(0.3)
+                .normalize()
+                .multiplyScalar(-2.5);
+              startRagdollLite(g6.root, {
+                director: g6.director,
+                impulse: fromBoss,
+                power: Math.min(1.1, 0.35 + res.dmg / 60),
+                death: false,
+                groundAt,
+              });
+            } catch {
+              /* */
+            }
+          }
+          ctx.onBossHitLocal?.(res.dmg, a.name);
+        } else if (res.kind === "perfect_parry" || res.kind === "parry") {
+          impacts.play("parry", impactAt);
+          window.__mvBossTelegraph = {
+            boss: a.name,
+            attack: res.kind === "perfect_parry" ? "PERFECT PARRY" : "Parried",
+            t: performance.now(),
+          };
+          refreshCombatFrame();
+        } else if (res.kind === "iframe") {
+          impacts.play("hit", impactAt, { color: 0x88ccff, yLift: 0.5 });
+          refreshCombatFrame();
+        } else if (res.kind === "block") {
+          impacts.play("shockwave", impactAt, { radius: 0.9, color: 0xaaccff });
+          refreshCombatFrame();
+        }
+      }
+      // Lite ragdoll tick after death flop
+      if (g6?.root?.userData?.ragdollLite) {
+        updateRagdollLite(g6.root.userData.ragdollLite, dt);
       }
       // Refresh HUD when boss telegraph changes
       if (window.__mvBossTelegraph || window.__mvBossTarget) {
-        /* combat frame reads globals — light refresh throttle */
         if (!this._hudAcc) this._hudAcc = 0;
         this._hudAcc += dt;
-        if (this._hudAcc > 0.2) {
+        if (this._hudAcc > 0.15) {
           this._hudAcc = 0;
           refreshCombatFrame();
         }
@@ -945,6 +1161,26 @@ export async function attachWarlordsWorld(ctx) {
     /** Call when local HP changes so unit frame stays correct */
     syncPlayerHp(hp, maxHp = 100) {
       syncHp(hp, maxHp);
+      // Death → lite Bip001 ragdoll (restore on respawn via beginRagdoll/restore)
+      if (hp <= 0 && g6?.root && !g6.root.userData.ragdollLite) {
+        const impulse = new THREE.Vector3(
+          (Math.random() - 0.5) * 2,
+          0.35,
+          (Math.random() - 0.5) * 2,
+        );
+        startRagdollLite(g6.model || g6.root, {
+          director: g6.director,
+          impulse,
+        });
+        // also mark outer root if model is nested
+        if (g6.model && g6.root !== g6.model) {
+          g6.root.userData.ragdollLite = g6.model.userData.ragdollLite;
+        }
+      } else if (hp > 0 && g6?.root?.userData?.ragdollLite) {
+        restoreRagdollLite(g6.model || g6.root);
+        if (g6.director) g6.director.enabled = true;
+        delete g6.root.userData.ragdollLite;
+      }
     },
   };
 }

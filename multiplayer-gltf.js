@@ -1590,33 +1590,75 @@ async function init() {
     camera.position.copy(spawnPos).add(new THREE.Vector3(4, 3, 6));
     controls.target.copy(spawnPos);
 
-    // Local player: SI capsule (scale 0.01 → ~1.8 m) + grudge6 visual in warlords
-    // Mixamo mesh hidden after attach; do NOT use 0.001 FPS scale (tiny capsule / void fall).
+    // Warlords: SI capsule proxy ONLY — visual is Toon RTS GLB (grudge6Loader). Never Mixamo person*.glb.
+    // Legacy FPS path still uses CHARACTER_LIST Mixamo for gun mode.
     localPlayer = new LocalPlayer({ scene, camera, controls });
     await localPlayer.init({
-        playerModelConfig: {
-            ...PLAYER_MODEL,
-            scale: USE_WARLORDS_ISLAND ? 0.01 : PLAYER_MODEL.scale,
-            // Prefer idle; gun anims unused in warlords
-            noGun: USE_WARLORDS_ISLAND ? true : PLAYER_MODEL.noGun,
-        },
+        playerModelConfig: USE_WARLORDS_ISLAND
+            ? {
+                url: "proxy",
+                proxyOnly: true,
+                scale: 0.01, // cm-era controller → SI (~1.8 m capsule)
+                idleAnim: "idle",
+                walkAnim: "walk",
+                runAnim: "run",
+                jumpAnim: "jump",
+                noGun: true,
+                // SI speeds in cm units before *scale
+                speed: 320,
+                gravity: -2800,
+                jumpHeight: 650,
+              }
+            : {
+                ...PLAYER_MODEL,
+                scale: PLAYER_MODEL.scale,
+                noGun: PLAYER_MODEL.noGun,
+              },
         initPos: spawnPos,
-        minCamDistance: USE_WARLORDS_ISLAND ? 2.5 : 2,
-        maxCamDistance: USE_WARLORDS_ISLAND ? 18 : 220,
+        // TPS best practice for ~1.8 m Toon RTS hero (SI metres)
+        minCamDistance: USE_WARLORDS_ISLAND ? 3.0 : 2,
+        maxCamDistance: USE_WARLORDS_ISLAND ? 11 : 220,
+        camLookAtHeightRatio: USE_WARLORDS_ISLAND ? 0.72 : 0.8,
+        camOverShoulderOffsetRatio: USE_WARLORDS_ISLAND ? 0.1 : 0.2,
         enableOverShoulderView: true,
+        enableZoom: USE_WARLORDS_ISLAND ? true : false,
+        isFirstPerson: false,
         staticCollider: sceneModel,
-        // Desktop keyboard/mouse only — do not inject mobile joystick UI
         isShowMobileControls: false,
-        // Free mouse — never force pointer-lock on embed/play
-        mouseSensitivity: USE_WARLORDS_ISLAND ? 2.2 : 5,
+        mouseSensitivity: USE_WARLORDS_ISLAND ? 2.0 : 5,
     });
     if (USE_WARLORDS_ISLAND) {
-        // Hide FPS mixamo immediately; grudge6 attaches later
         try {
-            localPlayer.getPlayerModel?.()?.traverse((c) => { c.visible = false; });
-            if (localPlayer._player?.playerModel) localPlayer._player.playerModel.visible = false;
+            const host = localPlayer._player;
+            if (host?.cam) {
+                host.cam.epsilon = 0.35; // SI wall-pull (not 35 cm-era)
+                host.cam.zoomEnabled = true;
+                host.cam.minDist = 3;
+                host.cam.maxDist = 11;
+                host.cam.originMaxDist = 11;
+                host.cam.lookAtHeightRatio = 0.72;
+                host.cam.overShoulderOffsetRatio = 0.1;
+                host.cam.setOverShoulder(true);
+            }
+            // MapControls: pan off (ban orbit writing feet); orbit rotate + zoom for TPS
+            if (controls) {
+                controls.enablePan = false;
+                controls.enableZoom = true;
+                controls.minDistance = 3;
+                controls.maxDistance = 12;
+                controls.maxPolarAngle = Math.PI * 0.48;
+                controls.minPolarAngle = 0.12;
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.08;
+            }
+            // FOV for third-person action (not FPS 55-only)
+            if (camera) {
+                camera.fov = 50;
+                camera.near = 0.15;
+                camera.far = 2000;
+                camera.updateProjectionMatrix();
+            }
         } catch { /* ignore */ }
-        // Ensure cursor visible (embed iframes + OrbitControls)
         try {
             document.exitPointerLock?.();
             document.body.style.cursor = "crosshair";
@@ -1628,7 +1670,7 @@ async function init() {
             if (renderer?.domElement) renderer.domElement.style.cursor = "crosshair";
         } catch { /* ignore */ }
         mountWarlordsHud();
-        window.setLoaderStatus?.("Controller ready · loading world…");
+        window.setLoaderStatus?.("Controller ready · Toon RTS world…");
     }
 
     // è®¾ç½®æœ¬åœ°çŽ©å®¶æè´¨

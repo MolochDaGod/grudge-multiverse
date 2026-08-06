@@ -11,7 +11,8 @@ Browser
   ├─ Map GLB (Bermuda)    → R2 CDN  assets.grudge-studio.com/models/maps/bermuda.glb
   │                           (never ship 54MB on Vercel)
   │
-  ├─ Characters / atlas   → R2 CDN  models/grudge6/races/* + textures/grudge6/*
+  ├─ Characters ★         → R2 CDN  asset-packs/toon-rts-characters/glb/characters/*
+  ├─ Atlases              → R2 CDN  textures/grudge6/*
   │
   ├─ Baked anims          → gameopen.vercel.app/anims/baked/*  (or open.grudge-studio.com)
   │

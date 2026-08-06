@@ -212,135 +212,138 @@ export class playerController {
 
     // ==================== 玩家模型 ====================
 
-    // 加载模型与动画
+    // 加载模型与动画（proxyOnly = Toon RTS visual path; no Mixamo person GLB）
     private async loadPlayerModelGLB() {
         try {
-            const gltf = await this.loader.loadAsync(this.playerModelConfig.url) as GLTF;
-            this.playerModel = gltf.scene;
-
-            // 初始化动画混合器
-            this.animation.mixer = new THREE.AnimationMixer(this.playerModel);
-            const animations = gltf.animations ?? [];
-            this.animation.clips = animations;
-            this.animation.actions = new Map();
-
-            // 构建动作映射表
             const mc = this.playerModelConfig;
-            const isThreePartJump = Array.isArray(mc.jumpAnim);
-            this.animation.hasThreePartJump = isThreePartJump;
-            const mappings: [string, string][] = [
-                [mc.idleAnim, "idle"],
-                [mc.walkAnim, "walking"],
-                [mc.leftWalkAnim || mc.walkAnim, "left_walking"],
-                [mc.rightWalkAnim || mc.walkAnim, "right_walking"],
-                [mc.backwardAnim || mc.walkAnim, "walking_backward"],
-                ...(isThreePartJump
-                    ? [] as [string, string][]
-                    : [[mc.jumpAnim as string, "jumping"]] as [string, string][]),
-                [mc.runAnim, "running"],
-                [mc.flyIdleAnim || mc.idleAnim, "flyidle"],
-                [mc.flyAnim || mc.idleAnim, "flying"],
-                [mc.flyHoverForwardAnim || mc.flyAnim || mc.idleAnim, "flyHoverForward"],
-                [mc.flyHoverBackAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverBack"],
-                [mc.flyHoverLeftAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverLeft"],
-                [mc.flyHoverRightAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverRight"],
-                [mc.flyHoverUpAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverUp"],
-                [mc.flyHoverDownAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverDown"],
-                [mc.enterCarAnim || mc.idleAnim, "enterCar"],
-                [mc.exitCarAnim || mc.idleAnim, "exitCar"],
-            ];
+            const proxyOnly = !!(mc as any).proxyOnly || mc.url === "proxy" || !mc.url;
 
-            for (const [clipName, actionName] of mappings) {
-                const clip = animations.find(a => a.name === clipName);
-                if (!clip) continue;
-                const action = this.animation.mixer.clipAction(clip);
-                if (actionName === "jumping") {
-                    action.setLoop(THREE.LoopOnce, 1);
-                    action.clampWhenFinished = true;
-                    action.setEffectiveTimeScale(1.2);
-                } else {
-                    action.setLoop(THREE.LoopRepeat, Infinity);
-                    action.setEffectiveTimeScale(1);
-                }
-                action.enabled = true;
-                action.setEffectiveWeight(0);
-                this.animation.actions.set(actionName, action);
-            }
+            if (proxyOnly) {
+                // Invisible proxy — capsule KCC only. Hero skin = Toon RTS via grudge6Loader.
+                this.playerModel = new THREE.Group();
+                this.playerModel.name = "proxy-controller-no-mixamo";
+                this.playerModel.visible = false;
+                this.animation.mixer = new THREE.AnimationMixer(this.playerModel);
+                this.animation.clips = [];
+                this.animation.actions = new Map();
+                this.animation.sets.set("default", new Map());
+                console.info("[playerController] proxyOnly — skip Mixamo/person GLB (Toon RTS visual)");
+            } else {
+                const gltf = await this.loader.loadAsync(mc.url) as GLTF;
+                this.playerModel = gltf.scene;
 
-            // 注册三段跳跃动画
-            if (isThreePartJump) {
-                const [startClip, loopClip, endClip] = mc.jumpAnim as [string, string, string];
-                const jumpDefs: [string, string, number, boolean][] = [
-                    [startClip, "jumpStart", THREE.LoopOnce, true],
-                    [loopClip, "jumpLoop", THREE.LoopRepeat, false],
-                    [endClip, "jumpEnd", THREE.LoopOnce, true],
+                this.animation.mixer = new THREE.AnimationMixer(this.playerModel);
+                const animations = gltf.animations ?? [];
+                this.animation.clips = animations;
+                this.animation.actions = new Map();
+
+                const isThreePartJump = Array.isArray(mc.jumpAnim);
+                this.animation.hasThreePartJump = isThreePartJump;
+                const mappings: [string, string][] = [
+                    [mc.idleAnim, "idle"],
+                    [mc.walkAnim, "walking"],
+                    [mc.leftWalkAnim || mc.walkAnim, "left_walking"],
+                    [mc.rightWalkAnim || mc.walkAnim, "right_walking"],
+                    [mc.backwardAnim || mc.walkAnim, "walking_backward"],
+                    ...(isThreePartJump
+                        ? [] as [string, string][]
+                        : [[mc.jumpAnim as string, "jumping"]] as [string, string][]),
+                    [mc.runAnim, "running"],
+                    [mc.flyIdleAnim || mc.idleAnim, "flyidle"],
+                    [mc.flyAnim || mc.idleAnim, "flying"],
+                    [mc.flyHoverForwardAnim || mc.flyAnim || mc.idleAnim, "flyHoverForward"],
+                    [mc.flyHoverBackAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverBack"],
+                    [mc.flyHoverLeftAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverLeft"],
+                    [mc.flyHoverRightAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverRight"],
+                    [mc.flyHoverUpAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverUp"],
+                    [mc.flyHoverDownAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverDown"],
+                    [mc.enterCarAnim || mc.idleAnim, "enterCar"],
+                    [mc.exitCarAnim || mc.idleAnim, "exitCar"],
                 ];
-                for (const [clipName, key, loop, clamp] of jumpDefs) {
+
+                for (const [clipName, actionName] of mappings) {
                     const clip = animations.find(a => a.name === clipName);
-                    if (!clip) { console.warn(`找不到跳跃动画 clip: "${clipName}"`); continue; }
-                    const action = this.animation.mixer!.clipAction(clip);
-                    action.setLoop(loop as THREE.AnimationActionLoopStyles, loop === THREE.LoopOnce ? 1 : Infinity);
-                    action.clampWhenFinished = clamp;
-                    action.setEffectiveTimeScale(key === "jumpStart" ? 1.2 : 1);
+                    if (!clip) continue;
+                    const action = this.animation.mixer.clipAction(clip);
+                    if (actionName === "jumping") {
+                        action.setLoop(THREE.LoopOnce, 1);
+                        action.clampWhenFinished = true;
+                        action.setEffectiveTimeScale(1.2);
+                    } else {
+                        action.setLoop(THREE.LoopRepeat, Infinity);
+                        action.setEffectiveTimeScale(1);
+                    }
                     action.enabled = true;
                     action.setEffectiveWeight(0);
-                    this.animation.actions.set(key, action);
+                    this.animation.actions.set(actionName, action);
                 }
-            }
 
-            // 注册默认动作组
-            const defaultSet = new Map<string, THREE.AnimationAction>();
-            for (const key of ["idle", "walking", "walking_backward", "running", "jumping", "flyidle", "flying"]) {
-                const action = this.animation.actions.get(key);
-                if (action) defaultSet.set(key, action);
-            }
-            this.animation.sets.set("default", defaultSet);
+                if (isThreePartJump) {
+                    const [startClip, loopClip, endClip] = mc.jumpAnim as [string, string, string];
+                    const jumpDefs: [string, string, number, boolean][] = [
+                        [startClip, "jumpStart", THREE.LoopOnce, true],
+                        [loopClip, "jumpLoop", THREE.LoopRepeat, false],
+                        [endClip, "jumpEnd", THREE.LoopOnce, true],
+                    ];
+                    for (const [clipName, key, loop, clamp] of jumpDefs) {
+                        const clip = animations.find(a => a.name === clipName);
+                        if (!clip) { console.warn(`找不到跳跃动画 clip: "${clipName}"`); continue; }
+                        const action = this.animation.mixer!.clipAction(clip);
+                        action.setLoop(loop as THREE.AnimationActionLoopStyles, loop === THREE.LoopOnce ? 1 : Infinity);
+                        action.clampWhenFinished = clamp;
+                        action.setEffectiveTimeScale(key === "jumpStart" ? 1.2 : 1);
+                        action.enabled = true;
+                        action.setEffectiveWeight(0);
+                        this.animation.actions.set(key, action);
+                    }
+                }
 
-            this.animation.actions.get("idle")?.setEffectiveWeight(1);
-            this.animation.actions.get("idle")?.play();
-            this.animation.state = this.animation.actions.get("idle")!;
+                const defaultSet = new Map<string, THREE.AnimationAction>();
+                for (const key of ["idle", "walking", "walking_backward", "running", "jumping", "flyidle", "flying"]) {
+                    const action = this.animation.actions.get(key);
+                    if (action) defaultSet.set(key, action);
+                }
+                this.animation.sets.set("default", defaultSet);
 
-            // 监听动画完成事件
-            this.animation.mixerCb = (ev: any) => {
-                const done: THREE.AnimationAction = ev.action;
-                const resolveGroundAnim = () => {
-                    if (this.input.fwd) { this.animation.playByName(this.input.shift ? "running" : "walking"); return; }
-                    if (this.input.bkd) { this.animation.playByName("walking_backward"); return; }
-                    if (this.input.rgt || this.input.lft) { this.animation.playByName("walking"); return; }
-                    this.animation.playByName("idle");
+                this.animation.actions.get("idle")?.setEffectiveWeight(1);
+                this.animation.actions.get("idle")?.play();
+                this.animation.state = this.animation.actions.get("idle")!;
+
+                this.animation.mixerCb = (ev: any) => {
+                    const done: THREE.AnimationAction = ev.action;
+                    const resolveGroundAnim = () => {
+                        if (this.input.fwd) { this.animation.playByName(this.input.shift ? "running" : "walking"); return; }
+                        if (this.input.bkd) { this.animation.playByName("walking_backward"); return; }
+                        if (this.input.rgt || this.input.lft) { this.animation.playByName("walking"); return; }
+                        this.animation.playByName("idle");
+                    };
+                    if (done === this.animation.actions?.get("jumping")) {
+                        if (this.animation.state === done) resolveGroundAnim();
+                        return;
+                    }
+                    if (done === this.animation.actions?.get("jumpStart")) {
+                        if (this.animation.state === done) this.animation.playByName("jumpLoop");
+                        return;
+                    }
+                    if (done === this.animation.actions?.get("jumpEnd")) {
+                        if (this.animation.state === done) resolveGroundAnim();
+                        return;
+                    }
+                    if (done === this.animation.actions?.get("enterCar")) this.vehicle.onEnterAnimFinished();
                 };
-                if (done === this.animation.actions?.get("jumping")) {
-                    if (this.animation.state === done) resolveGroundAnim();
-                    return;
-                }
-                if (done === this.animation.actions?.get("jumpStart")) {
-                    if (this.animation.state === done) this.animation.playByName("jumpLoop");
-                    return;
-                }
-                if (done === this.animation.actions?.get("jumpEnd")) {
-                    if (this.animation.state === done) resolveGroundAnim();
-                    return;
-                }
-                if (done === this.animation.actions?.get("enterCar")) this.vehicle.onEnterAnimFinished();
-            };
-            this.animation.mixer.addEventListener("finished", this.animation.mixerCb);
+                this.animation.mixer.addEventListener("finished", this.animation.mixerCb);
+                this.animation.mixer.update(0);
+            }
 
-            this.animation.mixer.update(0);
             this.playerModel.updateMatrixWorld(true);
 
-            // 计算胶囊体尺寸
-            const { size } = this.getBbox(this.playerModel);
-            const modelScale = this.playerCapsuleHeight / size.y;
-
+            // Capsule from fixed human proportions (SI via scale 0.01 → ~1.8 m)
             const s = this.playerModelConfig.scale;
             const r = this.playerCapsuleRadius * s * this.playerCapsuleRadiusRatio;
             const h = this.playerCapsuleHeight * s;
+            const rideHeightScaled = this.rideHeight * s;
+            const colliderHeight = h - rideHeightScaled;
 
-            // 悬空胶囊：碰撞椭球底部永久离脚 rideHeight
-            const rideHeightScaled = this.rideHeight * s;   // 当前缩放下的实际悬空高度
-            const colliderHeight = h - rideHeightScaled;    // 缩短后胶囊总高
-
-            // 创建胶囊体网格
             this.playerCapsule = new THREE.Mesh(
                 new RoundedBoxGeometry(r * 2, colliderHeight, r * 2, 1, 75),
                 new THREE.MeshStandardMaterial({
@@ -351,7 +354,7 @@ export class playerController {
                     depthWrite: false,
                 }),
             );
-            const segmentLength = colliderHeight - 2 * r;
+            const segmentLength = Math.max(0.01, colliderHeight - 2 * r);
             this.playerCapsule.geometry.translate(0, -segmentLength / 2, 0);
             this.playerCapsule.capsuleInfo = {
                 radius: r,
@@ -364,8 +367,11 @@ export class playerController {
             this.reset();
             this.playerCapsule.rotateY(this.playerModelConfig.rotateY ?? 0);
 
-            // 挂载模型到胶囊
-            this.playerModel.scale.multiplyScalar(modelScale * s);
+            if (!proxyOnly) {
+                const { size } = this.getBbox(this.playerModel);
+                const modelScale = size.y > 1e-4 ? this.playerCapsuleHeight / size.y : 1;
+                this.playerModel.scale.multiplyScalar(modelScale * s);
+            }
             this.modelBaseY = -segmentLength - r - rideHeightScaled;
             this.playerModel.position.set(0, this.modelBaseY, 0);
             this.playerModel.traverse((child: any) => {

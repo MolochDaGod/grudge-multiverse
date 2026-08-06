@@ -166,18 +166,22 @@ export class InputSystem {
                     ? { LEFT: 2, MIDDLE: 1, RIGHT: 0 }
                     : { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
                 break;
-            // 跳跃
+            // 跳跃（地面）· 二段跳由 DrcCombatController.tryDoubleJump 在空中处理
             case "jump":
                 if (pressed) {
                     c.vehicle.cancelBoarding(); // 取消载具模式下的下车
                     this.space = true;
                     if (c.controllerMode === 1) return; // 载具模式不跳跃
                     if (c.isFlying) { c.animation.setAnimationByPressed(); return; } // 飞行中仅切动画
-                    if (!c.playerIsOnGround) return; // 不在地面不能跳
-                    if (c.animation.isJumping()) return;  // 跳跃中不重复触发
-                    c.animation.startJump();
+                    if (!c.playerIsOnGround) {
+                        // Air: allow DRC double-jump host to handle via keydown Space
+                        return;
+                    }
+                    if (c.animation.isJumping?.()) return;  // 跳跃中不重复触发
+                    c.animation.startJump?.();
                     c.playerVelocity.y = c.jumpHeight;
                     c.setOnGround(false); // 跳跃后设置为不在地面
+                    (c as any)._jumpsUsed = 1;
                 } else {
                     this.space = false;
                     if (c.isFlying) c.animation.setAnimationByPressed();

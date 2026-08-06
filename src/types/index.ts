@@ -5,7 +5,9 @@ import type { PathPlanner } from "../utils/pathPlanner";
 // ==================== 玩家配置 ====================
 
 export type PlayerModelOptions = {
-    url: string; // 模型路径（GLB/GLTF）
+    url: string; // 模型路径（GLB/GLTF）；warlords Toon RTS uses "proxy" + proxyOnly
+    /** Skip Mixamo/person GLB — invisible proxy for capsule only; visual is Toon RTS grudge6 */
+    proxyOnly?: boolean;
     scale: number; // 模型缩放
     idleAnim: string; // 静止动画名
     walkAnim: string; // 行走动画名

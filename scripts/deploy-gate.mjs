@@ -3,7 +3,7 @@
  *
  * A deploy only "makes sense" when:
  *  1. Bermuda map GLB is live on R2 CDN (binary, not HTML)
- *  2. ALL 6 grudge6 race kit GLBs are live (model/gltf-binary)
+ *  2. ALL 6 Toon RTS ★ race kit GLBs are live
  *  3. ALL 6 race body atlases are live (image/webp)
  *  4. Open anim bake host responds for canonical walk + run + 2h idle
  *
@@ -16,13 +16,14 @@ const ANIMS = "https://open.grudge-studio.com/anims/baked";
 
 const MAP = `${CDN}/models/maps/bermuda.glb`;
 
+/** Toon RTS ★ play meshes only (human.glb … dwarf.glb). */
 const KITS = [
-  `${CDN}/models/grudge6/races/WK_Characters.glb`,
-  `${CDN}/models/grudge6/races/ELF_Characters.glb`,
-  `${CDN}/models/grudge6/races/ORC_Characters.glb`,
-  `${CDN}/models/grudge6/races/UD_Characters.glb`,
-  `${CDN}/models/grudge6/races/BRB_Characters.glb`,
-  `${CDN}/models/grudge6/races/DWF_Characters.glb`,
+  `${CDN}/asset-packs/toon-rts-characters/glb/characters/human.glb`,
+  `${CDN}/asset-packs/toon-rts-characters/glb/characters/elf.glb`,
+  `${CDN}/asset-packs/toon-rts-characters/glb/characters/orc.glb`,
+  `${CDN}/asset-packs/toon-rts-characters/glb/characters/undead.glb`,
+  `${CDN}/asset-packs/toon-rts-characters/glb/characters/barbarian.glb`,
+  `${CDN}/asset-packs/toon-rts-characters/glb/characters/dwarf.glb`,
 ];
 
 const ATLASES = [
@@ -51,9 +52,6 @@ async function headOk(url, opts = {}) {
     if (opts.rejectHtml && ct.includes("text/html")) {
       return { ok: false, url, status: res.status, ct, err: "html masquerade" };
     }
-    if (opts.expectImage && !ct.includes("image") && !ct.includes("webp") && !ct.includes("octet")) {
-      // soft: some CDNs omit type
-    }
     return { ok: true, url, status: res.status, ct };
   } catch (e) {
     return { ok: false, url, err: e?.message || String(e) };
@@ -61,13 +59,13 @@ async function headOk(url, opts = {}) {
 }
 
 function short(url) {
-  return url.replace(/^https:\/\/[^/]+\//, "").split("/").slice(-2).join("/");
+  return url.replace(/^https:\/\/[^/]+\//, "").split("/").slice(-3).join("/");
 }
 
 async function main() {
-  console.log("[deploy-gate] Multiverse production sanity (map + 6 kits + 6 atlases + anims)…");
+  console.log("[deploy-gate] Multiverse production (map + 6 Toon RTS kits + atlases + anims)…");
   const checks = [
-    await headOk(MAP, { rejectHtml: true, requireGlb: true }),
+    await headOk(MAP, { rejectHtml: true }),
     ...(await Promise.all(KITS.map((u) => headOk(u, { rejectHtml: true })))),
     ...(await Promise.all(ATLASES.map((u) => headOk(u, { rejectHtml: true, expectImage: true })))),
     ...(await Promise.all(ANIMS_REQUIRED.map((u) => headOk(u, { rejectHtml: true })))),
@@ -94,7 +92,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `[deploy-gate] PASS — map + ${KITS.length} kits + ${ATLASES.length} atlases + anims live on CDN/Open`,
+    `[deploy-gate] PASS — map + ${KITS.length} Toon RTS kits + ${ATLASES.length} atlases + anims`,
   );
   process.exit(0);
 }

@@ -3,36 +3,29 @@
  * GRUDGE6 STONE SSOT — Multiverse + fleet agent contract
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * SET IN STONE 2026-08-01. Do not invent alternate CDNs, atlases, or “temp” hosts.
- * Verified live HEAD 200 on every kit + atlas path below.
+ * ★ PLAY MESH (only production primary):
+ *   {CDN}/asset-packs/toon-rts-characters/glb/characters/{raceId}.glb
+ *   raceId = human | elf | orc | undead | barbarian | dwarf
  *
- * BINARY MESHES
- *   R2 bucket : grudge-assets   (only place bytes live)
- *   Public CDN: https://assets.grudge-studio.com  (Worker in front of that R2)
- *   Open mirror (same keys): https://open.grudge-studio.com  — optional fallback only
+ * Atlas:
+ *   {CDN}/textures/grudge6/{folder}/{file}.webp
  *
- * NOT mesh storage
- *   D1 = index only (meshes / gear_presets / asset_registry)
- *   Railway Postgres = player heroes / bag / account (not kit GLB)
+ * Equip: mesh_ids visibility (never whole-body GLB swap)
+ * Unit:  one uniform SI fit → ~1.8 m human yardstick
+ * Anims: open.grudge-studio.com/anims/baked/*  (Bip001, strip position)
  *
- * LOAD ORDER (browser production)
- *   1. GLB kit:  {CDN}/models/grudge6/races/{PREFIX}_Characters.glb
- *   2. Atlas:    {CDN}/textures/grudge6/{folder}/{file}.webp
- *   3. Equip:    mesh_ids visibility (never swap whole body GLB)
- *   4. Unit:     one uniform SI normalize → ~1.8 m (CDN kits still ~10–22 m raw)
- *   5. Anims:    open.grudge-studio.com/anims/baked/*  (Bip001, strip position)
+ * LEGACY (fallback only — wrong bake / compare):
+ *   models/grudge6/races/{PREFIX}_Characters.glb
  *
- * FORBIDDEN
- *   - models/grudge6/atlases/*          (404)
- *   - objectstore…/api/v1/grudge6-*     (often 404; use assets CDN api)
+ * FORBIDDEN primary:
+ *   - models/grudge6/metaverse/*
+ *   - models/grudge6/atlases/*
  *   - Meshy / capsules as final hero
- *   - Non-uniform “orc stretch” / body-region hacks
- *   - Second character host (arena CDN characters, random Vercel glb)
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
 /** Bump when kit/atlas/anim contracts change — used as asset query bust. */
-export const GRUDGE6_SSOT_VERSION = "2026-08-06.2";
+export const GRUDGE6_SSOT_VERSION = "2026-08-06.3-toon";
 
 /** Append to CDN asset URLs so clients drop stale browser cache after SSOT ship. */
 export function assetUrlBust(url) {
@@ -78,13 +71,24 @@ export const GRUDGE6_KIT_JS = `${CDN}/js/grudge6-kit.js`;
  *   libraryId: string,
  * }>}
  */
+/** Toon RTS ★ play mesh path. */
+export function toonRtsKitUrl(libraryId) {
+  return `${CDN}/asset-packs/toon-rts-characters/glb/characters/${libraryId}.glb`;
+}
+
+/** Legacy races bake — fallback only. */
+export function legacyRaceKitUrl(prefixFile) {
+  return `${CDN}/models/grudge6/races/${prefixFile}`;
+}
+
 export const RACES = {
   "western-kingdoms": {
     raceId: "western-kingdoms",
     short: "human",
     prefix: "WK_",
     label: "Western Kingdoms",
-    kitGlb: `${CDN}/models/grudge6/races/WK_Characters.glb`,
+    kitGlb: toonRtsKitUrl("human"),
+    kitFallback: legacyRaceKitUrl("WK_Characters.glb"),
     kitFbx: `${CDN}/models/grudge6/races/WK_Characters.fbx`,
     atlasUrl: `${CDN}/textures/grudge6/western-kingdoms/WK_Standard_Units.webp`,
     libraryId: "human",
@@ -95,7 +99,8 @@ export const RACES = {
     short: "elf",
     prefix: "ELF_",
     label: "High Elves",
-    kitGlb: `${CDN}/models/grudge6/races/ELF_Characters.glb`,
+    kitGlb: toonRtsKitUrl("elf"),
+    kitFallback: legacyRaceKitUrl("ELF_Characters.glb"),
     kitFbx: `${CDN}/models/grudge6/races/ELF_Characters.fbx`,
     atlasUrl: `${CDN}/textures/grudge6/elves/ELF_HighElves_Texture.webp`,
     libraryId: "elf",
@@ -106,7 +111,8 @@ export const RACES = {
     short: "orc",
     prefix: "ORC_",
     label: "Orcs",
-    kitGlb: `${CDN}/models/grudge6/races/ORC_Characters.glb`,
+    kitGlb: toonRtsKitUrl("orc"),
+    kitFallback: legacyRaceKitUrl("ORC_Characters.glb"),
     kitFbx: `${CDN}/models/grudge6/races/ORC_Characters.fbx`,
     atlasUrl: `${CDN}/textures/grudge6/orcs/ORC_StandardUnits.webp`,
     libraryId: "orc",
@@ -117,7 +123,8 @@ export const RACES = {
     short: "undead",
     prefix: "UD_",
     label: "Undead",
-    kitGlb: `${CDN}/models/grudge6/races/UD_Characters.glb`,
+    kitGlb: toonRtsKitUrl("undead"),
+    kitFallback: legacyRaceKitUrl("UD_Characters.glb"),
     kitFbx: `${CDN}/models/grudge6/races/UD_Characters.fbx`,
     atlasUrl: `${CDN}/textures/grudge6/undead/UD_Standard_Units.webp`,
     libraryId: "undead",
@@ -128,7 +135,8 @@ export const RACES = {
     short: "barbarian",
     prefix: "BRB_",
     label: "Barbarians",
-    kitGlb: `${CDN}/models/grudge6/races/BRB_Characters.glb`,
+    kitGlb: toonRtsKitUrl("barbarian"),
+    kitFallback: legacyRaceKitUrl("BRB_Characters.glb"),
     kitFbx: `${CDN}/models/grudge6/races/BRB_Characters.fbx`,
     atlasUrl: `${CDN}/textures/grudge6/barbarians/BRB_StandardUnits_texture.webp`,
     libraryId: "barbarian",
@@ -139,7 +147,8 @@ export const RACES = {
     short: "dwarf",
     prefix: "DWF_",
     label: "Dwarves",
-    kitGlb: `${CDN}/models/grudge6/races/DWF_Characters.glb`,
+    kitGlb: toonRtsKitUrl("dwarf"),
+    kitFallback: legacyRaceKitUrl("DWF_Characters.glb"),
     kitFbx: `${CDN}/models/grudge6/races/DWF_Characters.fbx`,
     atlasUrl: `${CDN}/textures/grudge6/dwarves/DWF_Standard_Units.webp`,
     libraryId: "dwarf",
@@ -207,6 +216,15 @@ export const FORBIDDEN_PATH_FRAGMENTS = [
   "models/grudge6/metaverse/",
 ];
 
+/** True if URL is Toon RTS ★ play mesh. */
+export function isToonRtsKitUrl(url) {
+  return /asset-packs\/toon-rts-characters\/glb\/characters\/[a-z]+\.glb/i.test(String(url || ""));
+}
+
+/**
+ * Accept Toon RTS ★ as canonical; allow legacy races as explicit fallback.
+ * Throw on metaverse / forbidden hosts.
+ */
 export function assertAllowedKitUrl(url) {
   const u = String(url || "");
   for (const bad of FORBIDDEN_PATH_FRAGMENTS) {
@@ -214,10 +232,24 @@ export function assertAllowedKitUrl(url) {
       throw new Error(`[grudge6SSOT] FORBIDDEN kit URL: ${u} (matched ${bad})`);
     }
   }
-  if (!u.includes("/models/grudge6/races/") || !u.endsWith("_Characters.glb")) {
-    console.warn("[grudge6SSOT] non-canonical kit URL (expected …/races/{PFX}_Characters.glb):", u);
+  if (isToonRtsKitUrl(u)) return u;
+  if (u.includes("/models/grudge6/races/") && /_Characters\.glb$/i.test(u)) {
+    console.warn("[grudge6SSOT] legacy races kit (fallback only — prefer Toon RTS ★):", u);
+    return u;
   }
+  console.warn(
+    "[grudge6SSOT] non-canonical kit URL (expected …/toon-rts-characters/glb/characters/{race}.glb):",
+    u,
+  );
   return u;
+}
+
+/** Load order: Toon ★ → race fallback GLB. */
+export function kitUrlCandidates(idOrShort) {
+  const r = getRace(idOrShort);
+  const list = [r.kitGlb];
+  if (r.kitFallback && r.kitFallback !== r.kitGlb) list.push(r.kitFallback);
+  return list;
 }
 
 /** List for UI / debug. */

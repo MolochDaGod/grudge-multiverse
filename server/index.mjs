@@ -13,14 +13,18 @@
  * Wire protocol (JSON, `t` tag) — Multiverse room client:
  *   Client → Server: { t: "hello", id, name, classId, raceId }
  *                    { t: "state", id, name, snap }
- *                    { t: "combat", id, ev }
+ *                    { t: "combat", id, ev }  // dodge|parry|block|slide|skill|hit
+ *                    { t: "boss", id, bossId, hp, telegraph }
  *                    { t: "chat", id, name, text }
  *   Server → Client: { t: "welcome", self, code, peers, tickHz }
  *                    { t: "joined", player }
  *                    { t: "left", id }
  *                    { t: "snapshot", time, players }
  *                    { t: "combat", ev }
+ *                    { t: "boss", ... }
  *                    { t: "chat", ... }
+ *
+ * Combat events (DRC fleet): kind = dodge|parry|parrySuccess|block|slide|doubleJump|skill|hit
  */
 import http from "node:http";
 import { WebSocketServer } from "ws";
@@ -338,6 +342,8 @@ wss.on("connection", (ws, _req, url) => {
         clip: String(snap.clip || "idle").slice(0, 32),
         weapon: String(snap.weapon || "").slice(0, 24),
         hp: Number(snap.hp ?? 100),
+        stamina: Number(snap.stamina ?? 100),
+        combat: String(snap.combat || "idle").slice(0, 24),
         moving: !!snap.moving,
         grounded: snap.grounded !== false,
         name: me.name,
@@ -347,7 +353,37 @@ wss.on("connection", (ws, _req, url) => {
     }
 
     if (msg.t === "combat" && msg.ev) {
-      room.broadcast({ t: "combat", ev: msg.ev }, null);
+      const ev = typeof msg.ev === "object" ? msg.ev : { kind: String(msg.ev) };
+      room.broadcast(
+        {
+          t: "combat",
+          id: selfId,
+          name: me.name,
+          ev: {
+            kind: String(ev.kind || "hit").slice(0, 32),
+            ...ev,
+          },
+          time: Date.now(),
+        },
+        null,
+      );
+      return;
+    }
+
+    if (msg.t === "boss" && msg.bossId) {
+      room.broadcast(
+        {
+          t: "boss",
+          id: selfId,
+          bossId: String(msg.bossId).slice(0, 48),
+          hp: Number(msg.hp),
+          maxHp: Number(msg.maxHp),
+          telegraph: msg.telegraph ? String(msg.telegraph).slice(0, 64) : null,
+          dead: !!msg.dead,
+          time: Date.now(),
+        },
+        null,
+      );
       return;
     }
 
