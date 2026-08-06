@@ -10,6 +10,9 @@ import {
   tagMeshWorld,
   buildNavGrid,
   describeIslandLiteracy,
+  estimateWaterline,
+  measureLandRadius,
+  createWaterPhysics,
   COLLIDER_LAYER,
 } from "./mapLiteracy.js";
 
@@ -196,10 +199,39 @@ export async function loadBermudaIsland(scene, opts = {}) {
     tagMeshWorld(o, kind);
   });
 
-  // Water ring
+  // Root first so ground sampler can hit Main_Large_Terrain before water is placed
+  scene.add(root);
+  // Keep layer markers as empty groups for tools (children stay under root)
+  for (const g of Object.values(layers)) scene.add(g);
+
+  // Invisible safety under island (last-resort collider — not preferred ground)
+  const safety = new THREE.Mesh(
+    new THREE.CircleGeometry(halfW * 1.15, 48),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  safety.rotation.x = -Math.PI / 2;
+  safety.position.y = box.min.y - 0.02;
+  safety.name = "island-safety-ground";
+  safety.userData.colliderLayer = COLLIDER_LAYER.WALKABLE;
+  safety.userData.walkable = true;
+  safety.userData.worldKind = "terrain";
+  safety.userData.safetyOnly = true;
+  root.add(safety);
+
+  // Ground sampler BEFORE water (water must not win raycasts)
+  const sampleY = makeGroundSampler(root);
+
+  // Calibrate sea level + land radius from real terrain (SI metres)
+  const waterY = estimateWaterline(sampleY, halfW);
+  const landRadius = measureLandRadius(sampleY, halfW, waterY);
+  console.info(
+    `[island] waterline Y=${waterY.toFixed(2)} m · landRadius=${landRadius.toFixed(1)} m · halfW=${halfW.toFixed(1)} m`,
+  );
+
+  // Water ring — visual + semantic WATER layer (not walkable, not static BVH solid)
   const waterGroup = new THREE.Group();
   waterGroup.name = ISLAND_LAYERS.water;
-  const waterSize = halfW * 2.6;
+  const waterSize = Math.max(landRadius * 2.4, halfW * 2.4);
   const water = new THREE.Mesh(
     new THREE.CircleGeometry(waterSize, 64),
     new THREE.MeshStandardMaterial({
@@ -207,25 +239,37 @@ export async function loadBermudaIsland(scene, opts = {}) {
       metalness: 0.2,
       roughness: 0.35,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.88,
+      depthWrite: false,
     }),
   );
+  water.name = "water-surface";
   water.rotation.x = -Math.PI / 2;
-  water.position.y = box.min.y - 0.15;
+  water.position.y = waterY - 0.08;
   water.receiveShadow = true;
   waterGroup.add(water);
   const deep = new THREE.Mesh(
-    new THREE.PlaneGeometry(waterSize * 4, waterSize * 4),
-    new THREE.MeshStandardMaterial({ color: 0x0a2030, metalness: 0.15, roughness: 0.5 }),
+    new THREE.PlaneGeometry(waterSize * 3.5, waterSize * 3.5),
+    new THREE.MeshStandardMaterial({
+      color: 0x0a2030,
+      metalness: 0.15,
+      roughness: 0.5,
+      transparent: true,
+      opacity: 0.95,
+    }),
   );
+  deep.name = "water-deep";
   deep.rotation.x = -Math.PI / 2;
-  deep.position.y = box.min.y - 0.4;
+  deep.position.y = waterY - 0.55;
   waterGroup.add(deep);
-
-  scene.add(waterGroup);
-  scene.add(root);
-  // Keep layer markers as empty groups for tools (children stay under root for skinning/world)
-  for (const g of Object.values(layers)) scene.add(g);
+  waterGroup.traverse((o) => {
+    if (o.isMesh) {
+      o.userData.worldKind = "water";
+      o.userData.colliderLayer = COLLIDER_LAYER.WATER;
+      o.userData.walkable = false;
+      o.userData.waterSurfaceY = waterY;
+    }
+  });
   scene.add(waterGroup);
 
   // Harvestables — prefer grass/tree/rock OUTSIDE hub ring
@@ -312,85 +356,54 @@ export async function loadBermudaIsland(scene, opts = {}) {
   const maxH = opts.maxHarvest ?? 80;
   const capped = harvestNodes.slice(0, maxH);
 
-  // Spawns on grass ring outside hub
-  const spawns = [];
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const r = hubRadius * 1.35;
-    spawns.push(new THREE.Vector3(Math.cos(a) * r, 2, Math.sin(a) * r));
-  }
+  // Heightfield navmesh — land only (above waterline, inside landRadius)
+  const nav = buildNavGrid(
+    { bounds: box, halfW, hubRadius, scale, waterY, landRadius },
+    sampleY,
+    { cellSize: opts.navCellSize ?? 5, waterY, landRadius },
+  );
 
-  // World / elite pins — real GLBs + Elden Ring telegraphs (bosses.js)
+  // Spawns: ALWAYS from walkable land cells (never mathematical ring into sea)
+  const landPts = nav.pickLandSpawns(12, hubRadius);
+  const spawns = landPts.map((p) => new THREE.Vector3(p.x, p.y, p.z));
+
+  // World / elite pins — snap onto land nav
   const bossPads = [
     {
       id: "boss_east",
-      position: new THREE.Vector3(halfW * 0.42, 1.5, halfW * 0.08),
+      position: new THREE.Vector3(halfW * 0.35, 1.5, halfW * 0.08),
       name: "Shadow Flame Mantis",
       defId: "shadow_flame_mantis",
     },
     {
       id: "boss_west",
-      position: new THREE.Vector3(-halfW * 0.4, 1.5, -halfW * 0.06),
+      position: new THREE.Vector3(-halfW * 0.35, 1.5, -halfW * 0.06),
       name: "Ash Ghast",
       defId: "volcano_ghast",
     },
     {
       id: "boss_north",
-      position: new THREE.Vector3(0, 1.5, -halfW * 0.48),
+      position: new THREE.Vector3(0, 1.5, -halfW * 0.4),
       name: "Werelephant",
       defId: "werelephant",
     },
   ];
+  for (const b of bossPads) {
+    const sn = nav.snap(b.position.x, b.position.z);
+    b.position.set(sn.x, sn.y + 0.1, sn.z);
+  }
 
-  // Vendors near hub — weapon booth uses weaponvendor.glb (spawned in warlordsBootstrap)
+  // Vendors near hub — land-snapped
   const vendorPads = [
     { id: "weapon", position: new THREE.Vector3(10, 1.2, 12), label: "Weaponsmith" },
     { id: "armor", position: new THREE.Vector3(-10, 1.2, 12), label: "Armourer" },
   ];
-
-  // Invisible large ground plane under island as physics safety net
-  const safety = new THREE.Mesh(
-    new THREE.CircleGeometry(halfW * 1.15, 48),
-    new THREE.MeshBasicMaterial({ visible: false }),
-  );
-  safety.rotation.x = -Math.PI / 2;
-  safety.position.y = box.min.y - 0.02;
-  safety.name = "island-safety-ground";
-  safety.userData.colliderLayer = COLLIDER_LAYER.WALKABLE;
-  safety.userData.walkable = true;
-  safety.userData.worldKind = "terrain";
-  root.add(safety);
-
-  // Tag water meshes
-  waterGroup.traverse((o) => {
-    if (o.isMesh) {
-      o.userData.worldKind = "water";
-      o.userData.colliderLayer = COLLIDER_LAYER.WATER;
-      o.userData.walkable = false;
-    }
-  });
-
-  // Spawns: sample real ground Y (not floating y=2)
-  const sampleY = makeGroundSampler(root);
-  for (const s of spawns) {
-    const gy = sampleY(s.x, s.z);
-    s.y = (Number.isFinite(gy) ? gy : 0) + 1.0;
-  }
-  for (const b of bossPads) {
-    const gy = sampleY(b.position.x, b.position.z);
-    b.position.y = (Number.isFinite(gy) ? gy : 0) + 0.1;
-  }
   for (const v of vendorPads) {
-    const gy = sampleY(v.position.x, v.position.z);
-    v.position.y = (Number.isFinite(gy) ? gy : 0) + 0.05;
+    const sn = nav.snap(v.position.x, v.position.z);
+    v.position.set(sn.x, sn.y + 0.05, sn.z);
   }
 
-  // Heightfield navmesh (walkable grid) — AI + spawn snap
-  const nav = buildNavGrid(
-    { bounds: box, halfW, hubRadius, scale },
-    sampleY,
-    { cellSize: opts.navCellSize ?? 5 },
-  );
+  const waterPhysics = createWaterPhysics(nav, { waterY, landRadius });
 
   const island = {
     root,
@@ -402,12 +415,20 @@ export async function loadBermudaIsland(scene, opts = {}) {
     vendorPads,
     halfW,
     hubRadius,
+    landRadius,
+    waterY,
+    waterPhysics,
     bounds: box.clone(),
     scale,
+    units: "si_metres",
+    humanHeightM: HUMAN_HEIGHT_M,
     nav,
     sampleY,
   };
   console.info("[island] literacy", describeIslandLiteracy(island, nav));
+  console.info(
+    `[island] land spawns=${spawns.length} first=${spawns[0]?.toArray?.()?.map?.((n) => +n.toFixed(1))}`,
+  );
   return island;
 }
 
@@ -431,23 +452,35 @@ export function makeGroundSampler(islandRoot) {
   const all = [];
   islandRoot.traverse((o) => {
     if (!o.isMesh || !o.visible || !o.geometry) return;
-    // Skip foliage / high LODs for ground queries
-    if (/leave|leaf|plant_01|bush|flower|LOD[12]/i.test(o.name || "") && !/LOD0/i.test(o.name || "")) {
+    // Never sample water / foliage for feet Y
+    if (o.userData?.colliderLayer === COLLIDER_LAYER.WATER) return;
+    if (/leave|leaf|plant_01|bush|flower|LOD[12]|water/i.test(o.name || "") && !/LOD0/i.test(o.name || "")) {
       return;
     }
-    if (/leave|leaf|plant_01|Broom_snakeweed/i.test(o.name || "")) return;
-    all.push(o);
+    if (/leave|leaf|plant_01|Broom_snakeweed|water-surface|water-deep/i.test(o.name || "")) return;
+    // Safety plane only as last resort (not in primary)
+    const isSafety = o.name === "island-safety-ground" || o.userData?.safetyOnly;
+    if (!isSafety) all.push(o);
     const kind = o.userData?.worldKind || classifyMeshName(o.name);
     const n = o.name || "";
     if (
-      o.name === "island-safety-ground" ||
-      kind === "terrain" ||
-      /Main_Large_Terrain|^ground|ground\.|Floor|MainHighway|UnsurfacedRoad|airport_road|CementFactory_ground/i.test(n)
+      !isSafety &&
+      (kind === "terrain" ||
+        /Main_Large_Terrain|^ground|ground\.|Floor|MainHighway|UnsurfacedRoad|airport_road|CementFactory_ground/i.test(
+          n,
+        ))
     ) {
       primary.push(o);
-    } else if (kind === "building" || /road|Road|Floor/i.test(n)) {
+    } else if (!isSafety && (kind === "building" || /road|Road|Floor/i.test(n))) {
       secondary.push(o);
+    } else if (isSafety) {
+      // deferred
     }
+  });
+  // Append safety only if we have almost no terrain hits later
+  const safetyMeshes = [];
+  islandRoot.traverse((o) => {
+    if (o.isMesh && (o.name === "island-safety-ground" || o.userData?.safetyOnly)) safetyMeshes.push(o);
   });
 
   // BVH on walk surfaces — required for fast ground raycasts on Main_Large_Terrain*
@@ -461,27 +494,41 @@ export function makeGroundSampler(islandRoot) {
     }
   };
 
-  const preferred = primary.length >= 1 ? primary.concat(secondary) : secondary.length ? secondary : all;
+  const preferred =
+    primary.length >= 1
+      ? primary.concat(secondary)
+      : secondary.length
+        ? secondary
+        : all.concat(safetyMeshes);
   for (const m of preferred) ensureBvh(m);
+  for (const m of safetyMeshes) ensureBvh(m);
 
   console.info(
-    `[island] ground sampler meshes primary=${primary.length} secondary=${secondary.length} allSolid=${all.length}`,
+    `[island] ground sampler primary=${primary.length} secondary=${secondary.length} solid=${all.length} safety=${safetyMeshes.length}`,
   );
 
   islandRoot.updateMatrixWorld(true);
 
-  return (x, z) => {
+  const sampleHit = (x, z) => {
     origin.set(x, 800, z);
     ray.set(origin, down);
     ray.far = 1600;
-    // Prefer primary terrain shell first
     if (primary.length) {
       const hits = ray.intersectObjects(primary, false);
-      if (hits[0]) return hits[0].point.y;
+      if (hits[0]) return { y: hits[0].point.y, name: hits[0].object?.name || "", mesh: hits[0].object };
     }
     const hits2 = ray.intersectObjects(preferred, false);
-    if (hits2[0]) return hits2[0].point.y;
+    if (hits2[0]) return { y: hits2[0].point.y, name: hits2[0].object?.name || "", mesh: hits2[0].object };
     const hits3 = ray.intersectObjects(all, false);
-    return hits3[0]?.point.y ?? 0;
+    if (hits3[0]) return { y: hits3[0].point.y, name: hits3[0].object?.name || "", mesh: hits3[0].object };
+    if (safetyMeshes.length) {
+      const hits4 = ray.intersectObjects(safetyMeshes, false);
+      if (hits4[0]) return { y: hits4[0].point.y, name: "island-safety-ground", mesh: hits4[0].object };
+    }
+    return { y: 0, name: null, mesh: null };
   };
+
+  const sampleY = (x, z) => sampleHit(x, z).y;
+  sampleY.hit = sampleHit;
+  return sampleY;
 }

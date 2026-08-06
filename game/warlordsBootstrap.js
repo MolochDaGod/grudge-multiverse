@@ -266,7 +266,11 @@ export async function attachWarlordsWorld(ctx) {
     `[warlords] MAP SI ≈ ${mapW.toFixed(0)} m across · hubR=${island.hubRadius?.toFixed?.(1)} · scale=${island.scale} · nav walkable=${island.nav?.cells?.filter?.((c) => c.walkable).length ?? "?"}`,
   );
   window.__mvMapMeta = {
+    units: "si_metres",
+    humanHeightM: 1.8,
     halfW: island.halfW,
+    landRadius: island.landRadius,
+    waterY: island.waterY,
     scale: island.scale,
     widthM: mapW,
     nav: island.nav
@@ -274,22 +278,37 @@ export async function attachWarlordsWorld(ctx) {
           cellSize: island.nav.cellSize,
           walkable: island.nav.cells.filter((c) => c.walkable).length,
           total: island.nav.cells.length,
+          waterY: island.nav.waterY,
+          landRadius: island.nav.landRadius,
         }
       : null,
   };
   window.__mvNav = island.nav || null;
   window.__mvIsland = island;
+  window.__mvWater = island.waterPhysics || null;
 
-  // Place player on grass spawn outside hub — snap to navmesh when available
-  let spawn = island.spawns[Math.floor(Math.random() * island.spawns.length)].clone();
-  let spawnGroundY = groundAt(spawn.x, spawn.z);
+  // Start ON LAND — spawns already nav-picked; re-snap for safety
+  let spawn = (island.spawns[Math.floor(Math.random() * island.spawns.length)] || island.spawns[0]).clone();
   if (island.nav?.snap) {
     const sn = island.nav.snap(spawn.x, spawn.z);
-    spawn = new THREE.Vector3(sn.x, sn.y + 1.0, sn.z);
-    spawnGroundY = sn.y;
+    spawn = new THREE.Vector3(sn.x, sn.y + 1.05, sn.z);
   } else {
-    spawn.y = (Number.isFinite(spawnGroundY) ? spawnGroundY : 0) + 1.15;
+    const gy = groundAt(spawn.x, spawn.z);
+    spawn.y = (Number.isFinite(gy) ? gy : 0) + 1.15;
   }
+  // Refuse water start
+  if (island.nav?.isWaterWorld?.(spawn.x, spawn.z) || island.waterPhysics?.isInWater?.(spawn.x, spawn.z, spawn.y - 1)) {
+    const land = island.nav?.pickLandSpawns?.(1, island.hubRadius)?.[0];
+    if (land) spawn.set(land.x, land.y, land.z);
+    else if (island.nav?.snap) {
+      const sn = island.nav.snap(0, 0);
+      spawn.set(sn.x, sn.y + 1.05, sn.z);
+    }
+  }
+  const spawnGroundY = groundAt(spawn.x, spawn.z);
+  console.info(
+    `[warlords] LAND spawn xz=(${spawn.x.toFixed(1)},${spawn.z.toFixed(1)}) y=${spawn.y.toFixed(2)} ground=${Number.isFinite(spawnGroundY) ? spawnGroundY.toFixed(2) : "?"} walkable=${!!island.nav?.isWalkableWorld?.(spawn.x, spawn.z)}`,
+  );
 
   // Drop temporary 40 m pad from multiplayer-gltf once real island is up
   if (ctx.tempGround) {
@@ -302,18 +321,37 @@ export async function attachWarlordsWorld(ctx) {
     }
   }
 
-  // #5 static collider rebind BEFORE placing player (so ground ray + capsule work)
+  // Static collider rebind BEFORE placing player (walkable + solid BVH)
   const colliderOk = rebindIslandStaticCollider(localPlayer, island.root);
   if (!colliderOk) {
     console.error("[warlords] island collider missing — player may void; safety ground still on root");
     flash?.("Map colliders failed — safety ground only", 2.5);
   }
 
+  // SI locomotion speeds (m/s) — controller scale 0.01 × cm-era numbers
+  try {
+    const host = localPlayer._player;
+    if (host) {
+      // walk ~3.2 m/s, sprint ~9.5 m/s after *3 shift
+      if (typeof host.setPlayerSpeed === "function") host.setPlayerSpeed(320);
+      else {
+        host.playerSpeed = 3.2;
+        host.curPlayerSpeed = 3.2;
+      }
+      host.playerFlySpeed = host.playerFlySpeed || 12;
+      host.gravity = -28; // SI-ish fall when scale already applied; clamp if insane
+      if (Math.abs(host.gravity) > 200) host.gravity = -28;
+      if (Math.abs(host.gravity) < 5) host.gravity = -28;
+    }
+  } catch {
+    /* ignore */
+  }
+
   const capsule = localPlayer._player?.getPlayerCapsule?.();
   if (capsule) {
-    // Re-sample after collider/BVH ready
     const gy2 = groundAt(spawn.x, spawn.z);
     spawn.y = (Number.isFinite(gy2) ? gy2 : spawnGroundY || 0) + 1.15;
+    island.waterPhysics?.constrainPosition?.(spawn, groundAt);
     capsule.position.copy(spawn);
     try {
       localPlayer._player.playerVelocity?.set(0, 0, 0);
@@ -334,6 +372,9 @@ export async function attachWarlordsWorld(ctx) {
     at: Date.now(),
     spawn: spawn.toArray(),
     groundY: groundAt(spawn.x, spawn.z),
+    walkable: !!island.nav?.isWalkableWorld?.(spawn.x, spawn.z),
+    waterY: island.waterY,
+    landRadius: island.landRadius,
   };
 
   // Soft-lock world reticle
@@ -719,8 +760,19 @@ export async function attachWarlordsWorld(ctx) {
       const ctrl = localPlayer?._player;
       if (!pos) return;
 
-      // Feet IK / snap — raycast ground under player
-      const groundY = groundAt(pos.x, pos.z) ?? 0;
+      // Feet IK / snap — same height field as nav (SI raycast)
+      let groundY = groundAt(pos.x, pos.z) ?? 0;
+      // Water layer physics — soft land clamp (no swim yet)
+      if (island.waterPhysics?.constrainPosition?.(pos, groundAt)) {
+        groundY = groundAt(pos.x, pos.z) ?? groundY;
+        try {
+          ctrl.playerVelocity.x *= 0.35;
+          ctrl.playerVelocity.z *= 0.35;
+          ctrl.playerVelocity.y = 0;
+        } catch {
+          /* ignore */
+        }
+      }
       // Keep capsule from falling into void (safety)
       const feetEst = capsuleFeetY(ctrl, capsule);
       if (feetEst < groundY - 0.5 || pos.y < groundY - 2) {
@@ -782,15 +834,29 @@ export async function attachWarlordsWorld(ctx) {
         ? { name: nearestBoss.name, hp: nearestBoss.hp, maxHp: nearestBoss.maxHp }
         : null;
 
-      // Body yaw: soft-lock / travel
+      // Body yaw + traversal — use KEYS + velocity (Mixamo isMoving is dead when grudge6 skins)
       let moving = false;
       let dx = 0;
       let dz = 0;
+      let sprinting = false;
+      let speed01 = 0;
       try {
         const vel = ctrl?.getVelocity?.() || tmpVel.set(0, 0, 0);
         dx = vel.x;
         dz = vel.z;
-        moving = Math.hypot(dx, dz) > 0.05 || !!localPlayer.isMoving;
+        const spd = Math.hypot(dx, dz);
+        const inp = ctrl?.input;
+        const keys =
+          !!(inp?.fwd || inp?.bkd || inp?.lft || inp?.rgt) ||
+          (Math.abs(inp?.analogMoveX || 0) > 0.12 || Math.abs(inp?.analogMoveY || 0) > 0.12);
+        sprinting = !!inp?.shift;
+        moving = keys || spd > 0.08;
+        // SI: walk ~3 m/s, sprint ~9 m/s
+        const walkMax = Math.max(2.5, ctrl?.playerSpeed || 3.2);
+        const sprintMax = walkMax * 3;
+        const maxSpd = sprinting ? sprintMax : walkMax;
+        speed01 = Math.min(1, spd / Math.max(0.4, maxSpd * 0.92));
+        if (keys && speed01 < 0.2) speed01 = sprinting ? 0.95 : 0.4;
       } catch {
         moving = !!localPlayer.isMoving;
       }
@@ -818,26 +884,20 @@ export async function attachWarlordsWorld(ctx) {
       updateWorldReticle(reticle, pos, bodyYaw, groundY);
 
       if (g6?.root) {
-        // Feet on ground (Box3-style feet Y) — model local feet at 0
+        // Feet on ground (Box3 feet Y) — same groundY as nav / water clamp
         g6.root.position.set(pos.x, groundY, pos.z);
-        // Yaw only — never copy full capsule quaternion (kills sideways/roll)
+        // Yaw only — never copy full capsule quaternion
         g6.root.rotation.set(0, bodyYaw, 0);
 
-        if (g6.director && ctrl) {
-          let speed01 = 0;
-          let sprinting = false;
-          try {
-            const vel = ctrl.getVelocity?.() || tmpVel.set(0, 0, 0);
-            tmpVel.set(vel.x, 0, vel.z);
-            const spd = tmpVel.length();
-            const maxSpd = Math.max(0.01, (ctrl.curPlayerSpeed || ctrl.playerSpeed || 1) * 0.9);
-            speed01 = Math.min(1, spd / maxSpd);
-            sprinting = !!ctrl.input?.shift || speed01 > 0.85;
-          } catch {
-            /* ignore */
-          }
+        if (g6.director) {
           g6.director.setGaitTarget(moving, sprinting, speed01);
           g6.director.update(dt);
+          window.__mvTraversal = g6.director.getTraversalState?.() || {
+            loco: g6.director.loco,
+            speed01,
+            sprinting,
+            moving,
+          };
         } else {
           g6.mixer?.update(dt);
         }

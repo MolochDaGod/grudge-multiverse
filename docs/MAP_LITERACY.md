@@ -6,24 +6,27 @@ How an agent or engineer **knows where things are** and **what layer each part u
 
 | Rule | Value |
 |------|--------|
-| Units | **SI metres** after `island.js` normalize |
+| Units | **SI metres** after `island.js` normalize (1 unit = 1 m, human ~1.8 m) |
 | Origin | Island XZ **centered**, ground near **y ≈ 0** |
 | +Y | Up (Three.js right-handed) |
 | Map CDN | `assets.grudge-studio.com/models/maps/bermuda.glb` |
 | Never | Force map to 120 m (dollhouse vs 1.8 m heroes) |
+| Water Y | `estimateWaterline()` from shoreline samples |
+| Land R | `measureLandRadius()` — max walk radius above water |
 
 ## How we know “what is where”
 
 1. **Mesh name → kind** — `classifyMeshName()`  
-   `terrain | tree | rock | building | prop`
+   `terrain | tree | rock | building | prop` (`Main_Large_Terrain*` = island shell)
 2. **Semantic collider layer** — `tagMeshWorld()` / `mapLiteracy.js`  
    `walkable | solid | harvest | water | trigger | ignore`
-3. **Ground height** — raycast down from `(x, 500, z)` via `makeGroundSampler`  
-   Prefer terrain/building/safety meshes
-4. **Navmesh grid** — `buildNavGrid()` samples walkable cells over bounds  
-   Exposed as `window.__mvNav` and `island.nav`
-5. **Gameplay pads** — returned from `loadBermudaIsland()`  
-   `spawns`, `bossPads`, `vendorPads`, `harvestNodes[]` with world `position`
+3. **Ground height** — raycast down from `(x, 800, z)` via `makeGroundSampler`  
+   Prefer `Main_Large_Terrain` / roads / floors; safety plane last; **never water**
+4. **Navmesh grid** — `buildNavGrid()` land-only cells (above waterY, inside landRadius, slope ok)  
+   A* `nav.findPath`, `nav.snap`, `nav.pickLandSpawns`  
+   Exposed as `window.__mvNav` / `window.__mvMapMeta` / `window.__mvWater`
+5. **Gameplay pads** — from `loadBermudaIsland()`  
+   `spawns` = **land nav only**; bosses/vendors nav-snapped
 
 ## Layers (do not confuse)
 
@@ -40,15 +43,17 @@ How an agent or engineer **knows where things are** and **what layer each part u
 | walkable | yes | floor | ground, road, safety plane |
 | solid | no | yes | houses, walls, fences |
 | harvest | soft | yes for AI | trees, rocks (nodes) |
-| water | no | no walk | synthetic ring + deep |
+| water | no | no walk | calibrated surface + deep; soft land clamp via `waterPhysics` |
 | trigger | no | no | boss/vendor pads |
 | ignore | no | no | leaves, tiny props |
 
 ## Spawns / nodes
 
-- **Player spawns**: ring outside hub → Y from ground sample + nav snap  
-- **Harvest**: trees/rocks outside hub, inside water edge; max ~70  
-- **Bosses / vendors**: pads at fractions of `halfW`, grounded  
+- **Player spawns**: `nav.pickLandSpawns()` only — never water/void mathematical ring  
+- **Water physics**: `createWaterPhysics` soft-constrain capsule back to land (no second physics engine)  
+- **Harvest**: trees/rocks outside hub, inside land edge; max ~70  
+- **Bosses / vendors**: pads nav-snapped to land  
+- **Traversal**: grudge6 `AnimationDirector` gait from **WASD + velocity** (not Mixamo isMoving)  
 - **Node inventory**: `public/maps/bermuda-node-names.json` (GLB name dump)
 
 ## Characters (DRC)
