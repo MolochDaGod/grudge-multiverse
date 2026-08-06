@@ -38,6 +38,7 @@ import {
 } from "./combatAim.js";
 import { mountWarlordsHud, refreshCombatFrame, setHarvestPrompt, syncHp } from "./warlordsHud.js";
 import { setTightHudSkillBar } from "./drcTightHud.js";
+import { startRagdollLite, updateRagdollLite, restoreRagdollLite } from "./ragdollLite.js";
 import { setupRaceClassSelectUI } from "./raceClassSelect.js";
 import { loadSelection } from "./fleetGearPresets.js";
 import { ensureItemCatalog } from "./itemIcons.js";
@@ -407,9 +408,8 @@ export async function attachWarlordsWorld(ctx) {
     const host = localPlayer._player;
     if (host?.playerModel) host.playerModel.visible = false;
 
-    // World attach — SI independent of mixamo scale (never parent under 0.001 mesh)
+    // World attach — Toon RTS root at feet SI; never parent under Mixamo/proxy scale
     scene.add(g6.root);
-    // root.y = ground; model already feet-grounded at local 0 after deploy
     const feetY = (() => {
       const gy = groundAt(spawn.x, spawn.z);
       return Number.isFinite(gy) ? gy : 0;
@@ -418,8 +418,41 @@ export async function attachWarlordsWorld(ctx) {
     g6.root.rotation.set(0, 0, 0);
     g6.root.scale.set(1, 1, 1);
 
+    // Kill Mixamo/proxy mixer; Toon RTS uses AnimationDirector only
     try {
       if (host?.animation?.mixer) host.animation.mixer.timeScale = 0;
+      if (host?.playerModel) host.playerModel.visible = false;
+    } catch {
+      /* ignore */
+    }
+
+    // TPS camera: look at chest of SI hero (~1.3 m above feet), orbit 4–10 m
+    try {
+      if (host?.cam) {
+        host.cam.minDist = 3.2;
+        host.cam.maxDist = 10.5;
+        host.cam.originMaxDist = 10.5;
+        host.cam.lookAtHeightRatio = 0.72;
+        host.cam.overShoulderOffsetRatio = 0.1;
+        host.cam.epsilon = 0.4;
+        host.cam.zoomEnabled = true;
+        host.isFirstPerson = false;
+        host.enableOverShoulderView = true;
+        host.cam.setOverShoulder(true);
+        host.cam.setCamPos?.();
+      }
+      if (ctx.camera && capsule) {
+        const lookY = feetY + 1.35;
+        ctx.camera.position.set(spawn.x + 0.8, lookY + 1.2, spawn.z + 6.5);
+        if (ctx.controls) {
+          ctx.controls.target.set(spawn.x, lookY, spawn.z);
+          ctx.controls.minDistance = 3.2;
+          ctx.controls.maxDistance = 11;
+          ctx.controls.enablePan = false;
+          ctx.controls.update?.();
+        }
+        ctx.camera.lookAt(spawn.x, lookY, spawn.z);
+      }
     } catch {
       /* ignore */
     }
@@ -924,9 +957,14 @@ export async function attachWarlordsWorld(ctx) {
         }
       }
 
-      const attacks = bosses.update(dt, pos);
+      // Boss AI: heightfield A* pathfinding when nav exists
+      const attacks = bosses.update(dt, pos, island.nav || null);
       for (const a of attacks) {
         ctx.onBossHitLocal?.(a.damage, a.name);
+      }
+      // Lite ragdoll tick after death flop
+      if (g6?.root?.userData?.ragdollLite) {
+        updateRagdollLite(g6.root.userData.ragdollLite, dt);
       }
       // Refresh HUD when boss telegraph changes
       if (window.__mvBossTelegraph || window.__mvBossTarget) {
@@ -945,6 +983,26 @@ export async function attachWarlordsWorld(ctx) {
     /** Call when local HP changes so unit frame stays correct */
     syncPlayerHp(hp, maxHp = 100) {
       syncHp(hp, maxHp);
+      // Death → lite Bip001 ragdoll (restore on respawn via beginRagdoll/restore)
+      if (hp <= 0 && g6?.root && !g6.root.userData.ragdollLite) {
+        const impulse = new THREE.Vector3(
+          (Math.random() - 0.5) * 2,
+          0.35,
+          (Math.random() - 0.5) * 2,
+        );
+        startRagdollLite(g6.model || g6.root, {
+          director: g6.director,
+          impulse,
+        });
+        // also mark outer root if model is nested
+        if (g6.model && g6.root !== g6.model) {
+          g6.root.userData.ragdollLite = g6.model.userData.ragdollLite;
+        }
+      } else if (hp > 0 && g6?.root?.userData?.ragdollLite) {
+        restoreRagdollLite(g6.model || g6.root);
+        if (g6.director) g6.director.enabled = true;
+        delete g6.root.userData.ragdollLite;
+      }
     },
   };
 }

@@ -1,10 +1,8 @@
 /**
- * Grudge6 kit loader — exact gear_presets mesh_ids + body atlas + Bip001 packs.
- * Deploy order from grudge-character-correctness (characterDeploy helpers).
+ * Toon RTS character loader — modular race GLB + mesh_ids + atlas + Bip001 packs.
+ * Loader SSOT: toonRtsGltfLoader (Draco+Meshopt). NEVER Mixamo person*.glb.
  */
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import { getClass } from "./classes.js";
 import { resolveRaceClass, resolveClassKit, loadSelection } from "./fleetGearPresets.js";
@@ -22,42 +20,25 @@ import {
   logSSOT,
   resolveCharacterSource,
   assetUrlBust,
+  kitUrlCandidates,
+  isToonRtsKitUrl,
   GRUDGE6_SSOT_VERSION,
   HUMAN_HEIGHT_M,
   ANIMS_BAKED,
   CDN,
 } from "./grudge6SSOT.js";
 import { resolveAnimPackId } from "./drcAnimSsot.js";
+import { loadToonRtsRaceTemplate } from "./toonRtsGltfLoader.js";
 
-let _loader = null;
 const textureLoader = new THREE.TextureLoader();
 if (typeof textureLoader.setCrossOrigin === "function") {
   textureLoader.setCrossOrigin("anonymous");
 }
 
-function getLoader() {
-  if (_loader) return _loader;
-  _loader = new GLTFLoader();
-  try {
-    const draco = new DRACOLoader();
-    draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
-    _loader.setDRACOLoader(draco);
-  } catch {
-    /* optional */
-  }
-  return _loader;
-}
-
-const templateCache = new Map();
 const atlasCache = new Map();
 
 async function loadTemplate(url) {
-  const bust = assetUrlBust(url);
-  if (templateCache.has(bust)) return templateCache.get(bust);
-  window.setLoaderStatus?.(`Loading kit ${url.split("/").pop()}…`);
-  const gltf = await getLoader().loadAsync(bust);
-  templateCache.set(bust, gltf.scene);
-  return gltf.scene;
+  return loadToonRtsRaceTemplate(url);
 }
 
 /** Load Toon RTS body atlas (sRGB, flipY false — FBX/GLB UV contract). */
@@ -275,14 +256,33 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   );
 
   let template;
-  try {
-    template = await loadTemplate(kitUrl);
-  } catch (e) {
-    console.error("[grudge6Loader] CDN kit FAIL — capsule is NOT production hero", kitUrl, e);
+  let loadedUrl = kitUrl;
+  const candidates = kitUrlCandidates(kit.raceId || race);
+  // Prefer SSOT primary; if caller forced a URL, try that first then candidates
+  const tryUrls = [kitUrl, ...candidates.filter((u) => u !== kitUrl)];
+  let lastErr = null;
+  for (const url of tryUrls) {
+    try {
+      assertAllowedKitUrl(url);
+      template = await loadTemplate(url);
+      loadedUrl = url;
+      if (!isToonRtsKitUrl(url)) {
+        console.warn("[grudge6Loader] loaded FALLBACK kit (not Toon RTS ★)", url);
+      }
+      break;
+    } catch (e) {
+      lastErr = e;
+      console.warn("[grudge6Loader] kit try failed", url, e?.message || e);
+    }
+  }
+  if (!template) {
+    console.error("[grudge6Loader] CDN kit FAIL — capsule is NOT production hero", kitUrl, lastErr);
     const cap = makeCapsuleStandIn(classDef, kit);
-    cap.source = { ...source, degraded: true, error: String(e?.message || e) };
+    cap.source = { ...source, degraded: true, error: String(lastErr?.message || lastErr) };
     return cap;
   }
+  source.kitUrl = loadedUrl;
+  source.playMesh = isToonRtsKitUrl(loadedUrl) ? "toon-rts" : "legacy-races";
 
   const model = SkeletonUtils.clone(template);
   // Force skeleton bind update after clone
@@ -313,7 +313,9 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   const atlas = await loadAtlas(kit.atlasUrl);
   if (atlas) {
     const painted = applyBodyAtlas(model, atlas);
-    console.info("[grudge6Loader] atlas applied", kit.atlasUrl.split("/").pop(), "mats", painted);
+    console.info("[grudge6Loader] Toon RTS atlas", kit.atlasUrl.split("/").pop(), "mats", painted);
+  } else {
+    console.warn("[grudge6Loader] atlas missing — kit may look untextured", kit.atlasUrl);
   }
 
   model.traverse((o) => {
@@ -396,6 +398,12 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     clipsLoaded: Object.keys(clips).filter((k) => clips[k] && !k.startsWith("_")),
     director: !!director,
     degraded: false,
+    pipeline: isToonRtsKitUrl(loadedUrl) ? "toon_rts_glb" : "legacy_races_glb",
+    loader: "toonRtsGltfLoader",
+    kitUrl: loadedUrl,
+    isToonRtsKit: isToonRtsKitUrl(loadedUrl),
+    playMesh: isToonRtsKitUrl(loadedUrl) ? "toon-rts" : "legacy-races",
+    artForward: !!model.userData?.artForwardSet || !!diag.artForward,
     ssotVersion: GRUDGE6_SSOT_VERSION,
     humanHeightM: HUMAN_HEIGHT_M,
     cdn: CDN,
