@@ -46,6 +46,8 @@ import { reGroundAfterAnimSample } from "./characterDeploy.js";
 import { LootField } from "./lootField.js";
 import { refreshOpenTab } from "./mainPanel.js";
 import { logDrcContract, DRC_MULTIVERSE } from "./drcContract.js";
+import { DrcCombatController, DRC_COMBAT_LEGEND } from "./drcCombat.js";
+import { refreshDrcTightHud } from "./drcTightHud.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -653,6 +655,40 @@ export async function attachWarlordsWorld(ctx) {
   // DRC tight HUD owns visual slots; feed skill CDs + cast
   setTightHudSkillBar(skillBar, classDef);
 
+  // ── DRC fleet combat: C parry · X dodge · E block · Alt dash · double jump ──
+  const tmpFwd = new THREE.Vector3();
+  const combat = new DrcCombatController({
+    getCapsule: () => localPlayer._player?.getPlayerCapsule?.() || null,
+    getCtrl: () => localPlayer._player,
+    getDirector: () => g6?.director,
+    getForward: () => {
+      const c = ctx.camera;
+      if (c) {
+        c.getWorldDirection(tmpFwd);
+        tmpFwd.y = 0;
+        if (tmpFwd.lengthSq() > 1e-6) return tmpFwd.normalize();
+      }
+      tmpFwd.set(Math.sin(bodyYaw), 0, Math.cos(bodyYaw));
+      return tmpFwd;
+    },
+    groundAt,
+    isWater: (x, z) => !!island.nav?.isWaterWorld?.(x, z),
+    flash,
+    vfx,
+    onCombatEvent: (ev) => {
+      try {
+        ctx.onCombatEvent?.(ev);
+      } catch {
+        /* */
+      }
+    },
+  });
+  combat.bind();
+  window.__mvCombat = combat;
+  window.__mvMaxStamina = combat.maxStamina;
+  window.__mvStamina = combat.stamina;
+  flash?.(DRC_COMBAT_LEGEND, 2.2);
+
   // Soft-lock / focus input — free mouse only (no pointer-lock cursor loss)
   const canvas = ctx.renderer?.domElement || document.querySelector("canvas");
   let unbindAim = () => {};
@@ -706,8 +742,8 @@ export async function attachWarlordsWorld(ctx) {
     }
   }
   flash?.(
-    `Vendors ready · walk near booth · E to trade`,
-    1.2,
+    `Vendors ready · near booth E trades · elsewhere E = block`,
+    1.4,
   );
 
   document.addEventListener("keydown", (e) => {
@@ -719,11 +755,12 @@ export async function attachWarlordsWorld(ctx) {
     const cam = ctx.camera;
     if (!cam || !capsule) return;
 
-    // 1) Vendor booth (very near)
+    // 1) Vendor booth (very near) — trade; else combat block via DrcCombat
     for (const v of island.vendorPads) {
       if (!v._mesh) continue;
       const d = capsule.position.distanceTo(v._mesh.position);
       if (d <= (v._interactR || 2.8)) {
+        window.__mvNearVendor = true;
         openVendorShop(v.id === "armor" ? "armor" : "weapon");
         flash?.(`${v.label} · shop open`, 0.6);
         return;
@@ -784,6 +821,7 @@ export async function attachWarlordsWorld(ctx) {
     harvest,
     bosses,
     skillBar,
+    combat,
     g6,
     loot,
     vfx,
@@ -793,6 +831,10 @@ export async function attachWarlordsWorld(ctx) {
     getClassState,
     unbindAim,
     rebindCollider: () => rebindIslandStaticCollider(localPlayer, island.root),
+    /** Boss / PvP damage through defense pipeline */
+    resolveDamage(baseDmg, meta) {
+      return combat.resolveIncomingHit(baseDmg, meta || {});
+    },
     update(dt) {
       harvest.update();
       vfx.update(dt);
@@ -802,6 +844,30 @@ export async function attachWarlordsWorld(ctx) {
       const pos = capsule?.position;
       const ctrl = localPlayer?._player;
       if (!pos) return;
+
+      // Near vendor flag for E = trade vs block
+      let nearV = false;
+      for (const v of island.vendorPads || []) {
+        if (!v._mesh) continue;
+        if (pos.distanceTo(v._mesh.position) <= (v._interactR || 2.8)) {
+          nearV = true;
+          break;
+        }
+      }
+      window.__mvNearVendor = nearV;
+
+      // DRC combat tick (dodge travel, stam, water-aware dash)
+      combat.update(dt, { nav: island.nav, waterPhysics: island.waterPhysics });
+      if (!this._stamAcc) this._stamAcc = 0;
+      this._stamAcc += dt;
+      if (this._stamAcc > 0.15) {
+        this._stamAcc = 0;
+        try {
+          refreshDrcTightHud({ light: true });
+        } catch {
+          /* */
+        }
+      }
 
       // Feet IK / snap — same height field as nav (SI raycast)
       let groundY = groundAt(pos.x, pos.z) ?? 0;
@@ -957,10 +1023,25 @@ export async function attachWarlordsWorld(ctx) {
         }
       }
 
-      // Boss AI: heightfield A* pathfinding when nav exists
+      // Boss AI: heightfield A* pathfinding + Elden telegraphs
       const attacks = bosses.update(dt, pos, island.nav || null);
       for (const a of attacks) {
-        ctx.onBossHitLocal?.(a.damage, a.name);
+        const res = combat.resolveIncomingHit(a.damage || 0, {
+          boss: a.name,
+          attack: a.attack || a.kind,
+        });
+        if (res.dmg > 0) {
+          ctx.onBossHitLocal?.(res.dmg, a.name);
+        } else if (res.kind === "perfect_parry" || res.kind === "parry") {
+          window.__mvBossTelegraph = {
+            boss: a.name,
+            attack: res.kind === "perfect_parry" ? "PERFECT PARRY" : "Parried",
+            t: performance.now(),
+          };
+          refreshCombatFrame();
+        } else if (res.kind === "iframe" || res.kind === "block") {
+          refreshCombatFrame();
+        }
       }
       // Lite ragdoll tick after death flop
       if (g6?.root?.userData?.ragdollLite) {
@@ -968,10 +1049,9 @@ export async function attachWarlordsWorld(ctx) {
       }
       // Refresh HUD when boss telegraph changes
       if (window.__mvBossTelegraph || window.__mvBossTarget) {
-        /* combat frame reads globals — light refresh throttle */
         if (!this._hudAcc) this._hudAcc = 0;
         this._hudAcc += dt;
-        if (this._hudAcc > 0.2) {
+        if (this._hudAcc > 0.15) {
           this._hudAcc = 0;
           refreshCombatFrame();
         }

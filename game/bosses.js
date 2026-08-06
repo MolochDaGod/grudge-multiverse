@@ -865,9 +865,9 @@ export class BossFight {
   /**
    * @param {number} dt
    * @param {THREE.Vector3} playerPos
-   * @param {{ findPath?: Function, isWalkableWorld?: Function, sampleY?: Function } | null} [nav]
-   *   Heightfield nav from mapLiteracy.buildNavGrid — A* pathfinding on land.
-   * @returns {{ id: string, damage: number, name: string }[]}
+   * @param {{ findPath?: Function, isWalkableWorld?: Function, sampleY?: Function, isWaterWorld?: Function } | null} [nav]
+   *   Heightfield nav from mapLiteracy — A* pathfinding, water-aware chase.
+   * @returns {{ id: string, damage: number, name: string, attack?: string }[]}
    */
   update(dt, playerPos, nav = null) {
     const attacks = [];
@@ -938,7 +938,19 @@ export class BossFight {
               }
               if (dir.lengthSq() < 1e-6) dir.copy(toP);
               dir.normalize();
-              b.root.position.addScaledVector(dir, b.speed * dt);
+              const nx = b.root.position.x + dir.x * b.speed * dt;
+              const nz = b.root.position.z + dir.z * b.speed * dt;
+              // Water awareness — do not chase into sea (nav water mask)
+              const wet =
+                nav?.isWaterWorld?.(nx, nz) ||
+                (nav?.isWalkableWorld && !nav.isWalkableWorld(nx, nz) && dist > b.attackRange);
+              if (!wet) {
+                b.root.position.x = nx;
+                b.root.position.z = nz;
+              } else {
+                // Re-path next tick
+                b.path = null;
+              }
               // Snap Y to land when nav provides sample
               if (nav?.sampleY) {
                 try {

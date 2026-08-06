@@ -124,7 +124,8 @@ function localIconFor(hint) {
   if (/bow|arrow|ranger|yew/.test(h)) return desktopIconUrl("weapons/Bow_01.png");
   if (/staff|mage|magic|arcane/.test(h)) return desktopIconUrl("weapons/staff_1.png");
   if (/axe|worge|cleave/.test(h)) return desktopIconUrl("weapons/Axe_01.png");
-  if (/shield|block|guard/.test(h)) return desktopIconUrl("weapons/shield_01.png");
+  if (/shield|block|guard|parry/.test(h)) return desktopIconUrl("weapons/shield_01.png");
+  if (/dodge|dash|roll|slide/.test(h)) return desktopIconUrl("entities/barb warrior.png");
   if (/wood|tree|harvest/.test(h)) return desktopIconUrl("resources/Loot_01.png");
   if (/stone|ore|rock|scrap/.test(h)) return desktopIconUrl("resources/Loot_02.png");
   if (/armor|mail|leather|robe|chest/.test(h)) return desktopIconUrl("armor/Chest_01.png");

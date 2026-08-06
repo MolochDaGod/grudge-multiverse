@@ -12,19 +12,28 @@
  * Live Open reference: https://open.grudge-studio.com/danger
  */
 export const DRC_MULTIVERSE = {
-  version: "2026-08-06",
+  version: "2026-08-06-combat",
   openDanger: "https://open.grudge-studio.com/danger",
   animsBaked: "https://open.grudge-studio.com/anims/baked",
-  kits: "https://assets.grudge-studio.com/models/grudge6/races",
+  kits: "https://assets.grudge-studio.com/asset-packs/toon-rts-characters/glb/characters",
   atlases: "https://assets.grudge-studio.com/textures/grudge6",
   map: "https://assets.grudge-studio.com/models/maps/bermuda.glb",
   humanHeightM: 1.8,
   units: "si_metres",
   freeMouse: true,
   alwaysCrosshair: true,
-  /** Production hero is grudge6 CDN kit — never Mixamo person*.glb as visual */
-  visual: "grudge6_cdn_kit",
-  controllerCapsule: "mixamo_scale_only",
+  /** Toon RTS GLB play mesh — never Mixamo person*.glb as visual */
+  visual: "toon_rts_glb",
+  controllerCapsule: "proxy_si_only",
+  /** Fleet combat keys (epicfight CANONICAL_COMBAT) */
+  combat: {
+    parry: "KeyC",
+    dodge: "KeyX",
+    block: "KeyE",
+    slide: "AltLeft",
+    jump: "Space",
+    skills: "KeyF Digit1-5",
+  },
 };
 
 export function logDrcContract() {
