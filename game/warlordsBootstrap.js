@@ -31,6 +31,8 @@ import {
   aim,
   bindCombatAim,
   resolveAimPoint,
+  getPreferredHostile,
+  refreshSelectedTargetPoint,
   resolveBodyYaw,
   syncFocusCrosshair,
   updateWorldReticle,
@@ -617,6 +619,7 @@ export async function attachWarlordsWorld(ctx) {
       camFwd.normalize();
 
       const feet = new THREE.Vector3(pos.x, groundAt(pos.x, pos.z) ?? pos.y - 1, pos.z);
+      refreshSelectedTargetPoint();
       const aimPt = resolveAimPoint(feet, camFwd);
       const dir = aimPt.clone().sub(feet);
       dir.y = 0;
@@ -638,68 +641,83 @@ export async function attachWarlordsWorld(ctx) {
         showCastBar(skill.name || "Skill", Math.min(900, (skill.cd || 1) * 90));
       }
 
-      // Range-gated damage scaled by equipped weapon
+      // Range-gated damage — soft-lock preferred target first (RPG soft-lock)
       const baseDmg = equippedWeaponDmg(14);
-      const range =
-        skill.kind?.includes("ranged") || skill.kind === "magic"
-          ? 22
-          : skill.kind?.includes("aoe")
-            ? 4.5
-            : 2.8;
+      const isRanged = skill.kind?.includes("ranged") || skill.kind === "magic";
+      const isAoe = skill.kind?.includes("aoe");
+      const range = isRanged ? 22 : isAoe ? 4.5 : 2.8;
       const ikind = impactKindForSkill(skill);
-      for (const b of bosses.bosses) {
-        if (b.dead) continue;
-        const d = b.root.position.distanceTo(pos);
-        if (d < range) {
-          const dmg = Math.floor(baseDmg * (skill.dmgMul || 1));
-          const hitPos = b.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
-          impacts.play(ikind === "hit" && dmg > 30 ? "crit" : ikind, hitPos, {
-            radius: skill.kind?.includes("aoe") ? 2.8 : 1.4,
-            yLift: 0.2,
+      const pref = getPreferredHostile();
+      const prefMesh = pref?.mesh || null;
+      const prefId = pref?.id || null;
+
+      const applyBossHit = (b) => {
+        const dmg = Math.floor(baseDmg * (skill.dmgMul || 1));
+        const hitPos = b.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+        impacts.play(ikind === "hit" && dmg > 30 ? "crit" : ikind, hitPos, {
+          radius: isAoe ? 2.8 : 1.4,
+          yLift: 0.2,
+        });
+        try {
+          const knock = hitPos.clone().sub(feet).setY(0.2).normalize().multiplyScalar(2.2);
+          startRagdollLite(b.root, {
+            impulse: knock,
+            power: Math.min(1.4, 0.4 + dmg / 80),
+            death: false,
+            groundAt,
           });
-          // Hit-react ragdoll (non-death)
+        } catch {
+          /* */
+        }
+        const res = bosses.hit(b.id, dmg, playerId);
+        set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
+        window.__mvBossTarget = {
+          name: b.name,
+          hp: b.hp,
+          maxHp: b.maxHp,
+        };
+        if (res.killed) {
+          const reward = rollKillReward(true);
+          flash?.(`${b.name} defeated! L${reward.level}`, 1.2);
+          impacts.play("explode", hitPos, { radius: 2.6, color: 0xff8844 });
           try {
-            const knock = hitPos.clone().sub(feet).setY(0.2).normalize().multiplyScalar(2.2);
             startRagdollLite(b.root, {
-              impulse: knock,
-              power: Math.min(1.4, 0.4 + dmg / 80),
-              death: false,
+              impulse: hitPos.clone().sub(feet).setY(0.8).normalize().multiplyScalar(4),
+              power: 1.5,
+              death: true,
               groundAt,
             });
           } catch {
             /* */
           }
-          const res = bosses.hit(b.id, dmg, playerId);
-          set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
-          window.__mvBossTarget = {
-            name: b.name,
-            hp: b.hp,
-            maxHp: b.maxHp,
-          };
-          if (res.killed) {
-            const reward = rollKillReward(true);
-            flash?.(`${b.name} defeated! L${reward.level}`, 1.2);
-            impacts.play("explode", hitPos, { radius: 2.6, color: 0xff8844 });
-            try {
-              startRagdollLite(b.root, {
-                impulse: hitPos.clone().sub(feet).setY(0.8).normalize().multiplyScalar(4),
-                power: 1.5,
-                death: true,
-                groundAt,
-              });
-            } catch {
-              /* */
-            }
-            if (reward.dropped?.length) {
-              loot.spawnMany(b.root.position.clone(), reward.dropped);
-            }
-            window.__mvBossTarget = null;
-            refreshCombatFrame();
-          } else {
-            flash?.(`${b.name} HP ${res.hp}`, 0.4);
-            refreshCombatFrame();
+          if (reward.dropped?.length) {
+            loot.spawnMany(b.root.position.clone(), reward.dropped);
           }
+          window.__mvBossTarget = null;
+          if (aim.selectedTarget?.id === b.id) aim.selectedTarget = null;
+          refreshCombatFrame();
+        } else {
+          flash?.(`${b.name} HP ${res.hp}`, 0.4);
+          refreshCombatFrame();
         }
+      };
+
+      for (const b of bosses.bosses) {
+        if (b.dead || !b.root) continue;
+        const d = b.root.position.distanceTo(pos);
+        const isPref =
+          (prefId && (b.id === prefId || b.root.userData?.id === prefId)) ||
+          (prefMesh && (b.root === prefMesh || b.root.uuid === prefMesh.uuid || prefMesh.parent === b.root));
+        // Soft-lock: slight range grace; melee needs forward cone unless preferred
+        const maxR = isPref ? range * 1.35 : range;
+        if (d > maxR) continue;
+        if (!isAoe && !isRanged && !isPref) {
+          const toB = b.root.position.clone().sub(pos);
+          toB.y = 0;
+          const len = toB.length();
+          if (len > 1e-4 && toB.normalize().dot(dir) < 0.2) continue; // behind player
+        }
+        applyBossHit(b);
       }
     },
   });
@@ -868,6 +886,66 @@ export async function attachWarlordsWorld(ctx) {
   const tmpVel = new THREE.Vector3();
   const _euler = new THREE.Euler();
 
+  /** Next land spawn for death respawn — never hard-coded burnout SPAWN_POINTS. */
+  const pickRespawn = () => {
+    const pts = island.spawns || [];
+    let p = null;
+    if (pts.length) {
+      const idx = Math.floor(Math.random() * pts.length);
+      p = pts[idx].clone();
+    } else {
+      const land = island.nav?.pickLandSpawns?.(1, island.hubRadius)?.[0];
+      if (land) p = new THREE.Vector3(land.x, land.y, land.z);
+    }
+    if (!p) {
+      const sn = island.nav?.snap?.(0, 0);
+      p = sn
+        ? new THREE.Vector3(sn.x, sn.y + 1.15, sn.z)
+        : new THREE.Vector3(0, 2, 0);
+    }
+    if (island.nav?.snap) {
+      const sn = island.nav.snap(p.x, p.z);
+      p.set(sn.x, sn.y + 1.15, sn.z);
+    } else {
+      const gy = groundAt(p.x, p.z);
+      p.y = (Number.isFinite(gy) ? gy : 0) + 1.15;
+    }
+    island.waterPhysics?.constrainPosition?.(p, groundAt);
+    return p;
+  };
+
+  /** Clear death ragdoll, combat state, re-enable director after respawn. */
+  const onRespawn = () => {
+    try {
+      const root = g6?.model || g6?.root;
+      if (root?.userData?.ragdollLite) restoreRagdollLite(root);
+      if (g6?.root && g6.root !== root) delete g6.root.userData.ragdollLite;
+      if (g6?.director) g6.director.enabled = true;
+      if (combat) {
+        combat.stamina = combat.maxStamina;
+        combat.jumpsUsed = 0;
+        combat.state = "idle";
+        combat.blockHeld = false;
+        combat.dashRemain = 0;
+        combat.iframesUntil = 0;
+        combat.parryUntil = 0;
+      }
+      const ctrl = localPlayer?._player;
+      if (ctrl) {
+        ctrl._jumpsUsed = 0;
+        ctrl.playerVelocity?.set?.(0, 0, 0);
+      }
+      window.__mvStamina = combat?.stamina ?? 100;
+      syncHp(window.__mvHp ?? 100, window.__mvMaxHp ?? 100);
+      refreshCombatFrame();
+    } catch (e) {
+      console.warn("[warlords] onRespawn restore", e);
+    }
+  };
+
+  window.__mvPickRespawn = pickRespawn;
+  window.__mvOnRespawn = onRespawn;
+
   return {
     island,
     harvest,
@@ -882,6 +960,8 @@ export async function attachWarlordsWorld(ctx) {
     groundAt,
     getClassState,
     unbindAim,
+    pickRespawn,
+    onRespawn,
     rebindCollider: () => rebindIslandStaticCollider(localPlayer, island.root),
     /** Boss / PvP damage through defense pipeline */
     resolveDamage(baseDmg, meta) {
@@ -892,6 +972,8 @@ export async function attachWarlordsWorld(ctx) {
       vfx.update(dt);
       if (capsule?.position) loot.update(dt, capsule.position);
       syncFocusCrosshair(crosshairEl);
+      // Soft-lock track moving bosses (chest point stays live)
+      if (aim.selectedTarget?.mesh) refreshSelectedTargetPoint();
 
       const pos = capsule?.position;
       const ctrl = localPlayer?._player;

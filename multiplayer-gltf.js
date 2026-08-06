@@ -347,34 +347,91 @@ function triggerDeath() {
     // Warlords grudge6 classes always allow death; legacy noGun freefly chars skip
     if (PLAYER_MODEL.noGun && !USE_WARLORDS_ISLAND) return;
     isDead = true;
+    myHp = 0;
+    window.__mvHp = 0;
     localDeaths++;
     updateKillBar();
+    updateMyHPUI();
     const killerName = remotePlayers.get(lastAttackerOnMe)?.name ?? "?";
     addKillFeedEntry(killerName, myName);
     document.exitPointerLock?.();
     localPlayer.offAllEvent();
-    if (weapon._isReloading) weapon._cancelReload();
-    weapon.switchMode("normal");
-    localPlayer.playAnimation("death", { force: true, fade: 0.2 });
+    if (weapon?._isReloading) weapon._cancelReload();
+    weapon?.switchMode?.("normal");
+    // grudge6: lite ragdoll; legacy Mixamo death clip
+    try {
+        warlords?.syncPlayerHp?.(0, 100);
+        if (!warlords?.g6) {
+            localPlayer.playAnimation("death", { force: true, fade: 0.2 });
+        }
+    } catch {
+        localPlayer.playAnimation?.("death", { force: true, fade: 0.2 });
+    }
+    const overlay = document.getElementById("death-overlay");
+    if (overlay) overlay.style.display = "flex";
     sendState();
 }
 
-// æœ¬åœ°çŽ©å®¶å¤æ´»ï¼šé‡ç½®è¡€é‡ã€æ¢å¤è¾“å…¥ã€ä¼ é€åˆ°ä¸‹ä¸€ä¸ªå‡ºç”Ÿç‚¹ã€æŽ¨é€å¤æ´»çŠ¶æ€åˆ° Firebase
+// Local respawn: land-nav spawns (Warlords) — never hard-coded burnout SPAWN_POINTS on island
 function triggerRespawn() {
     isDead = false;
     myHp = 100;
+    window.__mvHp = 100;
     updateMyHPUI();
     document.getElementById("death-overlay").style.display = "none";
 
-    // æŒ‰é¡ºåºé€‰ä¸‹ä¸€ä¸ªå‡ºç”Ÿç‚¹å¹¶ä¼ é€
-    spawnIndex = (spawnIndex + 1) % SPAWN_POINTS.length;
-    const respawnPos = SPAWN_POINTS[spawnIndex];
+    let respawnPos = null;
+    // Prefer Warlords land-nav picks (SI metres on Bermuda)
+    try {
+        if (warlords?.pickRespawn) {
+            respawnPos = warlords.pickRespawn();
+        } else if (typeof window.__mvPickRespawn === "function") {
+            respawnPos = window.__mvPickRespawn();
+        } else if (window.__mvIsland?.spawns?.length) {
+            const pts = window.__mvIsland.spawns;
+            spawnIndex = (spawnIndex + 1) % pts.length;
+            const s = pts[spawnIndex];
+            respawnPos = s.clone ? s.clone() : new THREE.Vector3(s.x, s.y, s.z);
+        }
+    } catch (e) {
+        console.warn("[respawn] land spawn failed", e);
+    }
+    // Legacy burnout map only
+    if (!respawnPos) {
+        spawnIndex = (spawnIndex + 1) % SPAWN_POINTS.length;
+        respawnPos = SPAWN_POINTS[spawnIndex].clone();
+    }
+
     const capsule = localPlayer._player?.getPlayerCapsule();
-    if (capsule) capsule.position.copy(respawnPos);
+    if (capsule) {
+        capsule.position.copy(respawnPos);
+        try {
+            localPlayer._player.playerVelocity?.set(0, 0, 0);
+        } catch { /* */ }
+    }
+
+    // Restore grudge6 ragdoll + combat stamina (director re-enable)
+    try {
+        warlords?.onRespawn?.();
+        window.__mvOnRespawn?.();
+        warlords?.syncPlayerHp?.(100, 100);
+    } catch (e) {
+        console.warn("[respawn] warlords restore", e);
+    }
 
     weapon?.resetAmmo();
     localPlayer.onAllEvent();
-    localPlayer.playPlayerAnimationByName(PLAYER_MODEL.idleAnim, 0.3);
+    // grudge6 uses AnimationDirector; Mixamo idle only when no warlords kit
+    try {
+        if (warlords?.g6?.director) {
+            warlords.g6.director.setGaitTarget?.("idle");
+            warlords.g6.director.enabled = true;
+        } else {
+            localPlayer.playPlayerAnimationByName(PLAYER_MODEL.idleAnim, 0.3);
+        }
+    } catch {
+        localPlayer.playPlayerAnimationByName?.(PLAYER_MODEL.idleAnim, 0.3);
+    }
     sendState();
 }
 

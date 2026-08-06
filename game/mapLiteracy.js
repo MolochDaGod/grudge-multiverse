@@ -460,6 +460,8 @@ export function collectColliderMeshes(root, wantLayers, opts = {}) {
   const walkable = [];
   /** @type {THREE.Mesh[]} */
   const solid = [];
+  /** @type {THREE.Mesh | null} */
+  let safetyMesh = null;
   root.traverse((o) => {
     if (!o.isMesh || !o.visible || !o.geometry) return;
     const layer =
@@ -469,27 +471,39 @@ export function collectColliderMeshes(root, wantLayers, opts = {}) {
     // Skip degenerate
     const pos = o.geometry.attributes?.position;
     if (!pos || pos.count < 3) return;
-    if (layer === COLLIDER_LAYER.WALKABLE || o.name === "island-safety-ground") walkable.push(o);
+    // Safety plane is void-failsafe only — do not compete with real terrain in BVH
+    if (o.name === "island-safety-ground") {
+      safetyMesh = o;
+      return;
+    }
+    if (layer === COLLIDER_LAYER.WALKABLE) walkable.push(o);
     else solid.push(o);
   });
 
-  // Priority: Main_Large_Terrain / ground / roads / safety, then other walkable, then solids
+  // If no real walkable terrain, keep safety so player never voids
+  if (!walkable.length && safetyMesh) {
+    walkable.push(safetyMesh);
+    console.warn("[mapLiteracy] collider: safety-only (no tagged walkable terrain)");
+  }
+
+  // Priority: Main_Large_Terrain / ground / roads first, then other walkable, then solids
   const score = (m) => {
     const n = m.name || "";
-    if (n === "island-safety-ground") return 0;
-    if (/Main_Large_Terrain/i.test(n)) return 1;
-    if (/^ground|ground\.|Floor|CementFactory_ground|MainHighway|UnsurfacedRoad|airport_road/i.test(n)) return 2;
-    if (m.userData?.walkable || m.userData?.colliderLayer === COLLIDER_LAYER.WALKABLE) return 3;
-    if (/house|building|wall|fence|Hangar|Warehouse/i.test(n)) return 4;
-    return 5;
+    if (/Main_Large_Terrain/i.test(n)) return 0;
+    if (/^ground|ground\.|Floor|CementFactory_ground|MainHighway|UnsurfacedRoad|airport_road/i.test(n))
+      return 1;
+    if (m.userData?.walkable || m.userData?.colliderLayer === COLLIDER_LAYER.WALKABLE) return 2;
+    if (/house|building|wall|fence|Hangar|Warehouse/i.test(n)) return 3;
+    if (n === "island-safety-ground") return 9; // last resort only
+    return 4;
   };
   walkable.sort((a, b) => score(a) - score(b));
   solid.sort((a, b) => score(a) - score(b));
 
   const out = walkable.concat(solid);
   if (out.length > maxMeshes) {
-    // Keep all high-priority walkables, fill remainder with solids
-    const keepW = walkable.slice(0, Math.min(walkable.length, Math.floor(maxMeshes * 0.55)));
+    // Prefer terrain walkables, then solids (walls/buildings) — RPG best practice
+    const keepW = walkable.slice(0, Math.min(walkable.length, Math.floor(maxMeshes * 0.6)));
     const keepS = solid.slice(0, maxMeshes - keepW.length);
     console.warn(
       `[mapLiteracy] collider mesh cap ${maxMeshes}: walkable ${keepW.length}/${walkable.length} solid ${keepS.length}/${solid.length}`,

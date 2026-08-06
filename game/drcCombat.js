@@ -274,13 +274,20 @@ export class DrcCombatController {
   tryDoubleJump() {
     const ctrl = this.host.getCtrl?.();
     if (!ctrl || ctrl.isFlying) return false;
+    // Sync with InputSystem ground-jump counter (controller _jumpsUsed)
+    const ctrlUsed = typeof ctrl._jumpsUsed === "number" ? ctrl._jumpsUsed : 0;
+    this.jumpsUsed = Math.max(this.jumpsUsed, ctrlUsed);
     if (ctrl.playerIsOnGround) {
-      this.jumpsUsed = 1; // ground jump counted by InputSystem
+      this.jumpsUsed = Math.max(1, this.jumpsUsed || 1);
+      ctrl._jumpsUsed = this.jumpsUsed;
       return false;
     }
+    // Need first jump already used (ground or fall); allow one air jump
+    if (this.jumpsUsed < 1) this.jumpsUsed = 1;
     if (this.jumpsUsed >= 2) return false;
     if (!this.spend(FLEET_STAMINA_COST.doubleJump)) return false;
     this.jumpsUsed = 2;
+    ctrl._jumpsUsed = 2;
     ctrl.playerVelocity.y = Math.abs(ctrl.jumpHeight) * 0.92;
     ctrl.setOnGround?.(false);
     this.host.getDirector?.()?.requestOneShot?.("skill4");
@@ -332,7 +339,10 @@ export class DrcCombatController {
     const cap = this.host.getCapsule?.();
     const ctrl = this.host.getCtrl?.();
 
-    if (ctrl?.playerIsOnGround) this.jumpsUsed = 0;
+    if (ctrl?.playerIsOnGround) {
+      this.jumpsUsed = 0;
+      ctrl._jumpsUsed = 0;
+    }
 
     // Stamina regen when not dashing
     if (this.state === "idle" || this.state === "block") {

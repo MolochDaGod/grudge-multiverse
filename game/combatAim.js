@@ -109,6 +109,9 @@ export function pickTarget(e, camera, selectables) {
 
 /** Resolve aim point for skills / projectiles. */
 export function resolveAimPoint(playerPos, camFwd) {
+  // Soft-lock preferred: track live mesh chest if still in scene
+  const live = refreshSelectedTargetPoint();
+  if (live) return live.clone();
   if (aim.focusEnabled && aim.selectedTarget?.point) {
     return aim.selectedTarget.point.clone();
   }
@@ -116,6 +119,38 @@ export function resolveAimPoint(playerPos, camFwd) {
     return aim.selectedTarget.point.clone();
   }
   return _tmp.copy(playerPos).addScaledVector(camFwd, 8).setY(playerPos.y + 1.1).clone();
+}
+
+/**
+ * Update selected target world point from live mesh (bosses move).
+ * RPG soft-lock best practice — skills track focus, not a stale click point.
+ * @returns {THREE.Vector3 | null}
+ */
+export function refreshSelectedTargetPoint() {
+  const t = aim.selectedTarget;
+  if (!t?.mesh) return t?.point || null;
+  try {
+    t.mesh.getWorldPosition(_tmp2);
+    _tmp2.y += 1.1;
+    t.point.copy(_tmp2);
+    return t.point;
+  } catch {
+    return t.point || null;
+  }
+}
+
+/**
+ * Preferred hostile for skill damage — soft-lock / focus first.
+ * @returns {TargetRef | null}
+ */
+export function getPreferredHostile() {
+  const t = aim.selectedTarget;
+  if (!t) return null;
+  if (t.kind === "hostile" || t.kind === "boss") {
+    refreshSelectedTargetPoint();
+    return t;
+  }
+  return null;
 }
 
 /**
