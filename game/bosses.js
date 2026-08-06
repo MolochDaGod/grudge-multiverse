@@ -865,9 +865,11 @@ export class BossFight {
   /**
    * @param {number} dt
    * @param {THREE.Vector3} playerPos
+   * @param {{ findPath?: Function, isWalkableWorld?: Function, sampleY?: Function } | null} [nav]
+   *   Heightfield nav from mapLiteracy.buildNavGrid — A* pathfinding on land.
    * @returns {{ id: string, damage: number, name: string }[]}
    */
-  update(dt, playerPos) {
+  update(dt, playerPos, nav = null) {
     const attacks = [];
     if (!playerPos) return attacks;
 
@@ -905,17 +907,58 @@ export class BossFight {
           if (dist < b.aggroRange) {
             if (dist > b.attackRange * 0.92) {
               b.state = "chase";
-              const dir = toP.normalize();
+              // Pathfinding on land navmesh when available; else straight line
+              let dir = toP.clone();
+              if (nav?.findPath && dist > 4) {
+                b.pathT = (b.pathT || 0) + dt;
+                if (!b.path || b.pathT > 0.45) {
+                  b.pathT = 0;
+                  try {
+                    b.path = nav.findPath(
+                      b.root.position.x,
+                      b.root.position.z,
+                      playerPos.x,
+                      playerPos.z,
+                    );
+                    b.pathI = 1;
+                  } catch {
+                    b.path = null;
+                  }
+                }
+                if (b.path && b.path.length > 1) {
+                  const i = Math.min(b.pathI || 1, b.path.length - 1);
+                  const wp = b.path[i];
+                  const dx = wp.x - b.root.position.x;
+                  const dz = wp.z - b.root.position.z;
+                  if (dx * dx + dz * dz < 2.5 * 2.5 && i < b.path.length - 1) {
+                    b.pathI = i + 1;
+                  }
+                  dir.set(dx, 0, dz);
+                }
+              }
+              if (dir.lengthSq() < 1e-6) dir.copy(toP);
+              dir.normalize();
               b.root.position.addScaledVector(dir, b.speed * dt);
+              // Snap Y to land when nav provides sample
+              if (nav?.sampleY) {
+                try {
+                  const gy = nav.sampleY(b.root.position.x, b.root.position.z);
+                  if (Number.isFinite(gy)) b.root.position.y = gy + 0.05 + (b.hoverY || 0);
+                } catch {
+                  /* ignore */
+                }
+              }
               b.root.lookAt(playerPos.x, b.root.position.y, playerPos.z);
               this._play(b, "walk", 0.2);
             } else {
+              b.path = null;
               // Enter deterministic attack script
               this._beginAttack(b, playerPos);
               this._play(b, b.currentAtk?.clip === "heavy" ? "heavy" : "attack", 0.1);
             }
           } else {
             b.state = "idle";
+            b.path = null;
             this._play(b, "idle", 0.25);
           }
           break;
