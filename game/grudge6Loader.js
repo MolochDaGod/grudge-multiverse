@@ -168,42 +168,56 @@ export function weaponKindFromItem(item) {
 function normId(name) {
   return String(name || "")
     .toLowerCase()
+    .replace(/^wk_|^brb_|^orc_|^elf_|^ud_|^dwf_/, "")
+    .replace(/units_/g, "")
+    .replace(/xtra_/g, "")
+    .replace(/weapon_/g, "weapon")
+    .replace(/shield_/g, "shield")
+    .replace(/shoulderpads_/g, "shoulders")
     .replace(/[^a-z0-9]/g, "");
 }
 
-/** Catalog hide → show exact gear_presets mesh_ids only. */
-export function applyExactMeshIds(root, visibleMeshes = []) {
-  const exact = new Set(visibleMeshes.filter(Boolean));
-  const fuzzy = new Set([...exact].map(normId));
+function meshMatchesId(meshName, meshId) {
+  if (!meshName || !meshId) return false;
+  if (meshName === meshId) return true;
+  if (meshName.endsWith(meshId) || meshId.endsWith(meshName)) return true;
+  const a = normId(meshName);
+  const b = normId(meshId);
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
 
+/** Catalog hide → show exact gear_presets mesh_ids only (fuzzy race/case tolerant). */
+export function applyExactMeshIds(root, visibleMeshes = []) {
+  const wanted = (visibleMeshes || []).filter(Boolean).map(String);
+
+  /** @type {THREE.Object3D[]} */
+  const meshes = [];
   root.traverse((o) => {
     if (!o.isMesh && !o.isSkinnedMesh) return;
     o.visible = false;
+    meshes.push(o);
   });
 
   const shown = new Set();
-  root.traverse((o) => {
-    if (!o.isMesh && !o.isSkinnedMesh) return;
-    if (exact.has(o.name)) {
-      o.visible = true;
-      shown.add(o.name);
-      return;
+  for (const id of wanted) {
+    const hit = meshes.find((m) => meshMatchesId(m.name, id));
+    if (hit) {
+      hit.visible = true;
+      shown.add(hit.name);
     }
-    const n = normId(o.name);
-    if (fuzzy.has(n)) {
-      o.visible = true;
-      shown.add(o.name);
-    }
-  });
+  }
 
   if (shown.size === 0) {
-    console.warn("[grudge6Loader] no mesh_ids matched; body fallback", visibleMeshes);
-    root.traverse((o) => {
-      if (!o.isMesh && !o.isSkinnedMesh) return;
-      if (/body|arms|legs|head|units_/i.test(o.name) && !/weapon|shield|bag|wood|quiver/i.test(o.name)) {
-        o.visible = true;
-      }
-    });
+    console.warn("[grudge6Loader] no mesh_ids matched; body A fallback", visibleMeshes);
+    // Only ONE body/arms/legs/head A — never show all variants (exploded kit)
+    for (const o of meshes) {
+      const n = o.name || "";
+      if (/weapon|shield|bag|wood|quiver/i.test(n)) continue;
+      if (/Body_A|body_A|Units_Body_A/i.test(n)) o.visible = true;
+      else if (/Arms_A|arms_A|Units_Arms_A/i.test(n)) o.visible = true;
+      else if (/Legs_A|legs_A|Units_Legs_A/i.test(n)) o.visible = true;
+      else if (/head_A|Head_A|Units_head_A/i.test(n)) o.visible = true;
+    }
   }
   return [...shown];
 }

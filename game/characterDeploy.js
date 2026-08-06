@@ -17,11 +17,65 @@ export const HEIGHT_BAND_MIN = 1.55;
 export const HEIGHT_BAND_MAX = 2.15;
 
 /**
+ * Bone-driven structural AABB for modular grudge6 kits.
+ * Unskinned SkinnedMesh geo is near origin — setFromObject under-measures
+ * and produces wrong SI fit (exploded / tiny heroes). Prefer bones.
+ */
+export function measureBoneStructuralBBox(root) {
+  if (!root) return null;
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    if (o.isSkinnedMesh && o.skeleton) o.skeleton.update();
+  });
+  const groups = [
+    ["Bip001 Head", "Bip001_Head", "Head"],
+    ["Bip001 HeadNub", "Bip001_HeadNub"],
+    ["Bip001 Pelvis", "Bip001_Pelvis", "Pelvis"],
+    ["Bip001 L Foot", "Bip001_L_Foot"],
+    ["Bip001 R Foot", "Bip001_R_Foot"],
+    ["Bip001 L Toe0", "Bip001_L_Toe0"],
+    ["Bip001 R Toe0", "Bip001_R_Toe0"],
+    ["Bip001 L Hand", "Bip001_L_Hand"],
+    ["Bip001 R Hand", "Bip001_R_Hand"],
+  ];
+  const box = new THREE.Box3();
+  let n = 0;
+  const p = new THREE.Vector3();
+  for (const names of groups) {
+    let bone = null;
+    for (const name of names) {
+      bone = root.getObjectByName(name);
+      if (bone) break;
+    }
+    if (!bone) continue;
+    bone.getWorldPosition(p);
+    if (!Number.isFinite(p.x + p.y + p.z)) continue;
+    if (n === 0) {
+      box.min.copy(p);
+      box.max.copy(p);
+    } else box.expandByPoint(p);
+    n++;
+  }
+  if (n < 2) return null;
+  const h = Math.max(box.max.y - box.min.y, 1e-4);
+  const pad = Math.max(h * 0.1, 0.05);
+  box.min.y -= pad * 0.55;
+  box.max.y += pad * 0.45;
+  return box;
+}
+
+/**
  * Skinned body AABB for height/feet.
  * @param {boolean} [visibleOnly=false] — NEVER use true for deploy scale (mesh_ids
  * hide most meshes first and would measure a sword as "height").
  */
 export function bodyBox(root, visibleOnly = false) {
+  // Prefer bone measure (correct for modular Toon RTS skinned kits)
+  if (!visibleOnly) {
+    const boneBox = measureBoneStructuralBBox(root);
+    if (boneBox) return boneBox;
+  }
+
   const box = new THREE.Box3();
   let any = false;
   root.updateMatrixWorld(true);
