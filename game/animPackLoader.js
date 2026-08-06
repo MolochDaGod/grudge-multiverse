@@ -11,6 +11,7 @@ import {
   isBannedLocomotionClip,
   filterLocoCandidates,
   CANONICAL_LOCO,
+  resolveAnimPackId,
 } from "./drcAnimSsot.js";
 
 /** Primary hosts for Bip001 baked clips — DRC Open only, then R2. No threejs-rapier. */
@@ -131,12 +132,17 @@ async function firstClip(paths) {
  * @returns {Promise<Record<string, THREE.AnimationClip|null>>}
  */
 export async function loadAnimPack(packId) {
-  const table = PACK_CLIPS[packId] || PACK_CLIPS.sword_shield;
+  const resolved = resolveAnimPackId(packId);
+  const table = PACK_CLIPS[resolved] || PACK_CLIPS[packId] || PACK_CLIPS.sword_shield;
+  if (!table || typeof table !== "object") {
+    console.warn("[animPack] missing table for", packId, "→", resolved, "using sword_shield");
+  }
+  const packTable = table && table.idle ? table : PACK_CLIPS.sword_shield;
   const out = {};
   const roles = ["idle", "walk", "run", "attack", "skill1", "skill2", "skill3", "skill4", "skill5"];
   await Promise.all(
     roles.map(async (role) => {
-      let paths = table[role];
+      let paths = packTable[role];
       if (!paths) {
         out[role] = null;
         return;
@@ -162,5 +168,10 @@ export async function loadAnimPack(packId) {
   if (!out.idle && out.walk) out.idle = out.walk;
   if (!out.walk && out.run) out.walk = out.run;
   if (!out.run && out.walk) out.run = out.walk;
+  out._packId = resolved;
+  out._sourceHost = OPEN_ANIMS;
+  console.info(
+    `[animPack] ${packId}→${resolved} idle=${!!out.idle} walk=${!!out.walk} run=${!!out.run} host=${OPEN_ANIMS}`,
+  );
   return out;
 }

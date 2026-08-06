@@ -10,9 +10,11 @@ import {
   kitUrl,
   atlasUrl,
   assertAllowedKitUrl,
+  resolveCharacterSource,
 } from "./grudge6SSOT.js";
+import { resolveAnimPackId } from "./drcAnimSsot.js";
 
-export { CDN };
+export { CDN, resolveCharacterSource };
 
 /** Fleet race list for UI — kitUrl/atlasUrl from stone SSOT (verified textures/ paths). */
 export const RACES = raceList().map((r) => ({
@@ -80,13 +82,9 @@ export const RACE_GEAR_PRESETS = {
   ],
 };
 
-/** greatsword / twohand / samurai → 2h_melee */
+/** greatsword / twohand / samurai → 2h_melee (delegates to drcAnimSsot) */
 export function normalizeAnimPack(pack) {
-  const p = String(pack || "sword_shield").toLowerCase();
-  if (p === "twohand" || p === "greatsword" || p === "greatsword_samurai" || p === "samurai" || p === "2h") {
-    return "2h_melee";
-  }
-  return p;
+  return resolveAnimPackId(pack);
 }
 
 export function getRace(raceId) {
@@ -105,6 +103,14 @@ export function resolveRaceClass(raceId, classId) {
   const race = getRace(raceId);
   const preset = getPreset(race.id, classId || "warrior");
   const url = assertAllowedKitUrl(kitUrl(race.id));
+  const animPack = normalizeAnimPack(preset.animPack);
+  const visibleMeshes = preset.visibleMeshes.slice();
+  const source = resolveCharacterSource(race.id, preset.id, {
+    animPack,
+    visibleMeshes,
+    kitUrl: url,
+    atlasUrl: atlasUrl(race.id),
+  });
   return {
     raceId: race.id,
     raceShort: race.short,
@@ -114,11 +120,12 @@ export function resolveRaceClass(raceId, classId) {
     atlasUrl: atlasUrl(race.id),
     prefix: race.prefix,
     color: race.color,
-    animPack: normalizeAnimPack(preset.animPack),
-    visibleMeshes: preset.visibleMeshes.slice(),
+    animPack,
+    visibleMeshes,
     label: `${race.label} · ${preset.label}`,
     presetLabel: preset.label,
     preset,
+    source,
   };
 }
 

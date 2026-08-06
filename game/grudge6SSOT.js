@@ -219,6 +219,53 @@ export function raceList() {
 export function logSSOT() {
   console.info(
     `[grudge6SSOT ${GRUDGE6_SSOT_VERSION}] CDN=${CDN} races=${Object.keys(RACES).length} ` +
-      `kits=GLB primary human=${HUMAN_HEIGHT_M}m R2=grudge-assets`,
+      `kits=GLB primary human=${HUMAN_HEIGHT_M}m R2=grudge-assets anims=${ANIMS_BAKED}`,
   );
+}
+
+/**
+ * Production character source contract — single object every loader must stamp.
+ * Deployed usage: kit GLB + body atlas from assets CDN, anims from Open baked, SI 1.8 m.
+ *
+ * @param {string} raceId
+ * @param {string} [classId]
+ * @param {{ animPack?: string, visibleMeshes?: string[], kitUrl?: string, atlasUrl?: string }} [extra]
+ */
+export function resolveCharacterSource(raceId, classId = "warrior", extra = {}) {
+  const race = getRace(raceId);
+  const kit = assertAllowedKitUrl(extra.kitUrl || race.kitGlb);
+  const atlas = extra.atlasUrl || race.atlasUrl;
+  return {
+    ssotVersion: GRUDGE6_SSOT_VERSION,
+    units: "si_metres",
+    humanHeightM: HUMAN_HEIGHT_M,
+    raceId: race.raceId,
+    raceLabel: race.label,
+    prefix: race.prefix,
+    classId: classId || "warrior",
+    kitUrl: kit,
+    atlasUrl: atlas,
+    animsHost: ANIMS_BAKED,
+    animPack: extra.animPack || "sword_shield",
+    meshIds: Array.isArray(extra.visibleMeshes) ? extra.visibleMeshes.slice() : [],
+    cdn: CDN,
+    forbidden: FORBIDDEN_PATH_FRAGMENTS,
+  };
+}
+
+/** All production URLs deploy-gate / agents should HEAD. */
+export function productionCharacterUrls() {
+  const kits = [];
+  const atlases = [];
+  for (const r of Object.values(RACES)) {
+    kits.push(r.kitGlb);
+    atlases.push(r.atlasUrl);
+  }
+  return {
+    kits,
+    atlases,
+    animWalk: `${ANIMS_BAKED}/magic/Standing%20Walk%20Forward.json`,
+    animRun: `${ANIMS_BAKED}/locomotion/run_forward.json`,
+    animIdle2h: `${ANIMS_BAKED}/greatsword_samurai/gs_samurai_idle_sword.json`,
+  };
 }

@@ -24,13 +24,6 @@ export const CANONICAL_LOCO = {
   runAlt: "greatsword_samurai/gs_samurai_run_sword",
 };
 
-// Pack aliases: greatsword / twohand / samurai → 2h_melee
-DRC_PACK_CLIPS.twohand = DRC_PACK_CLIPS["2h_melee"];
-DRC_PACK_CLIPS.greatsword = DRC_PACK_CLIPS["2h_melee"];
-DRC_PACK_CLIPS.greatsword_samurai = DRC_PACK_CLIPS["2h_melee"];
-DRC_PACK_CLIPS.samurai = DRC_PACK_CLIPS["2h_melee"];
-DRC_PACK_CLIPS["2h"] = DRC_PACK_CLIPS["2h_melee"];
-
 export function isBannedLocomotionClip(rel) {
   const n = String(rel || "")
     .trim()
@@ -119,10 +112,6 @@ export const DRC_PACK_CLIPS = {
     skill4: ["greatsword_samurai/gs_samurai_jump_sword", "dual_wield/sword_dash_attack"],
     skill5: ["ghost_rider/quakesmash", "dual_wield/combo"],
   },
-  // aliases → same table
-  twohand: null,
-  greatsword: null,
-  greatsword_samurai: null,
   unarmed: {
     idle: ["unarmed/fight_idle", "dual_wield/idle"],
     walk: [CANONICAL_LOCO.walk, "dual_wield/walk"],
@@ -157,3 +146,27 @@ export const DRC_PACK_CLIPS = {
     skill5: ["ghost_rider/quakesmash", "dual_wield/combo"],
   },
 };
+
+// Aliases AFTER object init (never touch TDZ)
+const _2h = DRC_PACK_CLIPS["2h_melee"];
+DRC_PACK_CLIPS.twohand = _2h;
+DRC_PACK_CLIPS.greatsword = _2h;
+DRC_PACK_CLIPS.greatsword_samurai = _2h;
+DRC_PACK_CLIPS.samurai = _2h;
+DRC_PACK_CLIPS["2h"] = _2h;
+
+/** Resolve pack id → table key (2h_melee aliases). */
+export function resolveAnimPackId(pack) {
+  const p = String(pack || "sword_shield").toLowerCase().trim();
+  if (
+    p === "twohand" ||
+    p === "greatsword" ||
+    p === "greatsword_samurai" ||
+    p === "samurai" ||
+    p === "2h" ||
+    p === "2h_melee"
+  ) {
+    return "2h_melee";
+  }
+  return p;
+}

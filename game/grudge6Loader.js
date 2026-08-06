@@ -17,7 +17,16 @@ import {
   reGroundAfterAnimSample,
   diagnoseCharacterLook,
 } from "./characterDeploy.js";
-import { assertAllowedKitUrl, logSSOT } from "./grudge6SSOT.js";
+import {
+  assertAllowedKitUrl,
+  logSSOT,
+  resolveCharacterSource,
+  GRUDGE6_SSOT_VERSION,
+  HUMAN_HEIGHT_M,
+  ANIMS_BAKED,
+  CDN,
+} from "./grudge6SSOT.js";
+import { resolveAnimPackId } from "./drcAnimSsot.js";
 
 let _loader = null;
 const textureLoader = new THREE.TextureLoader();
@@ -238,22 +247,38 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     classId = classId || sel.classId;
     race = race || sel.raceId;
   }
-  // Skills UI maps knight→warrior, unarmed→worge-ish
+  // Skills: knight/unarmed share warrior skill bar; worge keeps 2h bar
   const skillClass =
-    classId === "knight" ? "warrior" : classId === "unarmed" ? "worge" : classId;
+    classId === "knight" || classId === "unarmed"
+      ? "warrior"
+      : classId === "worge"
+        ? "worge"
+        : classId;
   const classDef = getClass(skillClass);
+  // Always race+class SSOT for kit/atlas/mesh_ids (never Mixamo / never invent host)
   const kit = race ? resolveRaceClass(race, classId) : resolveClassKit(classId);
   const kitUrl = assertAllowedKitUrl(kit.kitUrl || classDef.kitUrl);
-  const animPack = kit.animPack || classDef.animPack || "sword_shield";
+  const animPack = resolveAnimPackId(kit.animPack || classDef.animPack || "sword_shield");
   const visibleMeshes = kit.visibleMeshes || [];
+  const source = resolveCharacterSource(kit.raceId || race, kit.classId || classId, {
+    animPack,
+    visibleMeshes,
+    kitUrl,
+    atlasUrl: kit.atlasUrl || classDef.atlasUrl,
+  });
   logSSOT();
+  console.info(
+    `[grudge6Loader] SOURCE race=${source.raceId} class=${source.classId} kit=${source.kitUrl.split("/").pop()} atlas=${(source.atlasUrl || "").split("/").pop()} pack=${animPack} meshIds=${visibleMeshes.length}`,
+  );
 
   let template;
   try {
     template = await loadTemplate(kitUrl);
   } catch (e) {
-    console.warn("[grudge6Loader] CDN kit fail, capsule stand-in", e);
-    return makeCapsuleStandIn(classDef, kit);
+    console.error("[grudge6Loader] CDN kit FAIL — capsule is NOT production hero", kitUrl, e);
+    const cap = makeCapsuleStandIn(classDef, kit);
+    cap.source = { ...source, degraded: true, error: String(e?.message || e) };
+    return cap;
   }
 
   const model = SkeletonUtils.clone(template);
@@ -313,9 +338,17 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   reGroundAfterAnimSample(model, 0);
 
   const root = new THREE.Group();
-  root.name = `grudge6_${classDef.id}`;
+  root.name = `grudge6_${kit.raceId || classDef.id}_${kit.classId || classId}`;
   root.userData.siHuman = true;
   root.userData.deployHeightM = diag.height;
+  root.userData.characterSource = {
+    ...source,
+    heightM: diag.height,
+    beforeHeightM: diag.beforeHeight,
+    scaleFactor: diag.scaleFactor,
+    shownMeshes,
+    degraded: false,
+  };
   root.add(model);
 
   const mixer = new THREE.AnimationMixer(model);
@@ -350,6 +383,26 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     console.warn("[grudge6Loader] anim pack load failed", animPack, e);
   }
 
+  const finalSource = {
+    ...source,
+    heightM: diag.height,
+    beforeHeightM: diag.beforeHeight,
+    scaleFactor: diag.scaleFactor,
+    shownMeshes,
+    animPack,
+    clipsLoaded: Object.keys(clips).filter((k) => clips[k] && !k.startsWith("_")),
+    director: !!director,
+    degraded: false,
+    ssotVersion: GRUDGE6_SSOT_VERSION,
+    humanHeightM: HUMAN_HEIGHT_M,
+    cdn: CDN,
+    animsHost: ANIMS_BAKED,
+  };
+  root.userData.characterSource = finalSource;
+  if (typeof window !== "undefined") {
+    window.__mvCharacterSource = finalSource;
+  }
+
   return {
     root,
     model,
@@ -359,6 +412,7 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     director,
     clips,
     animPack,
+    source: finalSource,
     raceId: kit.raceId,
     classId: kit.classId,
     visibleMeshes,

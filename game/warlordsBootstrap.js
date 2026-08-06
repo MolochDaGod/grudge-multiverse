@@ -427,6 +427,7 @@ export async function attachWarlordsWorld(ctx) {
     window.__mvClassLabel = g6.kit?.label || classDef.label;
     window.__mvClassId = classId;
     window.__mvRaceId = raceId;
+    window.__mvCharacterSource = g6.source || g6.root?.userData?.characterSource || null;
     window.__mvCharMeta = {
       height: g6.diagnose?.height,
       beforeHeight: g6.diagnose?.beforeHeight,
@@ -434,12 +435,21 @@ export async function attachWarlordsWorld(ctx) {
       feet: g6.diagnose?.feetMinY,
       animPack: g6.animPack,
       meshes: g6.shownMeshes?.length,
+      kitUrl: g6.source?.kitUrl || g6.kit?.kitUrl,
+      atlasUrl: g6.source?.atlasUrl || g6.kit?.atlasUrl,
+      animsHost: g6.source?.animsHost,
+      ssot: g6.source?.ssotVersion,
+      degraded: !!g6.source?.degraded,
     };
     console.info(
-      `[warlords] CHAR ${raceId}/${classId} before=${g6.diagnose?.beforeHeight?.toFixed?.(2)}m ` +
-        `after=${g6.diagnose?.height?.toFixed?.(2)}m | MAP width≈${(island.halfW * 2).toFixed(0)}m ` +
-        `| hero should be ~1.8m vs buildings ~5–10m`,
+      `[warlords] CHAR SOURCE ${raceId}/${classId} kit=${(g6.source?.kitUrl || "").split("/").pop()} ` +
+        `atlas=${(g6.source?.atlasUrl || "").split("/").pop()} pack=${g6.animPack} ` +
+        `h=${g6.diagnose?.height?.toFixed?.(2)}m meshIds=${g6.shownMeshes?.length} ` +
+        `MAP≈${(island.halfW * 2).toFixed(0)}m | SI hero ~1.8m vs buildings ~5–10m`,
     );
+    if (g6.source?.degraded) {
+      flash?.("Character CDN fail — capsule stand-in (not production)", 3);
+    }
     // Apply equipped loadout weapon meshes (bag gear)
     try {
       g6.applyLoadout?.(loadLoadout());
