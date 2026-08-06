@@ -190,7 +190,8 @@ export class DangerRelay {
         this.emit("left", msg.id);
         break;
       case "combat":
-        this.emit("combat", msg.ev);
+        // Full envelope: { id, name, ev, time } so remotes can play VFX + apply PvP
+        this.emit("combat", msg);
         break;
       case "chat":
         this.emit("chat", msg);

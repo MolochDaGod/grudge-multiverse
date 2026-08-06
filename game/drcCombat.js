@@ -243,6 +243,74 @@ export class DrcCombatController {
     return true;
   }
 
+  /**
+   * MM gap-close / weapon skill close — dash capsule toward dest (SI metres).
+   * Soft-lock preferred dest computed by caller. Blink = near-instant teleport.
+   * @param {THREE.Vector3} dest
+   * @param {{ blink?: boolean, dist?: number, skillId?: string }} [opts]
+   */
+  gapCloseTo(dest, opts = {}) {
+    const cap = this.host.getCapsule?.();
+    if (!cap || !dest) return false;
+    const from = cap.position;
+    const dx = dest.x - from.x;
+    const dz = dest.z - from.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.35) return false;
+
+    // Water / land awareness
+    if (this.host.isWater?.(dest.x, dest.z)) {
+      this.host.flash?.("No gap over water", 0.35);
+      return false;
+    }
+
+    const dir = new THREE.Vector3(dx, 0, dz).normalize();
+    const gy = this.host.groundAt?.(dest.x, dest.z);
+    const landY = Number.isFinite(gy) ? gy + 1.12 : from.y;
+
+    if (opts.blink) {
+      // Near-instant blink — short i-frames
+      cap.position.set(dest.x, landY, dest.z);
+      const ctrl = this.host.getCtrl?.();
+      if (ctrl?.playerVelocity) ctrl.playerVelocity.set(0, 0, 0);
+      this.iframesUntil = performance.now() / 1000 + 0.18;
+      this.host.vfx?.play?.("gap", from.clone(), dir, 0xc478ff, { dist });
+      this.host.vfx?.play?.("nova", cap.position.clone(), dir, 0xc478ff, { radius: 1.8 });
+      this.host.flash?.("Blink", 0.3);
+      this.host.onCombatEvent?.({
+        kind: "gapClose",
+        skill: opts.skillId || "blink",
+        dist,
+        blink: true,
+        x: dest.x,
+        y: landY,
+        z: dest.z,
+      });
+      return true;
+    }
+
+    // Smooth dash toward target (weapon skill MM close)
+    this.dashDir.copy(dir);
+    const duration = Math.min(0.38, 0.12 + dist * 0.04);
+    this.dashRemain = duration;
+    this.dashSpeed = dist / duration;
+    this.state = "slide";
+    this.iframesUntil = performance.now() / 1000 + Math.min(0.28, duration * 0.85);
+    this.host.vfx?.play?.("gap", from.clone(), dir, 0xaaccff, { dist });
+    this.host.getDirector?.()?.requestOneShot?.("skill2") ||
+      this.host.getDirector?.()?.requestOneShot?.("skill4");
+    this.host.flash?.("Gap close", 0.28);
+    this.host.onCombatEvent?.({
+      kind: "gapClose",
+      skill: opts.skillId || "gap",
+      dist,
+      x: dest.x,
+      y: landY,
+      z: dest.z,
+    });
+    return true;
+  }
+
   tryParry() {
     const now = performance.now() / 1000;
     if (now < this.cd.parry) return false;

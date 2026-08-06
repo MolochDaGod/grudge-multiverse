@@ -29,10 +29,15 @@ import {
 } from "./game/mainPanel.js";
 import { connectMultiverseDanger, STATE_REPORT_MS } from "./game/net/dangerRelay.js";
 import { loadSelection } from "./game/fleetGearPresets.js";
+import { MvNetworkRemote } from "./game/mvRemote.js";
+import { clampPvpDmg } from "./game/mvPvp.js";
 
 const BASE = import.meta.env.BASE_URL;
 /** @type {Awaited<ReturnType<typeof attachWarlordsWorld>> | null} */
 let warlords = null;
+/** Railway-only remotes (when no Firebase Mixamo seat) @type {Map<string, import('./game/mvRemote.js').MvNetworkRemote>} */
+const netRemotes = new Map();
+window.__mvNetRemotes = netRemotes;
 
 // ================================================================
 // Firebase é…ç½®
@@ -435,8 +440,9 @@ function triggerRespawn() {
     sendState();
 }
 
-// ==================== è¿œç¨‹çŽ©å®¶ ====================
+// ==================== Remote players ====================
 const remotePlayers = new Map();
+window.__mvRemotePlayers = remotePlayers;
 
 class RemotePlayer {
     constructor(id, charIdx = 2) {
@@ -1090,8 +1096,20 @@ function updateEnemyAreaBadge() {
 function onHitPlayer(targetId, damage) {
     if (!canDamageTarget(targetId)) return; // friend — no damage
     _lastHitterOf.set(targetId, playerId);
-    set(ref(db, `rooms/${roomId}/hits/${targetId}/${Date.now()}`), { damage, by: playerId });
+    const dmg = clampPvpDmg(damage);
+    set(ref(db, `rooms/${roomId}/hits/${targetId}/${Date.now()}`), { damage: dmg, by: playerId });
+    // Also fan-out on Railway so peers without Firebase hits still resolve
+    try {
+        window.__mvDangerNet?.sendCombat?.({
+            kind: "pvp",
+            targetId,
+            dmg,
+            skill: "hit",
+        });
+    } catch { /* */ }
 }
+window.__mvOnHitPlayer = onHitPlayer;
+window.__mvCanDamageTarget = canDamageTarget;
 
 const PLAYER_STALE_MS = 60000; // no heartbeat for 60s → offline / ghost seat
 
@@ -1509,6 +1527,9 @@ function animate() {
         rp.tick(delta);
         rp.updateNameLabel(camera, renderer);
     }
+    for (const nr of netRemotes.values()) {
+        nr.update(delta, camera);
+    }
 
     updateDynamicPlatforms();
     updateEnemyAreaBadge();
@@ -1909,26 +1930,42 @@ async function init() {
                 if (now - lastReport < STATE_REPORT_MS) return;
                 lastReport = now;
                 const vel = localPlayer._player.getVelocity?.() || { x: 0, y: 0, z: 0 };
-                const moving = Math.hypot(vel.x, vel.z) > 0.05;
+                const moving = Math.hypot(vel.x || 0, vel.z || 0) > 0.05;
                 const sel2 = loadSelection();
+                // Smooth anim clip from grudge6 director gait (not only binary run/idle)
+                let clip = moving ? "run" : "idle";
+                try {
+                    const trav = warlords?.g6?.director?.getTraversalState?.();
+                    if (trav?.loco) clip = trav.loco;
+                    else if (window.__mvTraversal?.loco) clip = window.__mvTraversal.loco;
+                } catch { /* */ }
+                const combatState = window.__mvCombatState || warlords?.combat?.state || "idle";
                 dangerNet.sendState({
                     px: cap.position.x,
                     py: cap.position.y,
                     pz: cap.position.z,
                     ry: cap.rotation?.y ?? 0,
-                    clip: moving ? "run" : "idle",
+                    clip,
                     weapon: sel2.classId || "none",
                     hp: myHp,
+                    stamina: window.__mvStamina ?? 100,
+                    combat: combatState,
                     moving,
                     grounded: !!localPlayer._player.getIsOnGround?.(),
-                    guard: "open",
+                    dead: isDead,
+                    focus: !!warlords?.aim?.focusEnabled,
+                    classId: sel2.classId,
+                    raceId: sel2.raceId,
                 });
             };
             setInterval(reportState, STATE_REPORT_MS);
+
             dangerNet.on("snapshot", (players) => {
+                const seen = new Set();
                 for (const p of players || []) {
                     if (p.id === dangerNet.selfId) continue;
-                    // Prefer match by remote id tag if present, else name
+                    seen.add(p.id);
+                    // Firebase Mixamo seat if present
                     let rp = remotePlayers.get(p.id);
                     if (!rp) {
                         rp = [...remotePlayers.values()].find((r) => r.name === p.name);
@@ -1938,11 +1975,101 @@ async function init() {
                             rp.applyState?.({
                                 x: p.px, y: p.py, z: p.pz,
                                 ry: p.ry, name: p.name, t: Date.now(),
+                                dead: !!p.dead, hp: p.hp,
                             });
                         } catch { /* remote shape */ }
+                        continue;
+                    }
+                    // Railway capsule remote (game-ready peer without Mixamo)
+                    let nr = netRemotes.get(p.id);
+                    if (!nr) {
+                        nr = new MvNetworkRemote(p.id, scene, {
+                            name: p.name,
+                            classId: p.classId,
+                            raceId: p.raceId,
+                        });
+                        netRemotes.set(p.id, nr);
+                        addRoomNotify(p.name || p.id, "joined (net)");
+                        updateCountUI?.();
+                    }
+                    if (typeof p.px === "number") {
+                        nr.applyState(p);
+                    }
+                }
+                // Prune net remotes who left
+                for (const id of [...netRemotes.keys()]) {
+                    if (!seen.has(id)) {
+                        netRemotes.get(id)?.dispose();
+                        netRemotes.delete(id);
                     }
                 }
             });
+
+            dangerNet.on("left", (id) => {
+                const nr = netRemotes.get(id);
+                if (nr) {
+                    nr.dispose();
+                    netRemotes.delete(id);
+                }
+            });
+
+            // Combat VFX + PvP from peers
+            dangerNet.on("combat", (msg) => {
+                try {
+                    const fromId = msg?.id;
+                    const ev = msg?.ev || msg;
+                    if (!ev) return;
+                    // Ignore own echoes for local VFX (already played)
+                    if (fromId === dangerNet.selfId && ev.kind !== "pvp") return;
+
+                    // Incoming PvP damage on me
+                    if (ev.kind === "pvp" && ev.targetId === playerId) {
+                        if (isDead) return;
+                        if (!canDamageTarget(fromId)) return;
+                        let dmg = clampPvpDmg(ev.dmg);
+                        // DRC defense pipeline if available
+                        if (warlords?.resolveDamage) {
+                            const res = warlords.resolveDamage(dmg, { from: msg.name, skill: ev.skill });
+                            dmg = res.dmg;
+                            if (res.kind && res.kind !== "hit") {
+                                addRoomNotify(msg.name || "Peer", res.kind);
+                            }
+                        }
+                        if (dmg > 0) {
+                            myHp = Math.max(0, myHp - dmg);
+                            updateMyHPUI();
+                            warlords?.syncPlayerHp?.(myHp, 100);
+                            addRoomNotify(msg.name || fromId, `hits you −${dmg}`);
+                            if (myHp <= 0) triggerDeath();
+                        }
+                        return;
+                    }
+
+                    // Remote skill / gap / dodge VFX at world point
+                    const ox = Number(ev.x);
+                    const oy = Number(ev.y);
+                    const oz = Number(ev.z);
+                    if (Number.isFinite(ox) && Number.isFinite(oz) && warlords?.vfx) {
+                        const origin = new THREE.Vector3(ox, Number.isFinite(oy) ? oy : 0, oz);
+                        const dir = new THREE.Vector3(Number(ev.dx) || 0, 0, Number(ev.dz) || 1);
+                        if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+                        dir.normalize();
+                        const vfxKind = ev.vfx || (ev.kind === "gapClose" ? "gap" : ev.kind === "skill" ? "slash" : null);
+                        if (vfxKind) {
+                            warlords.vfx.play(vfxKind, origin, dir, ev.color || 0x9fe8ff, {
+                                radius: ev.aoeR || 4,
+                                dist: ev.dist || 5,
+                            });
+                        }
+                        if (ev.aoeR > 0 || vfxKind === "blast") {
+                            warlords.impacts?.play?.("shockwave", origin, { radius: ev.aoeR || 3 });
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[net] combat handle", e);
+                }
+            });
+
             dangerNet.on("close", () => setNetStatus("Net · Railway reconnect…", false));
             dangerNet.on("open", () => setNetStatus(`Net · Railway ${dangerNet.roomCode || "live"}`, true));
         } else {
@@ -1977,6 +2104,9 @@ async function init() {
                 onValue,
                 onChildAdded,
                 remove,
+                remotePlayers,
+                canDamageTarget,
+                onHitPlayer,
                 flash: (msg, t) => {
                     const el = document.getElementById("combat-flash");
                     if (el) {
@@ -1989,10 +2119,21 @@ async function init() {
                 },
                 onBossHitLocal: (dmg, name) => {
                     if (isDead) return;
-                    myHp = Math.max(0, myHp - dmg);
+                    let dealt = dmg;
+                    if (warlords?.resolveDamage) {
+                        const res = warlords.resolveDamage(dmg, { boss: name });
+                        dealt = res.dmg;
+                    }
+                    myHp = Math.max(0, myHp - dealt);
                     updateMyHPUI();
-                    addRoomNotify(name, `hits you −${dmg}`);
+                    warlords?.syncPlayerHp?.(myHp, 100);
+                    addRoomNotify(name, `hits you −${dealt}`);
                     if (myHp <= 0) triggerDeath();
+                },
+                onCombatEvent: (ev) => {
+                    try {
+                        window.__mvDangerNet?.sendCombat?.(ev);
+                    } catch { /* */ }
                 },
             });
             const sel = loadSelection();

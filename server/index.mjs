@@ -341,11 +341,15 @@ wss.on("connection", (ws, _req, url) => {
         ry: Number(snap.ry) || 0,
         clip: String(snap.clip || "idle").slice(0, 32),
         weapon: String(snap.weapon || "").slice(0, 24),
-        hp: Number(snap.hp ?? 100),
-        stamina: Number(snap.stamina ?? 100),
+        hp: Math.max(0, Math.min(200, Number(snap.hp ?? 100))),
+        stamina: Math.max(0, Math.min(100, Number(snap.stamina ?? 100))),
         combat: String(snap.combat || "idle").slice(0, 24),
         moving: !!snap.moving,
         grounded: snap.grounded !== false,
+        dead: !!snap.dead,
+        focus: !!snap.focus,
+        classId: me.classId,
+        raceId: me.raceId,
         name: me.name,
       };
       if (msg.name) me.name = String(msg.name).slice(0, 24);
@@ -354,16 +358,40 @@ wss.on("connection", (ws, _req, url) => {
 
     if (msg.t === "combat" && msg.ev) {
       const ev = typeof msg.ev === "object" ? msg.ev : { kind: String(msg.ev) };
+      const kind = String(ev.kind || "hit").slice(0, 32);
+      // Simple rate limit + PvP damage clamp (anti-spam / sanity)
+      me._combatLast = me._combatLast || 0;
+      const now = Date.now();
+      if (now - me._combatLast < 40) return; // max ~25 combat events/s
+      me._combatLast = now;
+      let safeEv = {
+        kind,
+        skill: ev.skill ? String(ev.skill).slice(0, 32) : undefined,
+        name: ev.name ? String(ev.name).slice(0, 32) : undefined,
+        vfx: ev.vfx ? String(ev.vfx).slice(0, 16) : undefined,
+        dist: Number.isFinite(ev.dist) ? Math.min(20, Math.max(0, Number(ev.dist))) : undefined,
+        aoeR: Number.isFinite(ev.aoeR) ? Math.min(12, Math.max(0, Number(ev.aoeR))) : undefined,
+        x: Number.isFinite(ev.x) ? Number(ev.x) : undefined,
+        y: Number.isFinite(ev.y) ? Number(ev.y) : undefined,
+        z: Number.isFinite(ev.z) ? Number(ev.z) : undefined,
+        dx: Number.isFinite(ev.dx) ? Number(ev.dx) : undefined,
+        dz: Number.isFinite(ev.dz) ? Number(ev.dz) : undefined,
+        color: Number.isFinite(ev.color) ? Number(ev.color) : undefined,
+        blink: !!ev.blink,
+      };
+      if (kind === "pvp") {
+        const dmg = Math.max(1, Math.min(80, Math.floor(Number(ev.dmg) || 0)));
+        const targetId = String(ev.targetId || "").slice(0, 16);
+        if (!targetId || !room.players.has(targetId)) return;
+        safeEv = { ...safeEv, targetId, dmg };
+      }
       room.broadcast(
         {
           t: "combat",
           id: selfId,
           name: me.name,
-          ev: {
-            kind: String(ev.kind || "hit").slice(0, 32),
-            ...ev,
-          },
-          time: Date.now(),
+          ev: safeEv,
+          time: now,
         },
         null,
       );

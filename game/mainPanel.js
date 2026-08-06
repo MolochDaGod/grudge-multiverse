@@ -569,12 +569,33 @@ function renderServer() {
     </div>`;
   };
 
+  const netOk = !!window.__mvDangerNet?.connected;
+  const netCode = window.__mvDangerNet?.roomCode || (location.hash || "#room1").slice(1) || "room1";
+  const netRemotes = window.__mvNetRemotes ? [...window.__mvNetRemotes.values()] : [];
+  const netRows = netRemotes
+    .map(
+      (r) => `<div class="pl-row">
+      <div>
+        <div class="pl-name">${escape(r.name || r.id)} <span class="tag">net</span></div>
+        <div class="pl-meta">HP ${Math.round(r.hp ?? 100)} · ${escape(r.classId || "")} · ${escape(r.clip || "idle")}</div>
+      </div>
+      <div class="pl-rel"><span class="mp-badge enemy">PvP</span></div>
+    </div>`,
+    )
+    .join("");
+
   return `
     <div class="mp-section-title">Server · ${escape(room)}</div>
-    <p class="mp-hint">Request friend → Accept / Decline. Decline = hostile. Friends deal no damage. (Fleet Quests tab → Server here)</p>
+    <p class="mp-hint">
+      Railway room <strong>${escape(netCode)}</strong> ·
+      <span style="color:${netOk ? "#6eec9a" : "#f87171"}">${netOk ? "LIVE" : "offline"}</span>
+      · soft-lock LMB · focus RMB · friends take no damage
+    </p>
     <div id="players-list" class="mp-players">
       ${row(local, true)}
-      ${remotes.map((r) => row(r, false)).join("") || `<div class="mp-hint" style="padding:12px">No other players in room</div>`}
+      ${remotes.map((r) => row(r, false)).join("")}
+      ${netRows}
+      ${!remotes.length && !netRows ? `<div class="mp-hint" style="padding:12px">No other players in #${escape(netCode)} — share URL for PvP</div>` : ""}
     </div>
   `;
 }

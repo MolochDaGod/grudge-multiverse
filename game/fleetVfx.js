@@ -20,10 +20,12 @@ export class FleetSkillVfx {
    * @param {THREE.Vector3} [dir] ground-plane aim
    * @param {number} [color]
    */
-  play(kind, origin, dir = new THREE.Vector3(0, 0, 1), color) {
+  play(kind, origin, dir = new THREE.Vector3(0, 0, 1), color, opts = {}) {
     if (kind === "slash") this.slash(origin, dir, color ?? 0x9fe8ff);
     else if (kind === "bolt") this.bolt(origin, dir, color ?? 0x7ec8ff);
-    else if (kind === "nova") this.nova(origin, color ?? 0xc478ff);
+    else if (kind === "nova") this.nova(origin, color ?? 0xc478ff, opts.radius);
+    else if (kind === "blast") this.blast(origin, color ?? 0xff8844, opts.radius ?? 4.5);
+    else if (kind === "gap") this.gapTrail(origin, dir, color ?? 0xaaccff, opts.dist ?? 5);
     else if (kind === "fire") this.fire(origin, dir, color ?? 0xff6622);
     else this.slash(origin, dir, color ?? 0xffe08a);
   }
@@ -57,7 +59,7 @@ export class FleetSkillVfx {
     this.active.push({ mesh, t: 0, life: 0.55, kind: "bolt", vel: d.multiplyScalar(28) });
   }
 
-  nova(origin, color) {
+  nova(origin, color, radius = 3.5) {
     const geo = new THREE.RingGeometry(0.2, 0.35, 32);
     const mat = new THREE.MeshBasicMaterial({
       color,
@@ -70,7 +72,74 @@ export class FleetSkillVfx {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.copy(origin).add(new THREE.Vector3(0, 0.15, 0));
     this.scene.add(mesh);
-    this.active.push({ mesh, t: 0, life: 0.5, kind: "nova", scale: 1 });
+    this.active.push({ mesh, t: 0, life: 0.55, kind: "nova", scale: 1, targetScale: Math.max(2, radius) });
+  }
+
+  /**
+   * AoE blast — expanding sphere + ground ring (SI metres, human-scale).
+   * Used for cleave / meteor / rampage / frost nova impacts.
+   */
+  blast(origin, color, radius = 4.5) {
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(0.35, 14, 14),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+      }),
+    );
+    core.position.copy(origin).add(new THREE.Vector3(0, 0.9, 0));
+    this.scene.add(core);
+    this.active.push({
+      mesh: core,
+      t: 0,
+      life: 0.42,
+      kind: "blast_core",
+      targetScale: Math.max(2.5, radius * 0.85),
+    });
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.25, 0.55, 36),
+      new THREE.MeshBasicMaterial({
+        color: 0xffeeaa,
+        transparent: true,
+        opacity: 0.8,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(origin).add(new THREE.Vector3(0, 0.08, 0));
+    this.scene.add(ring);
+    this.active.push({ mesh: ring, t: 0, life: 0.55, kind: "blast_ring", targetScale: radius });
+
+    const light = new THREE.PointLight(color, 2.2, radius * 2.5, 2);
+    light.position.copy(core.position);
+    this.scene.add(light);
+    this.active.push({ mesh: light, t: 0, life: 0.4, kind: "blast_light", isLight: true });
+  }
+
+  /** MM gap-close trail — elongated dash ribbon along travel dir. */
+  gapTrail(origin, dir, color, dist = 5) {
+    const d = dir.clone().normalize();
+    if (d.lengthSq() < 1e-6) d.set(0, 0, 1);
+    const len = Math.max(1.5, Math.min(12, dist));
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.18, len, 8, 1, true),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.65,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    const hand = origin.clone().add(new THREE.Vector3(0, 1.0, 0)).add(d.clone().multiplyScalar(len * 0.4));
+    mesh.position.copy(hand);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d);
+    this.scene.add(mesh);
+    this.active.push({ mesh, t: 0, life: 0.32, kind: "gap" });
   }
 
   /**
@@ -160,9 +229,23 @@ export class FleetSkillVfx {
         a.mesh.position.addScaledVector(a.vel, dt);
         a.mesh.material.opacity = 1 - u;
       } else if (a.kind === "nova") {
-        a.scale = 1 + u * 6;
+        const ts = a.targetScale || 6;
+        a.scale = 1 + u * ts;
         a.mesh.scale.setScalar(a.scale);
         a.mesh.material.opacity = 0.85 * (1 - u);
+      } else if (a.kind === "blast_core") {
+        const ts = a.targetScale || 4;
+        a.mesh.scale.setScalar(1 + u * ts);
+        if (a.mesh.material) a.mesh.material.opacity = 0.9 * (1 - u);
+      } else if (a.kind === "blast_ring") {
+        const ts = a.targetScale || 4;
+        a.mesh.scale.setScalar(1 + u * ts);
+        if (a.mesh.material) a.mesh.material.opacity = 0.8 * (1 - u);
+      } else if (a.kind === "blast_light") {
+        if (a.mesh.intensity != null) a.mesh.intensity = 2.2 * (1 - u);
+      } else if (a.kind === "gap") {
+        if (a.mesh.material) a.mesh.material.opacity = 0.65 * (1 - u);
+        a.mesh.scale.set(1 - u * 0.4, 1, 1 - u * 0.4);
       } else if (a.kind === "fire") {
         a.mesh.position.addScaledVector(a.vel, dt);
         a.glow?.position.copy(a.mesh.position);
@@ -223,8 +306,10 @@ export class FleetSkillVfx {
 
       if (a.t >= a.life) {
         this.scene.remove(a.mesh);
-        a.mesh.geometry?.dispose?.();
-        a.mesh.material?.dispose?.();
+        if (!a.isLight) {
+          a.mesh.geometry?.dispose?.();
+          a.mesh.material?.dispose?.();
+        }
         if (a.glow) {
           this.scene.remove(a.glow);
           a.glow.geometry?.dispose?.();
@@ -250,8 +335,9 @@ export function vfxKindForSkill(skill) {
   const blob = `${k} ${id} ${name}`.toLowerCase();
   // Fire / flame first (CastingAbilities fire + mage fire)
   if (/fire|flame|burn|meteor|inferno|pyro|ember/.test(blob)) return "fire";
-  // AoE / nova
-  if (k.includes("aoe") || k.includes("nova") || /nova|storm|rain|cleave|rampage/.test(blob)) {
+  // AoE blast (full shell) vs soft nova ring
+  if (/meteor|storm|rain|rampage|explode|blast|nuke/.test(blob)) return "blast";
+  if (k.includes("aoe") || k.includes("nova") || /nova|cleave|volley/.test(blob)) {
     return "nova";
   }
   // Ranged / magic bolt
