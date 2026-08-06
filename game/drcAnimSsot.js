@@ -24,6 +24,13 @@ export const CANONICAL_LOCO = {
   runAlt: "greatsword_samurai/gs_samurai_run_sword",
 };
 
+// Pack aliases: greatsword / twohand / samurai → 2h_melee
+DRC_PACK_CLIPS.twohand = DRC_PACK_CLIPS["2h_melee"];
+DRC_PACK_CLIPS.greatsword = DRC_PACK_CLIPS["2h_melee"];
+DRC_PACK_CLIPS.greatsword_samurai = DRC_PACK_CLIPS["2h_melee"];
+DRC_PACK_CLIPS.samurai = DRC_PACK_CLIPS["2h_melee"];
+DRC_PACK_CLIPS["2h"] = DRC_PACK_CLIPS["2h_melee"];
+
 export function isBannedLocomotionClip(rel) {
   const n = String(rel || "")
     .trim()
@@ -97,7 +104,11 @@ export const DRC_PACK_CLIPS = {
     skill4: ["dual_wield/dash"],
     skill5: ["dual_wield/attack5", "dual_wield/combo"],
   },
-  twohand: {
+  /**
+   * 2H melee — greatsword is 2h_melee; samurai set is primary.
+   * Aliases: twohand, greatsword, 2h_melee, greatsword_samurai (see below).
+   */
+  "2h_melee": {
     idle: ["greatsword_samurai/gs_samurai_idle_sword", "dual_wield/idle"],
     walk: ["greatsword_samurai/gs_samurai_walk_sword", CANONICAL_LOCO.walk],
     run: [CANONICAL_LOCO.runAlt, CANONICAL_LOCO.run, "dual_wield/run"],
@@ -108,6 +119,10 @@ export const DRC_PACK_CLIPS = {
     skill4: ["greatsword_samurai/gs_samurai_jump_sword", "dual_wield/sword_dash_attack"],
     skill5: ["ghost_rider/quakesmash", "dual_wield/combo"],
   },
+  // aliases → same table
+  twohand: null,
+  greatsword: null,
+  greatsword_samurai: null,
   unarmed: {
     idle: ["unarmed/fight_idle", "dual_wield/idle"],
     walk: [CANONICAL_LOCO.walk, "dual_wield/walk"],

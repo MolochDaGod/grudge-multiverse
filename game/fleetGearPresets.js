@@ -80,6 +80,15 @@ export const RACE_GEAR_PRESETS = {
   ],
 };
 
+/** greatsword / twohand / samurai → 2h_melee */
+export function normalizeAnimPack(pack) {
+  const p = String(pack || "sword_shield").toLowerCase();
+  if (p === "twohand" || p === "greatsword" || p === "greatsword_samurai" || p === "samurai" || p === "2h") {
+    return "2h_melee";
+  }
+  return p;
+}
+
 export function getRace(raceId) {
   const id = resolveRaceId(raceId);
   return RACES.find((r) => r.id === id || r.short === raceId) || RACES[0];
@@ -105,7 +114,7 @@ export function resolveRaceClass(raceId, classId) {
     atlasUrl: atlasUrl(race.id),
     prefix: race.prefix,
     color: race.color,
-    animPack: preset.animPack,
+    animPack: normalizeAnimPack(preset.animPack),
     visibleMeshes: preset.visibleMeshes.slice(),
     label: `${race.label} · ${preset.label}`,
     presetLabel: preset.label,
@@ -125,7 +134,14 @@ export function resolveClassKit(classId) {
   };
   const m = legacy[classId] || legacy.warrior;
   const kit = resolveRaceClass(m.raceId, m.classId);
-  if (m.animPackOverride) kit.animPack = m.animPackOverride;
+  if (m.animPackOverride) {
+    // Normalize legacy twohand → 2h_melee (greatsword/samurai)
+    const p = m.animPackOverride === "twohand" ? "2h_melee" : m.animPackOverride;
+    kit.animPack = p;
+  }
+  if (kit.animPack === "twohand" || kit.animPack === "greatsword") {
+    kit.animPack = "2h_melee";
+  }
   return kit;
 }
 

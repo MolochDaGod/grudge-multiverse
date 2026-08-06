@@ -92,7 +92,7 @@ export const CLASSES = [
     prefix: "ORC_",
     kitUrl: kitUrl("orcs"),
     atlasUrl: atlasUrl("orcs"),
-    animPack: "twohand",
+    animPack: "2h_melee", // greatsword + samurai (alias: twohand / greatsword)
     blurb: "Brutal orc · 2H melee · raw power",
     starterGear: {
       weapon: { id: "t0_axe", name: "Worge Axe", tier: 0, slot: "weapon", dmg: 15 },
