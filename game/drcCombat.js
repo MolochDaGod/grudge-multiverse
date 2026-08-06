@@ -304,6 +304,11 @@ export class DrcCombatController {
       const perfect = age > FLEET_PARRY.deflectWindow - FLEET_PARRY.perfectWindow;
       this.host.flash?.(perfect ? "PERFECT PARRY" : "Parry!", 0.6);
       this.host.vfx?.play?.("nova", this.host.getCapsule?.()?.position?.clone?.(), new THREE.Vector3(0, 1, 0), 0xffe066);
+      try {
+        window.__mvImpacts?.play?.("parry", this.host.getCapsule?.()?.position?.clone?.() || new THREE.Vector3());
+      } catch {
+        /* */
+      }
       this.host.onCombatEvent?.({ kind: "parrySuccess", perfect, boss: meta.boss });
       this.stamina = Math.min(this.maxStamina, this.stamina + 12);
       return { dmg: 0, kind: perfect ? "perfect_parry" : "parry" };

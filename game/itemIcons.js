@@ -222,6 +222,26 @@ export function itemIconUrl(idOrName) {
 
 export function skillIconUrl(skill, classId) {
   if (!skill) return localIconFor("skill");
+  // Prefer gametest / sloticons action art when available
+  try {
+    // lazy import path via absolute public URLs (no circular dep on mvUiTheme)
+    const BASE = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+    const k = `${skill.kind || ""} ${skill.id || ""} ${skill.name || ""}`.toLowerCase();
+    if (/fire|meteor|flame|burn/.test(k)) return `${BASE}ui/gametest/icons128/Icon_Fireball_128.png`;
+    if (/shield|fortify|guard|block|parry/.test(k)) return `${BASE}ui/gametest/icons128/Icon_Shield_128.png`;
+    if (/arrow|shot|volley|bow|rain/.test(k)) return `${BASE}ui/gametest/icons128/Icon_Arrows_128.png`;
+    if (/heal|nature|leaf/.test(k)) return `${BASE}ui/gametest/icons128/Icon_Leafs_128.png`;
+    if (/execute|death|rend|smash|nuke/.test(k)) return `${BASE}ui/gametest/icons128/Icon_Deathkiss_128.png`;
+    if (skill.key === "KeyF" || /slash|cleave|melee|attack/.test(k)) {
+      if (classId === "mage") return `${BASE}ui/gametest/icons128/Icon_Fireball_128.png`;
+      if (classId === "ranger") return `${BASE}ui/gametest/icons128/Icon_Arrows_128.png`;
+      return `${BASE}ui/gametest/icons128/Icon_Sword_128.png`;
+    }
+    if (/charge|leap/.test(k)) return `${BASE}ui/sloticons/charge.png`;
+    if (/harvest/.test(k)) return `${BASE}ui/sloticons/harvest.png`;
+  } catch {
+    /* */
+  }
   const hint = `${skill.id || ""} ${skill.name || ""} ${skill.kind || ""} ${classId || ""}`;
   const row = resolveItem(skill.id) || resolveItem(skill.name);
   if (row?.iconUrl) return rewriteIconUrl(row.iconUrl, hint);

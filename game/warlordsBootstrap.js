@@ -48,6 +48,16 @@ import { refreshOpenTab } from "./mainPanel.js";
 import { logDrcContract, DRC_MULTIVERSE } from "./drcContract.js";
 import { DrcCombatController, DRC_COMBAT_LEGEND } from "./drcCombat.js";
 import { refreshDrcTightHud } from "./drcTightHud.js";
+import { ImpactFx, impactKindForSkill } from "./impactFx.js";
+import {
+  ensureMvUiTheme,
+  mountGameMenu,
+  bindTooltipDelegation,
+  setGameCursor,
+  cursorFromContext,
+  showCastBar,
+  actionIconForSkill,
+} from "./mvUiTheme.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -256,9 +266,17 @@ export async function attachWarlordsWorld(ctx) {
   ensureStarterGear(classDef.starterGear);
 
   mountWarlordsHud();
+  ensureMvUiTheme();
+  bindTooltipDelegation(document.body);
+  mountGameMenu({
+    bag: () => window.dispatchEvent(new CustomEvent("mv-open-tab", { detail: { tab: "bag" } })),
+    skills: () => window.dispatchEvent(new CustomEvent("mv-open-tab", { detail: { tab: "skills" } })),
+    help: () => document.dispatchEvent(new KeyboardEvent("keydown", { code: "F1", bubbles: true })),
+  });
+  setGameCursor("combat");
   ensureItemCatalog().catch(() => {});
   window.setLoaderStatus?.("Loading Bermuda island…");
-  flash?.("DRC · grudge6 · Bermuda…", 1.2);
+  flash?.("DRC · Toon RTS · Bermuda…", 1.2);
 
   // Map is SI metres (bermuda ~843×614 m, buildings ~5–10 m). Never squash to 120 m.
   // Characters on CDN measure ~12–22 m raw → deploy applies ONE uniform unit normalize to ~1.8 m.
@@ -396,6 +414,8 @@ export async function attachWarlordsWorld(ctx) {
   scene.add(reticle);
 
   const vfx = new FleetSkillVfx(scene);
+  const impacts = new ImpactFx(scene);
+  window.__mvImpacts = impacts;
   const crosshairEl = document.getElementById("crosshair");
 
   // grudge6 character
@@ -613,6 +633,10 @@ export async function attachWarlordsWorld(ctx) {
               ? 0xff6a3a
               : 0x9fe8ff;
       vfx.play(kind, feet.clone(), dir, color);
+      // Cast bar for long CDs / magic
+      if ((skill.cd || 0) >= 6 || skill.kind?.includes("magic") || skill.kind?.includes("aoe")) {
+        showCastBar(skill.name || "Skill", Math.min(900, (skill.cd || 1) * 90));
+      }
 
       // Range-gated damage scaled by equipped weapon
       const baseDmg = equippedWeaponDmg(14);
@@ -622,11 +646,29 @@ export async function attachWarlordsWorld(ctx) {
           : skill.kind?.includes("aoe")
             ? 4.5
             : 2.8;
+      const ikind = impactKindForSkill(skill);
       for (const b of bosses.bosses) {
         if (b.dead) continue;
         const d = b.root.position.distanceTo(pos);
         if (d < range) {
           const dmg = Math.floor(baseDmg * (skill.dmgMul || 1));
+          const hitPos = b.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+          impacts.play(ikind === "hit" && dmg > 30 ? "crit" : ikind, hitPos, {
+            radius: skill.kind?.includes("aoe") ? 2.8 : 1.4,
+            yLift: 0.2,
+          });
+          // Hit-react ragdoll (non-death)
+          try {
+            const knock = hitPos.clone().sub(feet).setY(0.2).normalize().multiplyScalar(2.2);
+            startRagdollLite(b.root, {
+              impulse: knock,
+              power: Math.min(1.4, 0.4 + dmg / 80),
+              death: false,
+              groundAt,
+            });
+          } catch {
+            /* */
+          }
           const res = bosses.hit(b.id, dmg, playerId);
           set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
           window.__mvBossTarget = {
@@ -637,7 +679,17 @@ export async function attachWarlordsWorld(ctx) {
           if (res.killed) {
             const reward = rollKillReward(true);
             flash?.(`${b.name} defeated! L${reward.level}`, 1.2);
-            // World equipment drops at boss pad
+            impacts.play("explode", hitPos, { radius: 2.6, color: 0xff8844 });
+            try {
+              startRagdollLite(b.root, {
+                impulse: hitPos.clone().sub(feet).setY(0.8).normalize().multiplyScalar(4),
+                power: 1.5,
+                death: true,
+                groundAt,
+              });
+            } catch {
+              /* */
+            }
             if (reward.dropped?.length) {
               loot.spawnMany(b.root.position.clone(), reward.dropped);
             }
@@ -858,6 +910,25 @@ export async function attachWarlordsWorld(ctx) {
 
       // DRC combat tick (dodge travel, stam, water-aware dash)
       combat.update(dt, { nav: island.nav, waterPhysics: island.waterPhysics });
+      impacts.update(dt);
+      // Cursor from context (hostile / harvest / vendor)
+      if (!this._curAcc) this._curAcc = 0;
+      this._curAcc += dt;
+      if (this._curAcc > 0.12) {
+        this._curAcc = 0;
+        try {
+          cursorFromContext({
+            classId,
+            hostile: !!window.__mvBossTarget || !!aim.focusEnabled,
+            harvest: !!document.querySelector?.(".mv-harvest-prompt") || false,
+            vendor: !!window.__mvNearVendor,
+            loot: false,
+            busy: combat.state === "dodge" || combat.state === "slide",
+          });
+        } catch {
+          /* */
+        }
+      }
       if (!this._stamAcc) this._stamAcc = 0;
       this._stamAcc += dt;
       if (this._stamAcc > 0.15) {
@@ -1030,16 +1101,43 @@ export async function attachWarlordsWorld(ctx) {
           boss: a.name,
           attack: a.attack || a.kind,
         });
+        const impactAt = pos.clone().add(new THREE.Vector3(0, 1.1, 0));
         if (res.dmg > 0) {
+          impacts.play(res.dmg > 40 ? "crit" : "hit", impactAt, { color: 0xff6644 });
+          // Player hit-react flop (non-death)
+          if (g6?.root && res.dmg > 18) {
+            try {
+              const fromBoss = impactAt
+                .clone()
+                .sub(a.pos || impactAt)
+                .setY(0.3)
+                .normalize()
+                .multiplyScalar(-2.5);
+              startRagdollLite(g6.root, {
+                director: g6.director,
+                impulse: fromBoss,
+                power: Math.min(1.1, 0.35 + res.dmg / 60),
+                death: false,
+                groundAt,
+              });
+            } catch {
+              /* */
+            }
+          }
           ctx.onBossHitLocal?.(res.dmg, a.name);
         } else if (res.kind === "perfect_parry" || res.kind === "parry") {
+          impacts.play("parry", impactAt);
           window.__mvBossTelegraph = {
             boss: a.name,
             attack: res.kind === "perfect_parry" ? "PERFECT PARRY" : "Parried",
             t: performance.now(),
           };
           refreshCombatFrame();
-        } else if (res.kind === "iframe" || res.kind === "block") {
+        } else if (res.kind === "iframe") {
+          impacts.play("hit", impactAt, { color: 0x88ccff, yLift: 0.5 });
+          refreshCombatFrame();
+        } else if (res.kind === "block") {
+          impacts.play("shockwave", impactAt, { radius: 0.9, color: 0xaaccff });
           refreshCombatFrame();
         }
       }
