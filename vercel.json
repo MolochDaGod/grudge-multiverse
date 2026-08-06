@@ -8,11 +8,33 @@
     { "source": "/play/:path*", "destination": "/index.html" },
     { "source": "/room/:path*", "destination": "/index.html" },
     {
-      "source": "/((?!assets|glb|audio|img|maps|loader\\.js|favicon|robots\\.txt).*)",
+      "source": "/((?!assets|glb|audio|img|maps|models|ui|loader\\.js|favicon|robots\\.txt|hud-tight-bar\\.png).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate, no-cache"
+        },
+        { "key": "CDN-Cache-Control", "value": "max-age=0, must-revalidate" },
+        { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate, no-cache"
+        },
+        { "key": "CDN-Cache-Control", "value": "max-age=0, must-revalidate" },
+        { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0, must-revalidate" }
+      ]
+    },
     {
       "source": "/glb/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400, immutable" }]

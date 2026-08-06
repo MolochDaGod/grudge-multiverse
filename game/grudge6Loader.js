@@ -21,6 +21,7 @@ import {
   assertAllowedKitUrl,
   logSSOT,
   resolveCharacterSource,
+  assetUrlBust,
   GRUDGE6_SSOT_VERSION,
   HUMAN_HEIGHT_M,
   ANIMS_BAKED,
@@ -51,19 +52,21 @@ const templateCache = new Map();
 const atlasCache = new Map();
 
 async function loadTemplate(url) {
-  if (templateCache.has(url)) return templateCache.get(url);
+  const bust = assetUrlBust(url);
+  if (templateCache.has(bust)) return templateCache.get(bust);
   window.setLoaderStatus?.(`Loading kit ${url.split("/").pop()}…`);
-  const gltf = await getLoader().loadAsync(url);
-  templateCache.set(url, gltf.scene);
+  const gltf = await getLoader().loadAsync(bust);
+  templateCache.set(bust, gltf.scene);
   return gltf.scene;
 }
 
 /** Load Toon RTS body atlas (sRGB, flipY false — FBX/GLB UV contract). */
 async function loadAtlas(url) {
   if (!url) return null;
-  if (atlasCache.has(url)) return atlasCache.get(url);
+  const bust = assetUrlBust(url);
+  if (atlasCache.has(bust)) return atlasCache.get(bust);
   try {
-    const tex = await textureLoader.loadAsync(url);
+    const tex = await textureLoader.loadAsync(bust);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.flipY = false;
     tex.wrapS = THREE.ClampToEdgeWrapping;
@@ -72,10 +75,10 @@ async function loadAtlas(url) {
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
     tex.needsUpdate = true;
-    atlasCache.set(url, tex);
+    atlasCache.set(bust, tex);
     return tex;
   } catch (e) {
-    console.warn("[grudge6Loader] atlas load failed", url, e?.message || e);
+    console.warn("[grudge6Loader] atlas load failed", bust, e?.message || e);
     return null;
   }
 }

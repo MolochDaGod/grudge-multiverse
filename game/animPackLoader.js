@@ -5,7 +5,7 @@
  */
 import * as THREE from "three";
 
-import { ANIMS_BAKED } from "./grudge6SSOT.js";
+import { ANIMS_BAKED, assetUrlBust } from "./grudge6SSOT.js";
 import {
   DRC_PACK_CLIPS,
   isBannedLocomotionClip,
@@ -92,15 +92,16 @@ export function bakedCandidates(rel) {
 export async function loadBakedClip(rel) {
   let last;
   for (const url of bakedCandidates(rel)) {
+    const bust = assetUrlBust(url);
     try {
-      const res = await fetch(url, { mode: "cors" });
+      const res = await fetch(bust, { mode: "cors", cache: "no-cache" });
       if (!res.ok) {
-        last = `HTTP ${res.status} ${url}`;
+        last = `HTTP ${res.status} ${bust}`;
         continue;
       }
       const ct = res.headers.get("content-type") || "";
       if (ct.includes("text/html")) {
-        last = `HTML ${url}`;
+        last = `HTML ${bust}`;
         continue;
       }
       const json = await res.json();

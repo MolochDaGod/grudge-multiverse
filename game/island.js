@@ -15,6 +15,7 @@ import {
   createWaterPhysics,
   COLLIDER_LAYER,
 } from "./mapLiteracy.js";
+import { assetUrlBust } from "./grudge6SSOT.js";
 
 // Enable BVH raycasts for ground sampling (same as playerController)
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
@@ -97,10 +98,11 @@ async function loadIslandGltf(loader, preferredUrl) {
         // Some CDNs block HEAD — still try load; GET magic-byte below if fetch range works
         if (String(probeErr?.message || "").includes("bad content-type")) throw probeErr;
       }
-      const gltf = await loader.loadAsync(url);
+      const loadUrl = assetUrlBust(url);
+      const gltf = await loader.loadAsync(loadUrl);
       window.setLoaderProgress?.(1, 1, "Island geometry ready");
-      console.info("[island] loaded", url);
-      return { gltf, url };
+      console.info("[island] loaded", loadUrl);
+      return { gltf, url: loadUrl };
     } catch (e) {
       lastErr = e;
       console.warn("[island] load fail", url, e?.message || e);

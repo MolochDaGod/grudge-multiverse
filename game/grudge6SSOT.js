@@ -31,7 +31,17 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-export const GRUDGE6_SSOT_VERSION = "2026-08-01.1";
+/** Bump when kit/atlas/anim contracts change — used as asset query bust. */
+export const GRUDGE6_SSOT_VERSION = "2026-08-06.2";
+
+/** Append to CDN asset URLs so clients drop stale browser cache after SSOT ship. */
+export function assetUrlBust(url) {
+  const u = String(url || "");
+  if (!u || u.startsWith("blob:") || u.startsWith("data:")) return u;
+  const stamp = GRUDGE6_SSOT_VERSION.replace(/[^a-zA-Z0-9._-]/g, "");
+  if (u.includes("v=" + stamp)) return u;
+  return u.includes("?") ? `${u}&v=${stamp}` : `${u}?v=${stamp}`;
+}
 
 /** Only public mesh CDN (R2 grudge-assets). */
 export const CDN = "https://assets.grudge-studio.com";
