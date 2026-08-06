@@ -74,13 +74,11 @@
                 word-break: break-word;
             }
 
-            /* ===== 左下角：角色头像 + HP ===== */
+            /* ===== Legacy unit frame — DISABLED (HUD tight.psd owns bottom chrome) ===== */
             #player-hud {
-                position: fixed; bottom: 20px; left: 20px; z-index: 9999;
-                display: flex; align-items: center; gap: 10px;
-                /* background: rgba(0,0,0,0.65); */
-                /* border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; */
-                /* padding: 10px 14px; backdrop-filter: blur(6px); */
+                display: none !important;
+                position: fixed; bottom: 20px; left: 20px; z-index: 1;
+                align-items: center; gap: 10px;
             }
             .avatar-box {
                 width: 50px; height: 50px; flex-shrink: 0;
