@@ -5,7 +5,13 @@
 const KEY = "mv_inventory_v1";
 const LOADOUT_KEY = "mv_loadout_v1";
 
-/** @typedef {{ id: string, name: string, tier: 0|1, slot: string, dmg?: number, armor?: number, qty?: number }} Item */
+/**
+ * @typedef {{
+ *   id: string, name: string, tier: 0|1, slot: string,
+ *   dmg?: number, armor?: number, qty?: number,
+ *   meshFamily?: string, meshLabel?: string, meshSlot?: string
+ * }} Item
+ */
 /** @typedef {{ weapon: Item|null, armor: Item|null, offhand: Item|null }} Loadout */
 
 export const T0_DROPS = [
@@ -16,14 +22,38 @@ export const T0_DROPS = [
 ];
 
 export const T1_DROPS = [
-  { id: "t1_sword", name: "Iron Sword", tier: 1, slot: "weapon", dmg: 18 },
-  { id: "t1_bow", name: "Yew Bow", tier: 1, slot: "weapon", dmg: 16 },
-  { id: "t1_staff", name: "Oak Staff", tier: 1, slot: "weapon", dmg: 17 },
-  { id: "t1_mail", name: "Iron Mail", tier: 1, slot: "armor", armor: 14 },
-  { id: "t1_leather", name: "Hardened Leather", tier: 1, slot: "armor", armor: 10 },
-  { id: "t1_robe", name: "Woven Robe", tier: 1, slot: "armor", armor: 7 },
-  { id: "t1_shield", name: "Iron Shield", tier: 1, slot: "shield", armor: 8 },
+  { id: "t1_sword", name: "Iron Sword", tier: 1, slot: "weapon", dmg: 18, meshFamily: "sword", meshLabel: "Sword B+", meshSlot: "sword" },
+  { id: "t1_bow", name: "Yew Bow", tier: 1, slot: "weapon", dmg: 16, meshFamily: "bow", meshLabel: "Bow", meshSlot: "bow" },
+  { id: "t1_staff", name: "Oak Staff", tier: 1, slot: "weapon", dmg: 17, meshFamily: "staff", meshLabel: "Staff", meshSlot: "staff" },
+  { id: "t1_mail", name: "Iron Mail", tier: 1, slot: "armor", armor: 14, meshFamily: "heavy", meshLabel: "Heavy body", meshSlot: "body" },
+  { id: "t1_leather", name: "Hardened Leather", tier: 1, slot: "armor", armor: 10, meshFamily: "medium", meshLabel: "Medium body", meshSlot: "body" },
+  { id: "t1_robe", name: "Woven Robe", tier: 1, slot: "armor", armor: 7, meshFamily: "light", meshLabel: "Light body", meshSlot: "body" },
+  { id: "t1_shield", name: "Iron Shield", tier: 1, slot: "shield", armor: 8, meshFamily: "shield", meshLabel: "Shield B+", meshSlot: "shield" },
 ];
+
+/** Starter gear templates with mesh labels (classes.js merges these). */
+export const STARTER_MESH_META = {
+  t0_sword: { meshFamily: "sword", meshLabel: "Recruit Sword", meshSlot: "sword" },
+  t0_bow: { meshFamily: "bow", meshLabel: "Recruit Bow", meshSlot: "bow" },
+  t0_staff: { meshFamily: "staff", meshLabel: "Apprentice Staff", meshSlot: "staff" },
+  t0_axe: { meshFamily: "axe", meshLabel: "Worge Axe", meshSlot: "axe" },
+  t0_mail: { meshFamily: "heavy", meshLabel: "Recruit Mail", meshSlot: "body" },
+  t0_leather: { meshFamily: "medium", meshLabel: "Scout Leather", meshSlot: "body" },
+  t0_robe: { meshFamily: "light", meshLabel: "Apprentice Robe", meshSlot: "body" },
+  t0_hide: { meshFamily: "medium", meshLabel: "Hide Harness", meshSlot: "body" },
+  t0_shield: { meshFamily: "shield", meshLabel: "Wood Shield", meshSlot: "shield" },
+};
+
+export function decorateItemMeshMeta(item) {
+  if (!item) return item;
+  const meta = STARTER_MESH_META[item.id] || {};
+  return {
+    ...item,
+    meshFamily: item.meshFamily || meta.meshFamily,
+    meshLabel: item.meshLabel || meta.meshLabel || item.name,
+    meshSlot: item.meshSlot || meta.meshSlot || item.slot,
+  };
+}
 
 export function emptyBag() {
   return { items: /** @type {Item[]} */ ([]), gold: 50, xp: 0, level: 1 };
@@ -78,10 +108,12 @@ export function ensureStarterGear(starter) {
   const loadout = loadLoadout();
   const seed = (item, slotKey) => {
     if (!item) return;
-    if (!bag.items.some((i) => i.id === item.id)) {
-      addItem(bag, { ...item, qty: 1 });
+    const decorated = decorateItemMeshMeta(item);
+    if (!bag.items.some((i) => i.id === decorated.id)) {
+      addItem(bag, { ...decorated, qty: 1 });
     }
-    if (!loadout[slotKey]) loadout[slotKey] = { ...item };
+    if (!loadout[slotKey]) loadout[slotKey] = { ...decorated };
+    else loadout[slotKey] = decorateItemMeshMeta(loadout[slotKey]);
   };
   seed(starter.weapon, "weapon");
   seed(starter.armor, "armor");
@@ -101,9 +133,9 @@ export function equipItem(itemId) {
   }
   const loadout = loadLoadout();
   const key = item.slot === "shield" ? "offhand" : item.slot;
-  loadout[key] = { ...item, qty: 1 };
+  loadout[key] = { ...decorateItemMeshMeta(item), qty: 1 };
   saveLoadout(loadout);
-  return { ok: true, loadout, item };
+  return { ok: true, loadout, item: loadout[key] };
 }
 
 export function unequipSlot(slotKey) {

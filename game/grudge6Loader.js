@@ -29,6 +29,12 @@ import {
 } from "./grudge6SSOT.js";
 import { resolveAnimPackId } from "./drcAnimSsot.js";
 import { loadToonRtsRaceTemplate } from "./toonRtsGltfLoader.js";
+import {
+  applyCharacterEquipment,
+  applyLabeledMeshIds,
+  catalogAndLabelMeshes,
+  weaponFamilyFromItem,
+} from "./meshEquip.js";
 
 const textureLoader = new THREE.TextureLoader();
 if (typeof textureLoader.setCrossOrigin === "function") {
@@ -93,126 +99,27 @@ export function applyBodyAtlas(root, atlas) {
 }
 
 /**
- * Toggle weapon / shield meshes from equipped item kind.
- * Hides all weapons first, then shows one mesh per family (prefer gear preset names).
- * @param {THREE.Object3D} model
- * @param {string} [_prefix]
- * @param {{ weapon?: string, offhand?: string, prefer?: string[] }} kinds
+ * @deprecated prefer applyCharacterEquipment — kept for any external callers
  */
 export function applyEquipMeshes(model, _prefix, kinds = {}) {
   if (!model) return;
-  const w = String(kinds.weapon || "sword").toLowerCase();
-  const oh = String(kinds.offhand || "").toLowerCase();
-  const prefer = new Set((kinds.prefer || []).map(String));
-
-  /** @type {THREE.Object3D[]} */
-  const weapons = [];
-  model.traverse((o) => {
-    if (!o.isMesh && !o.isSkinnedMesh) return;
-    if (/weapon|sword|bow|staff|axe|quiver|shield/i.test(o.name || "")) {
-      weapons.push(o);
-      o.visible = false;
-    }
-  });
-
-  const matchKind = (name, kind) => {
-    const n = name.toLowerCase();
-    if (kind === "bow" || kind === "longbow") return /bow|quiver/.test(n);
-    if (kind === "staff" || kind === "magic") return /staff/.test(n);
-    if (kind === "axe" || kind === "twohand") return /axe/.test(n);
-    if (kind === "none" || kind === "unarmed") return false;
-    // sword / melee default
-    return /sword/.test(n) || /weapon_sword/.test(n);
+  const fam = String(kinds.weapon || "sword").toLowerCase();
+  const loadout = {
+    weapon: fam === "none" || fam === "unarmed" ? { id: "unarmed", name: "Unarmed" } : { id: fam, name: fam },
+    offhand: kinds.offhand ? { id: "shield", name: "Shield", slot: "shield" } : null,
   };
-
-  const pick = (predicate) => {
-    const list = weapons.filter((o) => predicate(o.name || ""));
-    if (!list.length) return null;
-    const preferred = list.find((o) => prefer.has(o.name));
-    return preferred || list[0];
-  };
-
-  if (w !== "none" && w !== "unarmed") {
-    const main = pick((n) => matchKind(n, w));
-    if (main) main.visible = true;
-    // Quiver with bows
-    if (w === "bow" || w === "longbow") {
-      const q = pick((n) => /quiver/i.test(n));
-      if (q) q.visible = true;
-    }
-  }
-  if (oh === "shield" || oh === "offhand" || w === "sword" || w === "sword_shield") {
-    const sh = pick((n) => /shield/i.test(n));
-    if (sh) sh.visible = true;
-  }
+  applyCharacterEquipment(model, kinds.prefer || [], loadout);
 }
 
 /** Map bag item id → weapon kind for mesh swap. */
 export function weaponKindFromItem(item) {
-  if (!item) return "sword";
-  const blob = `${item.id || ""} ${item.name || ""}`.toLowerCase();
-  if (/bow|longbow|yew/.test(blob)) return "bow";
-  if (/staff|wand|oak|arcane/.test(blob)) return "staff";
-  if (/axe|worge/.test(blob)) return "axe";
-  if (/unarmed|fist|glove/.test(blob)) return "none";
-  return "sword";
+  return weaponFamilyFromItem(item) || "sword";
 }
 
-function normId(name) {
-  return String(name || "")
-    .toLowerCase()
-    .replace(/^wk_|^brb_|^orc_|^elf_|^ud_|^dwf_/, "")
-    .replace(/units_/g, "")
-    .replace(/xtra_/g, "")
-    .replace(/weapon_/g, "weapon")
-    .replace(/shield_/g, "shield")
-    .replace(/shoulderpads_/g, "shoulders")
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function meshMatchesId(meshName, meshId) {
-  if (!meshName || !meshId) return false;
-  if (meshName === meshId) return true;
-  if (meshName.endsWith(meshId) || meshId.endsWith(meshName)) return true;
-  const a = normId(meshName);
-  const b = normId(meshId);
-  return a === b || a.endsWith(b) || b.endsWith(a);
-}
-
-/** Catalog hide → show exact gear_presets mesh_ids only (fuzzy race/case tolerant). */
+/** Catalog hide → show exact gear_presets mesh_ids; label every mesh. */
 export function applyExactMeshIds(root, visibleMeshes = []) {
-  const wanted = (visibleMeshes || []).filter(Boolean).map(String);
-
-  /** @type {THREE.Object3D[]} */
-  const meshes = [];
-  root.traverse((o) => {
-    if (!o.isMesh && !o.isSkinnedMesh) return;
-    o.visible = false;
-    meshes.push(o);
-  });
-
-  const shown = new Set();
-  for (const id of wanted) {
-    const hit = meshes.find((m) => meshMatchesId(m.name, id));
-    if (hit) {
-      hit.visible = true;
-      shown.add(hit.name);
-    }
-  }
-
-  if (shown.size === 0) {
-    console.warn("[grudge6Loader] no mesh_ids matched; body A fallback", visibleMeshes);
-    // Only ONE body/arms/legs/head A — never show all variants (exploded kit)
-    for (const o of meshes) {
-      const n = o.name || "";
-      if (/weapon|shield|bag|wood|quiver/i.test(n)) continue;
-      if (/Body_A|body_A|Units_Body_A/i.test(n)) o.visible = true;
-      else if (/Arms_A|arms_A|Units_Arms_A/i.test(n)) o.visible = true;
-      else if (/Legs_A|legs_A|Units_Legs_A/i.test(n)) o.visible = true;
-      else if (/head_A|Head_A|Units_head_A/i.test(n)) o.visible = true;
-    }
-  }
-  return [...shown];
+  const { shown } = applyLabeledMeshIds(root, visibleMeshes);
+  return shown;
 }
 
 /**
@@ -307,7 +214,13 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
       `${diag.beforeHeight?.toFixed?.(2)}→${diag.height?.toFixed?.(2)}m`,
     );
 
-  const shownMeshes = applyExactMeshIds(model, visibleMeshes);
+  // Label every kit mesh (slot / category / display name) then show gear_presets only
+  const labeledCatalog = catalogAndLabelMeshes(model);
+  const { shown: shownMeshes, labeled: meshLabels } = applyLabeledMeshIds(model, visibleMeshes);
+  console.info(
+    `[grudge6Loader] mesh_ids ${shownMeshes.length}/${visibleMeshes.length} labeled=${labeledCatalog.length}`,
+    meshLabels.map((m) => `${m.slot}:${m.label}`).join(", "),
+  );
 
   // Toon ★ keeps embeds — force race atlas only when body maps are missing
   let atlas = null;
@@ -374,8 +287,12 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     beforeHeightM: diag.beforeHeight,
     scaleFactor: diag.scaleFactor,
     shownMeshes,
+    meshLabels,
+    meshCatalogCount: labeledCatalog.length,
     degraded: false,
   };
+  root.userData.meshLabels = meshLabels;
+  root.userData.shownMeshes = shownMeshes;
   root.add(model);
 
   const mixer = new THREE.AnimationMixer(model);
@@ -460,18 +377,33 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     classId: kit.classId,
     visibleMeshes,
     shownMeshes,
+    meshLabels,
     atlas,
     diagnose: diag,
-    /** Re-apply weapon/shield meshes from equipped loadout */
+    /**
+     * Re-apply full body armor + weapon + shield from bag loadout.
+     * Starts from class gear_presets mesh_ids, then overrides by equipped items.
+     */
     applyLoadout(loadout) {
-      const wItem = loadout?.weapon;
-      const ohItem = loadout?.offhand;
-      // Prefer class gear mesh names, then item-driven family
-      applyEquipMeshes(model, kit.prefix, {
-        weapon: weaponKindFromItem(wItem) || animPack,
-        offhand: ohItem ? "shield" : animPack === "sword_shield" ? "shield" : "",
-        prefer: visibleMeshes,
-      });
+      const res = applyCharacterEquipment(model, visibleMeshes, loadout || {});
+      this.shownMeshes = res.shown;
+      this.meshLabels = res.labeled;
+      root.userData.shownMeshes = res.shown;
+      root.userData.meshLabels = res.labeled;
+      reGroundAfterAnimSample(model, 0);
+      console.info(
+        "[grudge6Loader] loadout applied",
+        res.labeled.map((m) => `${m.slot}=${m.label}`).join(" · "),
+      );
+      return res;
+    },
+    /** Live labeled catalog for main panel */
+    getMeshReport() {
+      return {
+        shown: this.shownMeshes || [],
+        labels: this.meshLabels || window.__mvMeshLabels || [],
+        catalog: window.__mvMeshCatalog || [],
+      };
     },
   };
 }

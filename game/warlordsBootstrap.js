@@ -513,16 +513,25 @@ export async function attachWarlordsWorld(ctx) {
     if (g6.source?.degraded) {
       flash?.("Character CDN fail — capsule stand-in (not production)", 3);
     }
-    // Apply equipped loadout weapon meshes (bag gear)
+    // Seed starter gear labels then apply full body/weapon/shield mesh_ids
     try {
-      g6.applyLoadout?.(loadLoadout());
-    } catch {
-      /* ignore */
+      ensureStarterGear(classDef.starterGear);
+      const lo = loadLoadout();
+      const applied = g6.applyLoadout?.(lo);
+      window.__mvShownMeshes = applied?.shown || g6.shownMeshes || [];
+      window.__mvMeshLabels = applied?.labeled || g6.meshLabels || [];
+      console.info(
+        "[warlords] mesh equip",
+        (window.__mvMeshLabels || []).map((m) => `${m.slot}:${m.label}`).join(" · "),
+      );
+    } catch (e) {
+      console.warn("[warlords] loadout mesh apply", e);
     }
     refreshCombatFrame({ classLabel: window.__mvClassLabel });
+    const meshNote = (window.__mvMeshLabels || []).slice(0, 4).map((m) => m.label).join(", ");
     flash?.(
-      `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${g6.animPack}`,
-      1.4,
+      `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${meshNote || g6.animPack}`,
+      1.6,
     );
   } catch (e) {
     console.warn("grudge6 load failed", e);
@@ -531,9 +540,20 @@ export async function attachWarlordsWorld(ctx) {
   // Live equip from Main Panel → swap Toon weapon meshes
   const onLoadout = () => {
     try {
-      g6?.applyLoadout?.(loadLoadout());
+      const res = g6?.applyLoadout?.(loadLoadout());
+      window.__mvShownMeshes = res?.shown || g6?.shownMeshes || [];
+      window.__mvMeshLabels = res?.labeled || g6?.meshLabels || [];
       refreshCombatFrame({ classLabel: window.__mvClassLabel });
-      flash?.("Equipment updated", 0.5);
+      try {
+        refreshOpenTab();
+      } catch {
+        /* */
+      }
+      const names = (window.__mvMeshLabels || [])
+        .filter((m) => m.category === "weapon" || m.category === "offhand" || m.slot === "body")
+        .map((m) => m.label)
+        .join(" · ");
+      flash?.(names ? `Equipped · ${names}` : "Equipment updated", 0.6);
     } catch (e) {
       console.warn("[warlords] loadout apply", e);
     }

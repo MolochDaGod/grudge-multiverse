@@ -22,9 +22,9 @@ export const CLASSES = [
     animPack: "sword_shield",
     blurb: "Sword & shield · frontline · melee skills",
     starterGear: {
-      weapon: { id: "t0_sword", name: "Recruit Sword", tier: 0, slot: "weapon", dmg: 12 },
-      armor: { id: "t0_mail", name: "Recruit Mail", tier: 0, slot: "armor", armor: 8 },
-      offhand: { id: "t0_shield", name: "Wood Shield", tier: 0, slot: "shield", armor: 4 },
+      weapon: { id: "t0_sword", name: "Recruit Sword", tier: 0, slot: "weapon", dmg: 12, meshFamily: "sword", meshLabel: "Sword", meshSlot: "sword" },
+      armor: { id: "t0_mail", name: "Recruit Mail", tier: 0, slot: "armor", armor: 8, meshFamily: "heavy", meshLabel: "Mail body", meshSlot: "body" },
+      offhand: { id: "t0_shield", name: "Wood Shield", tier: 0, slot: "shield", armor: 4, meshFamily: "shield", meshLabel: "Shield", meshSlot: "shield" },
     },
     /** @deprecated use resolveClassKit().visibleMeshes — exact gear_presets mesh_ids */
     meshHints: null,
@@ -47,8 +47,8 @@ export const CLASSES = [
     animPack: "longbow",
     blurb: "Longbow · kiting · ranged skills",
     starterGear: {
-      weapon: { id: "t0_bow", name: "Recruit Bow", tier: 0, slot: "weapon", dmg: 10 },
-      armor: { id: "t0_leather", name: "Scout Leather", tier: 0, slot: "armor", armor: 5 },
+      weapon: { id: "t0_bow", name: "Recruit Bow", tier: 0, slot: "weapon", dmg: 10, meshFamily: "bow", meshLabel: "Bow", meshSlot: "bow" },
+      armor: { id: "t0_leather", name: "Scout Leather", tier: 0, slot: "armor", armor: 5, meshFamily: "medium", meshLabel: "Leather body", meshSlot: "body" },
       offhand: null,
     },
     meshHints: null,
@@ -71,8 +71,8 @@ export const CLASSES = [
     animPack: "magic",
     blurb: "Staff · bolts · area magic",
     starterGear: {
-      weapon: { id: "t0_staff", name: "Apprentice Staff", tier: 0, slot: "weapon", dmg: 11 },
-      armor: { id: "t0_robe", name: "Apprentice Robe", tier: 0, slot: "armor", armor: 3 },
+      weapon: { id: "t0_staff", name: "Apprentice Staff", tier: 0, slot: "weapon", dmg: 11, meshFamily: "staff", meshLabel: "Staff", meshSlot: "staff" },
+      armor: { id: "t0_robe", name: "Apprentice Robe", tier: 0, slot: "armor", armor: 3, meshFamily: "light", meshLabel: "Robe body", meshSlot: "body" },
       offhand: null,
     },
     meshHints: null,
@@ -95,8 +95,8 @@ export const CLASSES = [
     animPack: "2h_melee", // greatsword + samurai (alias: twohand / greatsword)
     blurb: "Brutal orc · 2H melee · raw power",
     starterGear: {
-      weapon: { id: "t0_axe", name: "Worge Axe", tier: 0, slot: "weapon", dmg: 15 },
-      armor: { id: "t0_hide", name: "Hide Harness", tier: 0, slot: "armor", armor: 6 },
+      weapon: { id: "t0_axe", name: "Worge Axe", tier: 0, slot: "weapon", dmg: 15, meshFamily: "axe", meshLabel: "Axe", meshSlot: "axe" },
+      armor: { id: "t0_hide", name: "Hide Harness", tier: 0, slot: "armor", armor: 6, meshFamily: "medium", meshLabel: "Hide body", meshSlot: "body" },
       offhand: null,
     },
     meshHints: null,

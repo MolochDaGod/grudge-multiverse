@@ -390,10 +390,10 @@ function renderEquipmentPanel() {
       <div class="mp-eq-sum"><div class="val">${s.block}%</div><div class="lbl">Block</div></div>
       <div class="mp-eq-sum"><div class="val">${s.speed.toFixed(1)}</div><div class="lbl">Speed</div></div>
     </div>
-    <div class="mp-section-title" style="margin-top:14px;font-size:11px">Equipped meshes</div>
+    <div class="mp-section-title" style="margin-top:14px;font-size:11px">Equipped meshes · labeled kit parts</div>
     ${renderMeshStrip(doll)}
     <p class="mp-hint" style="text-align:center;margin-top:10px">
-      Unity-style paperdoll · bag on the right · click slot to unequip · click bag gear to equip ·
+      Body / arms / legs / head / weapon / shield from gear_presets + bag · visibility only ·
       <a href="https://info.grudge-studio.com/GRUDGE_Item_Database.html" target="_blank" rel="noopener">Item DB ↗</a>
     </p>
   `;
@@ -424,18 +424,32 @@ function renderPaperSlot(slotName, doll) {
 
 function renderMeshStrip(doll) {
   const chips = [];
+  // Bag paperdoll items (weapon / armor / offhand)
   for (const [slot, item] of Object.entries(doll)) {
     if (!item) continue;
+    const meshHint = item.meshLabel || item.meshSlot || item.meshFamily || "";
     chips.push(`<div class="mp-mesh-chip">
       <img src="${escape(itemIconUrl(item.id || item.name))}" alt="" onerror="this.style.display='none'" />
       <div>
-        <div class="chip-slot">${escape(slot)}</div>
+        <div class="chip-slot">${escape(slot)}${meshHint ? ` · ${escape(meshHint)}` : ""}</div>
         <div class="chip-name">${escape(item.name)}</div>
       </div>
     </div>`);
   }
+  // Live kit mesh_ids currently visible on the Toon character
+  const live = window.__mvMeshLabels || [];
+  for (const L of live) {
+    chips.push(`<div class="mp-mesh-chip live">
+      <div class="chip-live-dot" title="On character"></div>
+      <div>
+        <div class="chip-slot">${escape(L.slot || L.category || "mesh")}</div>
+        <div class="chip-name">${escape(L.label || L.name)}</div>
+        <div class="chip-id">${escape(L.name || "")}</div>
+      </div>
+    </div>`);
+  }
   if (!chips.length) {
-    return `<div class="mp-mesh-strip"><div class="mp-mesh-empty">No mesh gear equipped — equip from inventory (right)</div></div>`;
+    return `<div class="mp-mesh-strip"><div class="mp-mesh-empty">No mesh gear — equip inventory or wait for kit load</div></div>`;
   }
   return `<div class="mp-mesh-strip">${chips.join("")}</div>`;
 }
@@ -871,6 +885,12 @@ function ensureFleetPanelStyles() {
     }
     .mp-mesh-chip img { width: 28px; height: 28px; object-fit: contain; }
     .mp-mesh-chip .chip-slot { font-size: 7px; color: var(--mp-dim); text-transform: uppercase; }
+    .mp-mesh-chip .chip-id { font-size: 7px; color: #5a6a7a; font-family: ui-monospace, monospace; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mp-mesh-chip.live { border-color: rgba(110, 200, 140, 0.35); }
+    .mp-mesh-chip .chip-live-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #6eec9a; margin: 4px 6px 0 0; flex-shrink: 0;
+      box-shadow: 0 0 6px #6eec9a;
+    }
     .mp-mesh-chip .chip-name { color: var(--mp-text); font-weight: 600; }
     .mp-mesh-empty { font-size: 10px; color: var(--mp-dim); padding: 8px; font-family: system-ui; }
     .mp-hotbar {
