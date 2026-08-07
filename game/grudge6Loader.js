@@ -179,9 +179,9 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
 
   let template;
   let loadedUrl = kitUrl;
-  const candidates = kitUrlCandidates(kit.raceId || race);
   // Production: Toon RTS ★ only. Legacy races bake only with ?mvLegacyKit=1
   const legacyOk = allowLegacyKitFallback();
+  const candidates = kitUrlCandidates(kit.raceId || race, { allowLegacy: legacyOk });
   let tryUrls = [kitUrl, ...candidates.filter((u) => u !== kitUrl)].filter((u) => {
     if (isToonRtsKitUrl(u)) return true;
     if (legacyOk) {
@@ -242,20 +242,17 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   source.playMesh = isToonRtsKitUrl(loadedUrl) ? "toon-rts" : "legacy-races";
 
   const model = SkeletonUtils.clone(template);
-  // Force skeleton bind update after clone
+  // PURGED multi-mesh skeleton.pose() after clone (head-at-feet).
   model.traverse((o) => {
-    if (o.isSkinnedMesh && o.skeleton) {
-      o.skeleton.pose();
-      o.skeleton.update();
-    }
+    if (o.isSkinnedMesh && o.skeleton) o.skeleton.update();
   });
 
-  // CRITICAL order (DRC / grudge-character-correctness):
-  // 1) SI deploy while ALL body meshes still visible (scale measure)
-  // 2) then mesh_ids hide/show gear
-  // 3) then body-only atlas (never weapons)
-  // Measuring after mesh_ids → sword-height / stretched / floating kits.
-  const diag = deployGrudge6Model(model, { groundY: 0 });
+  // ObjectStore parity: bone SI fit; facePlusZ false for Toon play GLB
+  const diag = deployGrudge6Model(model, {
+    groundY: 0,
+    facePlusZ: false,
+    skipPose: true,
+  });
   if (!diag.ok) console.warn("[grudge6Loader] diagnose", diag);
   else
     console.info(

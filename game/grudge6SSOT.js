@@ -244,11 +244,15 @@ export function assertAllowedKitUrl(url) {
   return u;
 }
 
-/** Load order: Toon ★ → race fallback GLB. */
-export function kitUrlCandidates(idOrShort) {
+/**
+ * PLAY candidates = Toon RTS only.
+ * Legacy races bake only when caller sets ?mvLegacyKit=1 (see grudge6Loader).
+ * Never metaverse / FBX as play.
+ */
+export function kitUrlCandidates(idOrShort, { allowLegacy = false } = {}) {
   const r = getRace(idOrShort);
   const list = [r.kitGlb];
-  if (r.kitFallback && r.kitFallback !== r.kitGlb) list.push(r.kitFallback);
+  if (allowLegacy && r.kitFallback && r.kitFallback !== r.kitGlb) list.push(r.kitFallback);
   return list;
 }
 

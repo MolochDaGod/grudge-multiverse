@@ -70,11 +70,13 @@ export async function loadToonRtsRaceTemplate(kitUrl) {
   scene.userData.ssotVersion = GRUDGE6_SSOT_VERSION;
   scene.userData.cdn = CDN;
   scene.userData.pipeline = isToonRtsKitUrl(raw) ? "toon_rts_glb" : "legacy_races_glb";
+  // PURGED: skeleton.pose() on every skinned mesh after load.
+  // Head skins are 1-joint — multi-pose corrupts shared bones → head-at-feet.
+  // GLTF already loads in bind pose; only update matrices for measure.
   scene.traverse((o) => {
     if (o.isSkinnedMesh && o.skeleton) {
-      o.skeleton.pose();
       o.skeleton.update();
-      o.frustumCulled = true;
+      o.frustumCulled = false;
       o.castShadow = true;
       o.receiveShadow = true;
     }

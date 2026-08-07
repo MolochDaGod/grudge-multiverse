@@ -546,27 +546,44 @@ export function diagnoseCharacterLook(root, groundY = 0) {
 }
 
 /**
- * Full deploy: pose skeletons → uniform unit normalize → art-forward → feet ground.
- * Same for WK / ELF / ORC / UD / BRB / DWF — no special orc path.
+ * Full deploy (ObjectStore loadRaceKit parity for play):
+ *   skeleton.update only → bone SI fit → face yaw 0 for Toon → feet ground.
+ *
+ * PURGED (do not reintroduce for Toon play):
+ *   - pose() on every SkinnedMesh (1-joint head skins → head-at-feet)
+ *   - facePlusZ default true (Toon play GLBs already +Z; π/2 = sideways)
  */
 export function deployGrudge6Model(model, opts = {}) {
-  model.traverse((o) => {
-    if (o.isSkinnedMesh && o.skeleton) {
-      o.skeleton.pose();
-      o.skeleton.update();
+  if (!opts.skipPose) {
+    // Widest body skeleton pose once only (never every mesh)
+    let widest = null;
+    model.traverse((o) => {
+      if (o.isSkinnedMesh && o.skeleton) {
+        if (!widest || o.skeleton.bones.length > widest.bones.length) widest = o.skeleton;
+      }
+    });
+    if (widest) {
+      widest.pose();
+      widest.update();
     }
+  }
+  model.traverse((o) => {
+    if (o.isSkinnedMesh && o.skeleton) o.skeleton.update();
   });
   model.updateMatrixWorld(true);
 
   const beforeH = measureHeight(model);
   fitToHuman(model, opts.targetH ?? HUMAN_HEIGHT_M);
-  if (opts.facePlusZ !== false) applyArtForwardPlusZ(model);
+  // Toon RTS play: facePlusZ false. FBX author path only: facePlusZ true.
+  if (opts.facePlusZ === true) applyArtForwardPlusZ(model);
+  else model.userData.artForwardSet = true; // mark as handled (yaw 0)
   groundFeetAndCenterXZ(model, opts.groundY ?? 0);
   const diag = diagnoseCharacterLook(model, opts.groundY ?? 0);
   diag.beforeHeight = beforeH;
   console.info(
     `[characterDeploy] before=${beforeH.toFixed(2)}m → after=${diag.height?.toFixed(2)}m ` +
       `factor×${(diag.scaleFactor ?? 1).toFixed(4)} feet=${diag.feetMinY?.toFixed(3)} ` +
+      `facePlusZ=${opts.facePlusZ === true} ` +
       (diag.ok ? "OK" : diag.errors.join("; ")),
   );
   return diag;
