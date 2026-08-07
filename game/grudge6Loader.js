@@ -309,13 +309,34 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
 
   const shownMeshes = applyExactMeshIds(model, visibleMeshes);
 
-  // Race body atlas (Toon RTS polyart) — body/armor only
-  const atlas = await loadAtlas(kit.atlasUrl);
-  if (atlas) {
-    const painted = applyBodyAtlas(model, atlas);
-    console.info("[grudge6Loader] Toon RTS atlas", kit.atlasUrl.split("/").pop(), "mats", painted);
+  // Toon ★ keeps embeds — force race atlas only when body maps are missing
+  let atlas = null;
+  let embedMaps = 0;
+  model.traverse((o) => {
+    if (!o.isSkinnedMesh) return;
+    if (/weapon|shield|quiver|bag|xtra/i.test(o.name || "")) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (m?.map?.image) embedMaps++;
+    }
+  });
+  if (embedMaps === 0 && kit.atlasUrl) {
+    atlas = await loadAtlas(kit.atlasUrl);
+    if (atlas) {
+      const painted = applyBodyAtlas(model, atlas);
+      console.info(
+        "[grudge6Loader] atlas applied (embeds missing)",
+        kit.atlasUrl.split("/").pop(),
+        "mats",
+        painted,
+      );
+    } else {
+      console.warn("[grudge6Loader] atlas missing — kit may look untextured", kit.atlasUrl);
+    }
   } else {
-    console.warn("[grudge6Loader] atlas missing — kit may look untextured", kit.atlasUrl);
+    console.info(
+      `[grudge6Loader] keeping embedded maps (${embedMaps}) playMesh=${source.playMesh}`,
+    );
   }
 
   model.traverse((o) => {
@@ -328,7 +349,7 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
       for (const m of mats) {
         if (m.map) {
           m.map.colorSpace = THREE.SRGBColorSpace;
-          m.map.flipY = false;
+          if (m.map.flipY !== false) m.map.flipY = false;
         }
         m.vertexColors = false;
         m.metalness = Math.min(m.metalness ?? 0.1, 0.25);
@@ -346,6 +367,7 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   root.name = `grudge6_${kit.raceId || classDef.id}_${kit.classId || classId}`;
   root.userData.siHuman = true;
   root.userData.deployHeightM = diag.height;
+  root.userData.playMesh = source.playMesh;
   root.userData.characterSource = {
     ...source,
     heightM: diag.height,
@@ -363,29 +385,39 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   try {
     window.setLoaderStatus?.(`Loading anim pack ${animPack}…`);
     clips = await loadAnimPack(animPack);
-    // Rematch Bip001 bone names → strip hip/root position (kills hip-float)
+    // Bone-only rematch + strip position (kills head-at-feet + hip-float)
     let bound = 0;
+    let usable = 0;
     for (const k of Object.keys(clips)) {
       if (!clips[k]) continue;
-      clips[k] = stripPositionTracks(rematchClipTracks(clips[k], model));
+      const rematched = rematchClipTracks(clips[k], model);
+      clips[k] = stripPositionTracks(rematched);
       bound++;
+      if (clips[k]?.tracks?.length >= 6) usable++;
+      else if (clips[k]) {
+        console.warn(
+          `[grudge6Loader] clip "${k}" thin after rematch (${clips[k].tracks?.length || 0} tracks)`,
+        );
+      }
     }
-    const hasAny = Object.values(clips).some(Boolean);
-    if (hasAny) {
+    const hasAny = Object.values(clips).some((c) => c?.tracks?.length);
+    if (hasAny && usable > 0) {
       director = new AnimationDirector(mixer, clips);
       // Sample idle once then re-ground (kills residual hip float)
       mixer.update(1 / 30);
       reGroundAfterAnimSample(model, 0);
       const d2 = diagnoseCharacterLook(model, 0);
       console.info(
-        `[grudge6Loader] ${classId} pack=${animPack} meshes=${shownMeshes.length} clips=${bound} h=${d2.height?.toFixed(2)} feet=${d2.feetMinY?.toFixed(3)}`,
+        `[grudge6Loader] ${classId} pack=${animPack} playMesh=${source.playMesh} meshes=${shownMeshes.length} clips=${bound}/${usable} h=${d2.height?.toFixed(2)} feet=${d2.feetMinY?.toFixed(3)}`,
         d2.ok ? "OK" : d2.errors,
       );
     } else {
-      console.warn("[grudge6Loader] anim pack empty", animPack);
+      console.error(
+        `[grudge6Loader] anim pack EMPTY or unbindable pack=${animPack} bound=${bound} usable=${usable} — hero will T-pose`,
+      );
     }
   } catch (e) {
-    console.warn("[grudge6Loader] anim pack load failed", animPack, e);
+    console.error("[grudge6Loader] anim pack load failed", animPack, e);
   }
 
   const finalSource = {

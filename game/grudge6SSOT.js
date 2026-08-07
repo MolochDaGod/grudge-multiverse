@@ -25,7 +25,7 @@
  */
 
 /** Bump when kit/atlas/anim contracts change — used as asset query bust. */
-export const GRUDGE6_SSOT_VERSION = "2026-08-06.3-toon";
+export const GRUDGE6_SSOT_VERSION = "2026-08-06.6-toon-rematch";
 
 /** Append to CDN asset URLs so clients drop stale browser cache after SSOT ship. */
 export function assetUrlBust(url) {
@@ -261,7 +261,7 @@ export function raceList() {
 export function logSSOT() {
   console.info(
     `[grudge6SSOT ${GRUDGE6_SSOT_VERSION}] CDN=${CDN} races=${Object.keys(RACES).length} ` +
-      `kits=GLB primary human=${HUMAN_HEIGHT_M}m R2=grudge-assets anims=${ANIMS_BAKED}`,
+      `play=ToonRTS★ human=${HUMAN_HEIGHT_M}m R2=grudge-assets anims=${ANIMS_BAKED}`,
   );
 }
 

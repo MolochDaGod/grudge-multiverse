@@ -206,48 +206,192 @@ export function applyArtForwardPlusZ(model) {
 
 export function stripPositionTracks(clip) {
   if (!clip?.tracks) return clip;
-  const tracks = clip.tracks.filter((t) => /\.quaternion$|\.rotation/.test(t.name));
+  // Rotation-only: drop .position / .scale (hip-float + head-at-origin killers)
+  const tracks = clip.tracks.filter(
+    (t) => !/\.position$|\.scale$/.test(t.name) && /\.quaternion$|\.rotation/.test(t.name),
+  );
+  if (!tracks.length) {
+    const rotish = clip.tracks.filter((t) => !/\.position$|\.scale$/.test(t.name));
+    return new THREE.AnimationClip(clip.name, clip.duration, rotish.length ? rotish : clip.tracks);
+  }
   if (tracks.length === clip.tracks.length) return clip;
-  return new THREE.AnimationClip(clip.name, clip.duration, tracks.length ? tracks : clip.tracks);
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
-function normBone(s) {
-  return String(s || "")
+/** Alnum-only bone key: "Bip001 L UpperArm" / "Bip001_L_UpperArm" → bip001lupperarm */
+export function normalizeBoneKey(name) {
+  return String(name || "")
+    .trim()
     .toLowerCase()
-    .replace(/mixamorig[:_]?/g, "")
+    .replace(/^mixamorig\d*:/i, "")
+    .replace(/mixamorig[:_]?/gi, "")
     .replace(/[^a-z0-9]/g, "");
 }
 
-export function rematchClipTracks(clip, root) {
-  if (!clip?.tracks?.length || !root) return clip;
-  const boneMap = new Map();
-  root.traverse((o) => {
-    if (o.isBone) {
-      const n = normBone(o.name);
-      if (n) boneMap.set(n, o.name);
+/**
+ * Bone-only name lookup for Bip001 rematch.
+ *
+ * HARD (head-between-feet fix):
+ *  - Index only Bone nodes (+ hand containers) — NEVER skinned meshes
+ *  - Never bind tracks to mesh names like "WK_Units_head_A"
+ *  - Drop tracks for bones that do not exist (Spine1/Spine2 on many Toon kits)
+ */
+export function buildBoneNameLookup(root) {
+  const lookup = new Map();
+  const actualByKey = new Map();
+
+  root.traverse((node) => {
+    const isBone = node.isBone === true || node.type === "Bone";
+    const name = node.name || "";
+    if (!name) return;
+    if (
+      !isBone &&
+      !/bip001|mixamo|container|hand|pelvis|spine|hips/i.test(name)
+    ) {
+      return;
+    }
+    // Never treat skinned mesh body parts as anim targets
+    if (!isBone && (node.isMesh || node.isSkinnedMesh)) return;
+
+    lookup.set(name, name);
+    const key = normalizeBoneKey(name);
+    lookup.set(key, name);
+    if (isBone) actualByKey.set(key, name);
+
+    if (name.includes("_")) {
+      const spaced = name.replace(/^Bip001_/, "Bip001 ").replace(/_/g, " ");
+      lookup.set(spaced, name);
+      lookup.set(normalizeBoneKey(spaced), name);
+    }
+    if (name.includes(" ")) {
+      const underscored = name.replace(/ /g, "_");
+      lookup.set(underscored, name);
+      lookup.set(normalizeBoneKey(underscored), name);
     }
   });
-  if (boneMap.size === 0) {
-    root.traverse((o) => {
-      const n = normBone(o.name);
-      if (n && !boneMap.has(n)) boneMap.set(n, o.name);
-    });
+
+  // Role aliases (clip may say Hips / LeftArm when kit is Bip001)
+  const aliases = [
+    ["bip001pelvis", "hips"],
+    ["bip001spine", "spine"],
+    ["bip001neck", "neck"],
+    ["bip001head", "head"],
+    ["bip001lupperarm", "leftarm"],
+    ["bip001rupperarm", "rightarm"],
+    ["bip001lforearm", "leftforearm"],
+    ["bip001rforearm", "rightforearm"],
+    ["bip001lhand", "lefthand"],
+    ["bip001rhand", "righthand"],
+    ["bip001lthigh", "leftupleg"],
+    ["bip001rthigh", "rightupleg"],
+    ["bip001lcalf", "leftleg"],
+    ["bip001rcalf", "rightleg"],
+    ["bip001lfoot", "leftfoot"],
+    ["bip001rfoot", "rightfoot"],
+    ["bip001lclavicle", "leftshoulder"],
+    ["bip001rclavicle", "rightshoulder"],
+  ];
+  for (const [a, b] of aliases) {
+    const boneA = actualByKey.get(a);
+    const boneB = actualByKey.get(b);
+    if (boneA) lookup.set(b, boneA);
+    if (boneB) lookup.set(a, boneB);
   }
 
-  let changed = false;
-  const tracks = clip.tracks.map((t) => {
-    const dot = t.name.lastIndexOf(".");
-    if (dot < 0) return t;
-    const bone = t.name.slice(0, dot);
-    const prop = t.name.slice(dot + 1);
-    const hit = boneMap.get(normBone(bone));
-    if (!hit || hit === bone) return t;
-    changed = true;
-    const nt = t.clone();
-    nt.name = `${hit}.${prop}`;
-    return nt;
-  });
-  if (!changed) return clip;
+  return lookup;
+}
+
+/**
+ * Rematch clip tracks → only bones present on root.
+ * Drops missing bones (Spine1/2) and never rewrites onto mesh names.
+ */
+export function rematchClipTracks(clip, root) {
+  if (!clip?.tracks?.length || !root) return clip;
+
+  const lookup = buildBoneNameLookup(root);
+  const tracks = [];
+  let rewritten = 0;
+  let dropped = 0;
+
+  for (const track of clip.tracks) {
+    if (/\.position$|\.scale$/.test(track.name)) {
+      dropped++;
+      continue;
+    }
+
+    let nodeName;
+    let propSuffix;
+    try {
+      const parsed = THREE.PropertyBinding.parseTrackName(track.name);
+      nodeName = parsed.nodeName;
+      const dot = track.name.indexOf(".");
+      propSuffix =
+        dot >= 0
+          ? track.name.slice(dot)
+          : `.${parsed.propertyName || "quaternion"}`;
+    } catch {
+      const dot = track.name.lastIndexOf(".");
+      if (dot < 0) {
+        tracks.push(track);
+        continue;
+      }
+      nodeName = track.name.slice(0, dot);
+      propSuffix = track.name.slice(dot);
+    }
+
+    if (!nodeName) {
+      tracks.push(track);
+      continue;
+    }
+
+    // Refuse mesh-like node names (head-between-feet cause)
+    if (/units_|weapon_|shield_|xtra_|body_|arms_|legs_|head_/i.test(nodeName)) {
+      const asBone = lookup.get(nodeName) || lookup.get(normalizeBoneKey(nodeName));
+      if (!asBone || /units_|weapon_/i.test(asBone)) {
+        dropped++;
+        continue;
+      }
+    }
+
+    const resolved =
+      lookup.get(nodeName) || lookup.get(normalizeBoneKey(nodeName)) || null;
+
+    if (!resolved) {
+      // Missing bone (Spine1 / Spine2 / fingers / props) — drop, do not invent
+      dropped++;
+      continue;
+    }
+
+    if (resolved === nodeName) {
+      tracks.push(track);
+      continue;
+    }
+
+    rewritten++;
+    const Ctor = track.constructor;
+    tracks.push(
+      new Ctor(
+        `${resolved}${propSuffix}`,
+        track.times?.slice ? track.times.slice() : track.times,
+        track.values?.slice ? track.values.slice() : track.values,
+      ),
+    );
+  }
+
+  if (rewritten || dropped) {
+    console.info(
+      `[characterDeploy] rematch "${clip.name}": keep=${tracks.length} rewrote=${rewritten} dropped=${dropped}`,
+    );
+  }
+
+  if (!tracks.length) {
+    console.warn(
+      `[characterDeploy] rematch left 0 tracks for "${clip.name}" — clip unusable`,
+    );
+    // Return empty rotation clip rather than original (original may bind to meshes)
+    return new THREE.AnimationClip(clip.name, clip.duration, []);
+  }
+
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
