@@ -9,6 +9,7 @@
     "build": "vite build && node scripts/strip-map-glb.mjs",
     "preview": "vite preview",
     "deploy:gate": "node scripts/deploy-gate.mjs",
+    "smoke:character": "node scripts/smoke-character.mjs",
     "deploy": "node scripts/deploy-gate.mjs && npm run build && npx vercel deploy --prod --yes",
     "server": "npm --prefix server start",
     "server:dev": "npm --prefix server run dev",

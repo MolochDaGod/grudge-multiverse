@@ -14,6 +14,8 @@ import {
   rematchClipTracks,
   reGroundAfterAnimSample,
   diagnoseCharacterLook,
+  assertCoreBonesOnKit,
+  assertClipBindsCoreBones,
 } from "./characterDeploy.js";
 import {
   assertAllowedKitUrl,
@@ -35,6 +37,19 @@ import {
   catalogAndLabelMeshes,
   weaponFamilyFromItem,
 } from "./meshEquip.js";
+import { gradeCharacterSource } from "./characterIntegrity.js";
+
+/** Production: Toon RTS ★ only. Debug: ?mvLegacyKit=1 allows races bake fallback. */
+function allowLegacyKitFallback() {
+  try {
+    return (
+      typeof location !== "undefined" &&
+      /(?:^|[?&])mvLegacyKit=1(?:&|$)/.test(location.search || "")
+    );
+  } catch {
+    return false;
+  }
+}
 
 const textureLoader = new THREE.TextureLoader();
 if (typeof textureLoader.setCrossOrigin === "function") {
@@ -165,16 +180,30 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   let template;
   let loadedUrl = kitUrl;
   const candidates = kitUrlCandidates(kit.raceId || race);
-  // Prefer SSOT primary; if caller forced a URL, try that first then candidates
-  const tryUrls = [kitUrl, ...candidates.filter((u) => u !== kitUrl)];
+  // Production: Toon RTS ★ only. Legacy races bake only with ?mvLegacyKit=1
+  const legacyOk = allowLegacyKitFallback();
+  let tryUrls = [kitUrl, ...candidates.filter((u) => u !== kitUrl)].filter((u) => {
+    if (isToonRtsKitUrl(u)) return true;
+    if (legacyOk) {
+      console.warn("[grudge6Loader] mvLegacyKit=1 — allowing non-Toon URL", u);
+      return true;
+    }
+    return false;
+  });
+  if (!tryUrls.length && isToonRtsKitUrl(kitUrl)) {
+    tryUrls = [kitUrl];
+  }
   let lastErr = null;
   for (const url of tryUrls) {
     try {
       assertAllowedKitUrl(url);
+      if (!isToonRtsKitUrl(url) && !legacyOk) {
+        throw new Error(`refuse non-Toon kit in production: ${url}`);
+      }
       template = await loadTemplate(url);
       loadedUrl = url;
       if (!isToonRtsKitUrl(url)) {
-        console.warn("[grudge6Loader] loaded FALLBACK kit (not Toon RTS ★)", url);
+        console.error("[grudge6Loader] LEGACY kit loaded (not production default)", url);
       }
       break;
     } catch (e) {
@@ -183,9 +212,30 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     }
   }
   if (!template) {
-    console.error("[grudge6Loader] CDN kit FAIL — capsule is NOT production hero", kitUrl, lastErr);
+    console.error(
+      "[grudge6Loader] FAIL-CLOSED: Toon RTS kit load failed — no playable production hero",
+      kitUrl,
+      lastErr,
+    );
     const cap = makeCapsuleStandIn(classDef, kit);
-    cap.source = { ...source, degraded: true, error: String(lastErr?.message || lastErr) };
+    const failSource = {
+      ...source,
+      degraded: true,
+      standIn: true,
+      playMesh: "none",
+      isToonRtsKit: false,
+      director: false,
+      coreBonesOk: false,
+      coreClipOk: false,
+      pipeline: "capsule",
+      error: String(lastErr?.message || lastErr),
+      integrity: "red",
+      integrityReasons: ["toon_kit_load_failed"],
+    };
+    failSource.integrity = gradeCharacterSource(failSource).grade;
+    cap.source = failSource;
+    cap.root.userData.characterSource = failSource;
+    if (typeof window !== "undefined") window.__mvCharacterSource = failSource;
     return cap;
   }
   source.kitUrl = loadedUrl;
@@ -295,9 +345,19 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   root.userData.shownMeshes = shownMeshes;
   root.add(model);
 
+  // Fail-closed: kit must have core Bip001 bones before we bind clips
+  const coreKit = assertCoreBonesOnKit(model);
+  if (!coreKit.ok) {
+    console.error(
+      "[grudge6Loader] FAIL-CLOSED: kit missing core Bip001 bones",
+      coreKit.missing,
+    );
+  }
+
   const mixer = new THREE.AnimationMixer(model);
   let director = null;
   let clips = {};
+  let coreClip = { ok: false, bound: [], missing: ["(no probe clip)"], trackCount: 0 };
 
   try {
     window.setLoaderStatus?.(`Loading anim pack ${animPack}…`);
@@ -317,26 +377,45 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
         );
       }
     }
+    // Assert idle (or walk) drives core bones
+    const probe = clips.idle || clips.walk || clips.run;
+    if (probe) {
+      coreClip = assertClipBindsCoreBones(probe, model);
+      if (!coreClip.ok) {
+        console.error(
+          "[grudge6Loader] FAIL-CLOSED: rematch did not bind core bones",
+          coreClip.missing,
+          "tracks",
+          coreClip.trackCount,
+        );
+      }
+    }
     const hasAny = Object.values(clips).some((c) => c?.tracks?.length);
-    if (hasAny && usable > 0) {
+    const canDirect =
+      hasAny &&
+      usable > 0 &&
+      coreKit.ok &&
+      coreClip.ok &&
+      isToonRtsKitUrl(loadedUrl);
+    if (canDirect) {
       director = new AnimationDirector(mixer, clips);
-      // Sample idle once then re-ground (kills residual hip float)
       mixer.update(1 / 30);
       reGroundAfterAnimSample(model, 0);
       const d2 = diagnoseCharacterLook(model, 0);
       console.info(
-        `[grudge6Loader] ${classId} pack=${animPack} playMesh=${source.playMesh} meshes=${shownMeshes.length} clips=${bound}/${usable} h=${d2.height?.toFixed(2)} feet=${d2.feetMinY?.toFixed(3)}`,
+        `[grudge6Loader] ${classId} pack=${animPack} playMesh=toon-rts meshes=${shownMeshes.length} clips=${bound}/${usable} core=${coreClip.bound.length} h=${d2.height?.toFixed(2)} feet=${d2.feetMinY?.toFixed(3)}`,
         d2.ok ? "OK" : d2.errors,
       );
     } else {
       console.error(
-        `[grudge6Loader] anim pack EMPTY or unbindable pack=${animPack} bound=${bound} usable=${usable} — hero will T-pose`,
+        `[grudge6Loader] FAIL-CLOSED: no production director pack=${animPack} bound=${bound} usable=${usable} coreKit=${coreKit.ok} coreClip=${coreClip.ok} toon=${isToonRtsKitUrl(loadedUrl)}`,
       );
     }
   } catch (e) {
     console.error("[grudge6Loader] anim pack load failed", animPack, e);
   }
 
+  const isToon = isToonRtsKitUrl(loadedUrl);
   const finalSource = {
     ...source,
     heightM: diag.height,
@@ -344,21 +423,43 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     scaleFactor: diag.scaleFactor,
     shownMeshes,
     animPack,
-    clipsLoaded: Object.keys(clips).filter((k) => clips[k] && !k.startsWith("_")),
+    clipsLoaded: Object.keys(clips).filter((k) => clips[k]?.tracks?.length),
     director: !!director,
-    degraded: false,
-    pipeline: isToonRtsKitUrl(loadedUrl) ? "toon_rts_glb" : "legacy_races_glb",
+    degraded: !director || !isToon || !coreKit.ok || !coreClip.ok,
+    pipeline: isToon ? "toon_rts_glb" : "legacy_races_glb",
     loader: "toonRtsGltfLoader",
     kitUrl: loadedUrl,
-    isToonRtsKit: isToonRtsKitUrl(loadedUrl),
-    playMesh: isToonRtsKitUrl(loadedUrl) ? "toon-rts" : "legacy-races",
+    isToonRtsKit: isToon,
+    playMesh: isToon ? "toon-rts" : "legacy-races",
     artForward: !!model.userData?.artForwardSet || !!diag.artForward,
     ssotVersion: GRUDGE6_SSOT_VERSION,
     humanHeightM: HUMAN_HEIGHT_M,
     cdn: CDN,
     animsHost: ANIMS_BAKED,
+    coreBonesOk: coreKit.ok,
+    coreBonesFound: coreKit.found,
+    coreBonesMissing: coreKit.missing,
+    coreClipOk: coreClip.ok,
+    coreClipBound: coreClip.bound,
+    coreClipMissing: coreClip.missing,
+    coreClipTracks: coreClip.trackCount,
   };
+  const grade = gradeCharacterSource(finalSource);
+  finalSource.integrity = grade.grade;
+  finalSource.integrityReasons = grade.reasons;
+  finalSource.ok = grade.ok;
+
+  if (grade.grade !== "green") {
+    console.error(
+      `[grudge6Loader] integrity=${grade.grade} reasons=`,
+      grade.reasons,
+    );
+  } else {
+    console.info(`[grudge6Loader] integrity=green Toon RTS production OK`);
+  }
+
   root.userData.characterSource = finalSource;
+  root.userData.integrity = grade.grade;
   if (typeof window !== "undefined") {
     window.__mvCharacterSource = finalSource;
   }
@@ -373,6 +474,7 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     clips,
     animPack,
     source: finalSource,
+    integrity: grade.grade,
     raceId: kit.raceId,
     classId: kit.classId,
     visibleMeshes,

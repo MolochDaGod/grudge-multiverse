@@ -25,7 +25,7 @@
  */
 
 /** Bump when kit/atlas/anim contracts change — used as asset query bust. */
-export const GRUDGE6_SSOT_VERSION = "2026-08-06.6-toon-rematch";
+export const GRUDGE6_SSOT_VERSION = "2026-08-07.1-failclosed";
 
 /** Append to CDN asset URLs so clients drop stale browser cache after SSOT ship. */
 export function assetUrlBust(url) {

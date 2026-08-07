@@ -1,35 +1,55 @@
 /**
  * DRC (Danger Room Combat) animation SSOT for Multiverse.
- * Ported from gameopen grudge6 anims.ts — do NOT reintroduce banned loco.
  *
- * BANNED: locomotion/running (run-to-roll), locomotion/walking (tip gait),
- *         sword_shield/sword and shield run (thin arena wrong-way).
- * CANONICAL: magic Standing Walk Forward + locomotion/run_forward + samurai 1H.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "Banned loco" is NOT a ban on Toon RTS packs, meshes, or character builds.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * REJECTED_BAD_CLIP_PATHS = a few *baked anim JSON paths* that are known broken
+ * when used as walk/run (run-to-roll flip, tip-toe walk, thin wrong-facing run).
+ * We skip those *file paths only* and use CANONICAL_LOCO instead.
+ *
+ * Full Toon RTS ★ mesh + gear mesh_ids + weapon anim packs remain the product.
+ * Never interpret this list as "strip Toon content" or "block character options."
  */
 
 export const HUMAN_HEIGHT_M = 1.8;
 
+/**
+ * Known-broken *clip file paths* under /anims/baked — not mesh bans.
+ * @deprecated name kept for callers; prefer REJECTED_BAD_CLIP_PATHS
+ */
 export const BANNED_LOCOMOTION = [
-  "locomotion/running",
+  "locomotion/running", // run-to-roll (not a clean run)
   "uploads_2026_06/locomotion/running",
   "uploads/locomotion/Quick_Roll_To_Run",
-  "locomotion/walking",
-  "sword_shield/sword and shield run",
+  "locomotion/walking", // tip gait, not production walk
+  "sword_shield/sword and shield run", // thin / wrong-facing arena bake
   "sword_shield/sword-and-shield-run",
 ];
 
+/** Alias — preferred name (not a product ban). */
+export const REJECTED_BAD_CLIP_PATHS = BANNED_LOCOMOTION;
+
+/** Production walk/run when a pack's loco candidate is a rejected bad path. */
 export const CANONICAL_LOCO = {
   walk: "magic/Standing Walk Forward",
   run: "locomotion/run_forward",
   runAlt: "greatsword_samurai/gs_samurai_run_sword",
 };
 
+/** True if this baked path is a known-broken walk/run clip (path filter only). */
 export function isBannedLocomotionClip(rel) {
+  return isRejectedBadClipPath(rel);
+}
+
+export function isRejectedBadClipPath(rel) {
   const n = String(rel || "")
     .trim()
     .replace(/\\/g, "/")
     .replace(/\.json$/i, "");
   const base = n.split("/").pop() || n;
+  // Roll/tumble clips must never be selected as continuous walk/run gait
   if (
     /roll|tumble|somersault|cartwheel/i.test(base) ||
     /quick[_\s-]?roll/i.test(n) ||
@@ -37,14 +57,14 @@ export function isBannedLocomotionClip(rel) {
   ) {
     return true;
   }
-  return BANNED_LOCOMOTION.some(
+  return REJECTED_BAD_CLIP_PATHS.some(
     (b) => n === b || n.endsWith(`/${b}`) || n.includes("Quick_Roll_To_Run"),
   );
 }
 
-/** Filter candidate path lists — drop banned, keep order. */
+/** Filter candidate path lists — drop known-broken loco paths, keep order. */
 export function filterLocoCandidates(paths) {
-  return (paths || []).filter((p) => !isBannedLocomotionClip(p));
+  return (paths || []).filter((p) => !isRejectedBadClipPath(p));
 }
 
 /**

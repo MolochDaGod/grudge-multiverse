@@ -49,7 +49,25 @@ curl -sI https://assets.grudge-studio.com/models/maps/bermuda.glb
 # Railway room
 curl -s https://grudge-multiverse-room-production.up.railway.app/api/health
 # WS path only: /api/mv  (not /api/carrier)
+# Character CDN + idle parse
+npm run smoke:character
+# Optional browser assert (needs playwright)
+# PLAYWRIGHT=1 npm run smoke:character
 ```
+
+### Character integrity (fail-closed)
+
+Live tab after spawn: top-right **CHAR** badge (green/yellow/red) from `window.__mvCharacterSource`.
+
+| Grade | Meaning |
+|-------|---------|
+| **green** | Toon RTS ★ kit + director + core Bip001 rematch |
+| **yellow** | Playable but degraded (partial mesh_ids / height) |
+| **red** | Not production — capsule, no director, missing bones |
+
+**“Banned loco”** = a few *bad baked walk/run JSON paths* (run-to-roll, tip walk).  
+It is **not** a ban on Toon RTS meshes, gear mesh_ids, or character build options.  
+Production loads **only** Toon `…/glb/characters/{race}.glb` (legacy races bake needs `?mvLegacyKit=1`).
 
 ## Three.js production checklist (this app)
 

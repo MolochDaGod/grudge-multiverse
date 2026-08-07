@@ -218,6 +218,18 @@ export function stripPositionTracks(clip) {
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
+/** Core Bip001 bones a production Toon kit + idle clip must drive. */
+export const CORE_BIP001_BONES = [
+  "Bip001 Pelvis",
+  "Bip001 Spine",
+  "Bip001 Neck",
+  "Bip001 Head",
+  "Bip001 L UpperArm",
+  "Bip001 R UpperArm",
+  "Bip001 L Thigh",
+  "Bip001 R Thigh",
+];
+
 /** Alnum-only bone key: "Bip001 L UpperArm" / "Bip001_L_UpperArm" → bip001lupperarm */
 export function normalizeBoneKey(name) {
   return String(name || "")
@@ -393,6 +405,76 @@ export function rematchClipTracks(clip, root) {
   }
 
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+}
+
+/**
+ * Assert kit skeleton has core Bip001 bones (Toon RTS humanoid).
+ * @returns {{ ok: boolean, found: string[], missing: string[] }}
+ */
+export function assertCoreBonesOnKit(root) {
+  if (!root) return { ok: false, found: [], missing: CORE_BIP001_BONES.slice() };
+  const lookup = buildBoneNameLookup(root);
+  const found = [];
+  const missing = [];
+  for (const want of CORE_BIP001_BONES) {
+    const hit = lookup.get(want) || lookup.get(normalizeBoneKey(want));
+    if (hit) found.push(hit);
+    else missing.push(want);
+  }
+  return { ok: missing.length === 0, found, missing };
+}
+
+/**
+ * Assert a rematched clip drives enough core bones (rotation tracks).
+ * @returns {{ ok: boolean, bound: string[], missing: string[], trackCount: number }}
+ */
+export function assertClipBindsCoreBones(clip, root) {
+  const kit = assertCoreBonesOnKit(root);
+  if (!clip?.tracks?.length) {
+    return {
+      ok: false,
+      bound: [],
+      missing: kit.found.slice(),
+      trackCount: 0,
+    };
+  }
+  const boundKeys = new Set();
+  for (const t of clip.tracks) {
+    const dot = t.name.lastIndexOf(".");
+    if (dot < 0) continue;
+    const node = t.name.slice(0, dot);
+    boundKeys.add(normalizeBoneKey(node));
+  }
+  const bound = [];
+  const missing = [];
+  for (const want of CORE_BIP001_BONES) {
+    const k = normalizeBoneKey(want);
+    if (boundKeys.has(k) || [...boundKeys].some((b) => b.includes(k) || k.includes(b))) {
+      bound.push(want);
+    } else {
+      // Spine may be only "Bip001 Spine" without Spine1 — require pelvis+limbs hard
+      const soft = /spine|neck/i.test(want);
+      if (soft && boundKeys.has("bip001spine")) {
+        bound.push(want);
+      } else {
+        missing.push(want);
+      }
+    }
+  }
+  // Require pelvis + head + both arms + both legs (spine/neck soft if pelvis ok)
+  const hardMissing = missing.filter(
+    (m) => !/spine|neck/i.test(m) || m.includes("Pelvis") || m.includes("Head"),
+  );
+  const need = ["pelvis", "head", "lupperarm", "rupperarm", "lthigh", "rthigh"];
+  const hasHard = need.every((n) =>
+    [...boundKeys].some((b) => b.includes(n) || normalizeBoneKey(b).includes(n)),
+  );
+  return {
+    ok: hasHard && hardMissing.length <= 2,
+    bound,
+    missing,
+    trackCount: clip.tracks.length,
+  };
 }
 
 /**

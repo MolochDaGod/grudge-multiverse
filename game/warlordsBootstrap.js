@@ -38,7 +38,13 @@ import {
   updateWorldReticle,
   markHostile,
 } from "./combatAim.js";
-import { mountWarlordsHud, refreshCombatFrame, setHarvestPrompt, syncHp } from "./warlordsHud.js";
+import {
+  mountWarlordsHud,
+  refreshCombatFrame,
+  setHarvestPrompt,
+  syncHp,
+  refreshCharacterIntegrityBadge,
+} from "./warlordsHud.js";
 import { setTightHudSkillBar } from "./drcTightHud.js";
 import { startRagdollLite, updateRagdollLite, restoreRagdollLite } from "./ragdollLite.js";
 import { setupRaceClassSelectUI } from "./raceClassSelect.js";
@@ -510,12 +516,25 @@ export async function attachWarlordsWorld(ctx) {
         `h=${g6.diagnose?.height?.toFixed?.(2)}m meshIds=${g6.shownMeshes?.length} ` +
         `MAP≈${(island.halfW * 2).toFixed(0)}m | SI hero ~1.8m vs buildings ~5–10m`,
     );
-    if (g6.source?.degraded) {
-      flash?.("Character CDN fail — capsule stand-in (not production)", 3);
+    refreshCharacterIntegrityBadge(g6.source);
+    const grade = g6.source?.integrity || g6.integrity || "red";
+    if (grade === "red" || g6.source?.degraded || !g6.director) {
+      flash?.(
+        `CHAR FAIL (${grade}) — not production Toon RTS. See badge top-right.`,
+        4.5,
+      );
+      console.error("[warlords] FAIL-CLOSED character", g6.source);
+    } else if (grade === "yellow") {
+      flash?.(`Toon RTS degraded · ${g6.source?.integrityReasons?.join(", ") || "?"}`, 2.5);
+    } else {
+      flash?.(
+        `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${g6.animPack} · OK`,
+        1.4,
+      );
     }
-    // Seed starter gear labels then apply full body/weapon/shield mesh_ids
+    // Full body/weapon/shield mesh_ids (Toon RTS modular build) — all options remain
     try {
-      ensureStarterGear(classDef.starterGear);
+      ensureStarterGear?.(classDef.starterGear);
       const lo = loadLoadout();
       const applied = g6.applyLoadout?.(lo);
       window.__mvShownMeshes = applied?.shown || g6.shownMeshes || [];
@@ -528,13 +547,20 @@ export async function attachWarlordsWorld(ctx) {
       console.warn("[warlords] loadout mesh apply", e);
     }
     refreshCombatFrame({ classLabel: window.__mvClassLabel });
-    const meshNote = (window.__mvMeshLabels || []).slice(0, 4).map((m) => m.label).join(", ");
-    flash?.(
-      `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${meshNote || g6.animPack}`,
-      1.6,
-    );
+    refreshCharacterIntegrityBadge(g6.source);
+
   } catch (e) {
-    console.warn("grudge6 load failed", e);
+    console.error("grudge6 load failed", e);
+    flash?.("Character load crashed — check console", 3);
+    refreshCharacterIntegrityBadge({
+      degraded: true,
+      playMesh: "none",
+      director: false,
+      coreBonesOk: false,
+      coreClipOk: false,
+      integrity: "red",
+      integrityReasons: ["load_exception"],
+    });
   }
 
   // Live equip from Main Panel → swap Toon weapon meshes

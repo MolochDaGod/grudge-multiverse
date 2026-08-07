@@ -5,10 +5,16 @@
 import { ensureItemCatalog, iconHtml } from "./itemIcons.js";
 import { loadBag, loadLoadout } from "./inventory.js";
 import { mountDrcTightHud, refreshDrcTightHud } from "./drcTightHud.js";
+import {
+  gradeCharacterSource,
+  integrityLabel,
+  INTEGRITY_COLORS,
+} from "./characterIntegrity.js";
 
 export function mountWarlordsHud() {
   // Kill legacy prototype chrome — HUD tight.psd owns combat UI
   hideLegacyChrome();
+  mountCharacterIntegrityBadge();
 
   const el = document.querySelector(".hud");
   if (el) {
@@ -93,6 +99,61 @@ export function mountWarlordsHud() {
       if (e.code === "Escape") toggleHelpOverlay(false);
     });
   }
+}
+
+/**
+ * Green/yellow/red badge from window.__mvCharacterSource.
+ * Fail-closed visibility — no console required to see wrong hero.
+ */
+export function mountCharacterIntegrityBadge() {
+  let el = document.getElementById("mv-char-integrity");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "mv-char-integrity";
+    el.title = "Character integrity (Toon RTS). Click to dump __mvCharacterSource";
+    el.style.cssText =
+      "position:fixed;top:44px;right:12px;z-index:9998;padding:6px 12px;border-radius:8px;" +
+      "font:11px/1.35 system-ui,sans-serif;max-width:min(320px,46vw);cursor:pointer;" +
+      "border:1px solid #666;background:rgba(0,0,0,0.6);color:#ccc;pointer-events:auto;";
+    el.textContent = "CHAR · loading…";
+    el.addEventListener("click", () => {
+      const s = window.__mvCharacterSource;
+      console.info("[mv-char-integrity]", s);
+      try {
+        navigator.clipboard?.writeText?.(JSON.stringify(s, null, 2));
+      } catch {
+        /* */
+      }
+    });
+    document.body.appendChild(el);
+  }
+  refreshCharacterIntegrityBadge();
+  if (!window.__mvIntegrityPoll) {
+    window.__mvIntegrityPoll = setInterval(refreshCharacterIntegrityBadge, 1500);
+  }
+  return el;
+}
+
+export function refreshCharacterIntegrityBadge(source) {
+  const el = document.getElementById("mv-char-integrity");
+  if (!el) return;
+  const s = source || window.__mvCharacterSource;
+  if (!s) {
+    el.textContent = "CHAR · waiting…";
+    el.style.borderColor = "#666";
+    el.style.background = "rgba(0,0,0,0.55)";
+    el.style.color = "#aaa";
+    return;
+  }
+  const g = gradeCharacterSource(s);
+  const col = INTEGRITY_COLORS[g.grade] || INTEGRITY_COLORS.red;
+  el.style.background = col.bg;
+  el.style.borderColor = col.border;
+  el.style.color = col.text;
+  const why = g.reasons.length ? ` · ${g.reasons.slice(0, 2).join(", ")}` : "";
+  el.textContent = integrityLabel(g.grade, s) + why;
+  el.dataset.grade = g.grade;
+  window.__mvIntegrity = g;
 }
 
 function hideLegacyChrome() {
