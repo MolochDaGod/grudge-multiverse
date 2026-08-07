@@ -1912,15 +1912,22 @@ async function init() {
         window.setLoaderStatus?.("Connecting Multiverse Railway room…");
         const roomHint = (location.hash || "#room1").slice(1) || "room1";
         const sel = loadSelection();
-        const { client, ok, err, code, backend } = await connectMultiverseDanger(myName, roomHint, {
+        let seedHint = null;
+        try {
+            seedHint = new URLSearchParams(location.search).get("seed");
+        } catch { /* */ }
+        const { client, ok, err, code, backend, seed: roomSeed, world } = await connectMultiverseDanger(myName, roomHint, {
             classId: sel.classId,
             raceId: sel.raceId,
+            seed: seedHint || undefined,
         });
         dangerNet = client;
         window.__mvDangerNet = client;
         window.__mvNetBackend = backend || "multiverse-railway";
+        if (roomSeed) window.__mvWorldSeed = roomSeed;
+        if (world) window.__mvWorldWelcome = world;
         if (ok) {
-            setNetStatus(`Net · Railway ${code || roomHint}`, true);
+            setNetStatus(`Net · Railway ${code || roomHint}${roomSeed ? " · " + roomSeed : ""}`, true);
             let lastReport = 0;
             const reportState = () => {
                 if (!dangerNet?.connected) return;

@@ -29,12 +29,23 @@
 import http from "node:http";
 import { WebSocketServer } from "ws";
 import { randomBytes } from "node:crypto";
+import {
+  generateWorld,
+  worldWelcomePayload,
+  normalizeSeedLabel,
+  resolveSeedFromContext,
+  DEFAULT_WORLD_SEED,
+  WORLD_GEN_VERSION,
+  WORLD_SCHEMA,
+} from "./worldSeedGen.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const TICK_MS = Number(process.env.TICK_MS || 50); // 20 Hz snapshots
 const STALE_MS = Number(process.env.STALE_MS || 15000);
 const MAX_PER_ROOM = Number(process.env.MAX_PER_ROOM || 16);
 const SERVICE = "grudge-multiverse-room";
+/** Default land radius for seed gen when client has not measured Bermuda yet. */
+const DEFAULT_LAND_RADIUS = Number(process.env.WORLD_LAND_RADIUS || 320);
 
 /** @type {Map<string, Room>} */
 const rooms = new Map();
@@ -82,12 +93,37 @@ function newId() {
 class Room {
   /**
    * @param {string} code
+   * @param {string} [seedLabel]
    */
-  constructor(code) {
+  constructor(code, seedLabel) {
     this.code = code;
     /** @type {Map<string, Player>} */
     this.players = new Map();
     this.createdAt = Date.now();
+    // Valheim-style: room locks world seed at create time (first joiner / query)
+    this.seed = normalizeSeedLabel(
+      seedLabel ||
+        resolveSeedFromContext({ roomCode: code }) ||
+        DEFAULT_WORLD_SEED,
+    );
+    this.landRadius = DEFAULT_LAND_RADIUS;
+    this.world = generateWorld(this.seed, {
+      landRadius: this.landRadius,
+      density: 1.15,
+    });
+  }
+
+  /** Recompute world if landRadius updated (first client reports SI measure). */
+  setLandRadius(r) {
+    const n = Number(r);
+    if (!Number.isFinite(n) || n < 80 || n > 2000) return false;
+    if (Math.abs(n - this.landRadius) < 1) return false;
+    this.landRadius = n;
+    this.world = generateWorld(this.seed, {
+      landRadius: this.landRadius,
+      density: 1.15,
+    });
+    return true;
   }
 
   /** @param {import('ws').WebSocket} ws */
@@ -162,15 +198,22 @@ class Room {
   }
 }
 
-function getRoom(code) {
+/**
+ * @param {string} code
+ * @param {string} [seedFromQuery]
+ */
+function getRoom(code, seedFromQuery) {
   const key = String(code || "room1")
     .replace(/[^a-zA-Z0-9_-]/g, "")
     .slice(0, 32)
     .toLowerCase() || "room1";
   let room = rooms.get(key);
   if (!room) {
-    room = new Room(key);
+    room = new Room(key, seedFromQuery);
     rooms.set(key, room);
+    console.info(
+      `[${SERVICE}] room=${key} seed=${room.seed} world=${room.world.summary}`,
+    );
   }
   return room;
 }
@@ -199,7 +242,33 @@ const server = http.createServer((req, res) => {
       players: [...rooms.values()].reduce((n, r) => n + r.players.size, 0),
       time: new Date().toISOString(),
       ws: ["/api/mv"],
+      worldSchema: WORLD_SCHEMA,
+      worldGen: WORLD_GEN_VERSION,
     });
+    return;
+  }
+
+  // Valheim-style world seed API (authoritative generate; same as welcome.world)
+  if (path === "/api/world" || path === "/api/mv/world") {
+    const seed = normalizeSeedLabel(
+      url.searchParams.get("seed") || DEFAULT_WORLD_SEED,
+    );
+    const landRadius = Number(url.searchParams.get("landRadius") || DEFAULT_LAND_RADIUS);
+    const density = Number(url.searchParams.get("density") || 1.15);
+    const world = generateWorld(seed, { landRadius, density });
+    const full = url.searchParams.get("full") === "1";
+    json(res, 200, full ? world : worldWelcomePayload(world));
+    return;
+  }
+
+  if (path === "/api/rooms" || path === "/api/mv/rooms") {
+    const list = [...rooms.values()].map((r) => ({
+      code: r.code,
+      seed: r.seed,
+      players: r.players.size,
+      summary: r.world?.summary,
+    }));
+    json(res, 200, { rooms: list, gen: WORLD_GEN_VERSION });
     return;
   }
 
@@ -208,8 +277,11 @@ const server = http.createServer((req, res) => {
       service: SERVICE,
       game: "grudge-multiverse",
       health: "/api/health",
-      ws: "wss://<host>/api/mv?room=room1",
+      world: "/api/world?seed=GRUDGEHOLD",
+      ws: "wss://<host>/api/mv?room=room1&seed=GRUDGEHOLD",
       note: "Dedicated Multiverse Railway only — not Carrier, not gameopen",
+      worldGen: WORLD_GEN_VERSION,
+      grudgeInfo: "https://info.grudge-studio.com/docs",
     });
     return;
   }
@@ -243,7 +315,8 @@ server.on("upgrade", (req, socket, head) => {
 
 wss.on("connection", (ws, _req, url) => {
   const roomCode = url.searchParams.get("room") || "room1";
-  const room = getRoom(roomCode);
+  const seedQ = url.searchParams.get("seed") || null;
+  const room = getRoom(roomCode, seedQ);
   /** @type {string|null} */
   let selfId = null;
 
@@ -285,7 +358,14 @@ wss.on("connection", (ws, _req, url) => {
           hostId: roster[0]?.id || selfId,
           players: roster,
           tickHz: Math.round(1000 / TICK_MS),
-          content: { kind: "island", name: "Bermuda", preset: "bermuda" },
+          content: {
+            kind: "island",
+            name: "Bermuda",
+            preset: "bermuda",
+            seed: room.seed,
+          },
+          seed: room.seed,
+          world: worldWelcomePayload(room.world),
         }),
       );
       room.broadcast(
@@ -324,6 +404,8 @@ wss.on("connection", (ws, _req, url) => {
             name: p.name,
           })),
           tickHz: Math.round(1000 / TICK_MS),
+          seed: room.seed,
+          world: worldWelcomePayload(room.world),
         }),
       );
     }
@@ -331,6 +413,18 @@ wss.on("connection", (ws, _req, url) => {
     const me = room.players.get(selfId);
     if (!me) return;
     me.lastSeen = Date.now();
+
+    // Client reports measured Bermuda landRadius so seed content snaps correctly
+    if (msg.t === "world_meta" && msg.landRadius) {
+      if (room.setLandRadius(msg.landRadius)) {
+        room.broadcast({
+          t: "world",
+          seed: room.seed,
+          world: worldWelcomePayload(room.world),
+        });
+      }
+      return;
+    }
 
     if (msg.t === "state") {
       const snap = msg.snap || msg;

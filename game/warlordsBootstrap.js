@@ -78,7 +78,9 @@ import {
   updateRealmLife,
   damageRealmActor,
   pickNearestHostile,
+  resolvePlaySeed,
 } from "./realmLife.js";
+import { generateWorld } from "./worldSeedGen.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -1003,13 +1005,58 @@ export async function attachWarlordsWorld(ctx) {
     1.4,
   );
 
-  // Island-Crusade realm overlay: faction towns, camps, NPCs, wildlife AI
-  window.setLoaderStatus?.("Seeding Crusade realm (towns · camps · wildlife)…");
-  const realm = mountRealmLife(scene, island, groundAt);
+  // Valheim-style world seed (same generator as Railway /api/world)
+  const roomHint = (typeof location !== "undefined" && (location.hash || "#room1").slice(1)) || "room1";
+  const playSeed =
+    (typeof window !== "undefined" && window.__mvWorldSeed) ||
+    resolvePlaySeed({ roomCode: roomHint });
+  window.setLoaderStatus?.(`Generating world seed ${playSeed}…`);
+  // Prefer welcome world meta seed; always re-generate locally at measured landRadius
+  const realm = mountRealmLife(scene, island, groundAt, {
+    seed: playSeed,
+    roomCode: roomHint,
+    density: 1.15,
+  });
   window.__mvRealm = realm;
+  window.__mvWorldSeed = realm.seed;
+  // Report land radius to Railway so room world stays aligned
+  try {
+    const net = window.__mvDangerNet;
+    if (net?.connected && island.landRadius) {
+      net.sendWorldMeta?.({ landRadius: island.landRadius, seed: realm.seed });
+    }
+  } catch {
+    /* */
+  }
+  // Seed HUD chip
+  try {
+    let chip = document.getElementById("mv-world-seed");
+    if (!chip) {
+      chip = document.createElement("div");
+      chip.id = "mv-world-seed";
+      chip.style.cssText =
+        "position:fixed;top:76px;right:12px;z-index:9998;padding:6px 12px;border-radius:8px;" +
+        "font:11px/1.35 system-ui,sans-serif;background:rgba(0,0,0,0.7);border:1px solid #c9a04e;" +
+        "color:#e8d9a8;cursor:pointer;max-width:min(340px,48vw)";
+      chip.title = "World seed (Valheim-style). Click to copy. Change with ?seed=NAME";
+      chip.addEventListener("click", () => {
+        const s = window.__mvWorldSeed || realm.seed;
+        try {
+          navigator.clipboard?.writeText?.(s);
+        } catch {
+          /* */
+        }
+        flash?.(`Seed ${s} copied`, 0.8);
+      });
+      document.body.appendChild(chip);
+    }
+    chip.innerHTML = `<b>SEED</b> ${realm.seed}<br/><span style="opacity:.85">${realm.world?.summary || ""}</span>`;
+  } catch {
+    /* */
+  }
   flash?.(
-    `Realm · ${realm.stats.settlements} sites · ${realm.stats.npcs} NPCs · ${realm.stats.raiders} raiders · ${realm.stats.animals} wildlife`,
-    2.2,
+    `World ${realm.seed} · ${realm.stats.settlements} sites · ${realm.stats.npcs} NPCs · ${realm.stats.raiders} hostiles · ${realm.stats.animals} wildlife`,
+    2.4,
   );
 
   document.addEventListener("keydown", (e) => {
@@ -1044,6 +1091,19 @@ export async function attachWarlordsWorld(ctx) {
       }
       if (it.kind === "settlement") {
         flash?.(`${it.label} · ${it.settlement?.faction || "neutral"} lands`, 1.2);
+        return;
+      }
+      if (it.kind === "info" && it.url) {
+        flash?.("Grudge Info · opening docs…", 1.2);
+        try {
+          window.open(it.url, "_blank", "noopener");
+        } catch {
+          /* */
+        }
+        return;
+      }
+      if (it.kind === "poi") {
+        flash?.(`${it.label}`, 1.0);
         return;
       }
     }

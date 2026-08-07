@@ -55,6 +55,17 @@ npm run smoke:character
 # PLAYWRIGHT=1 npm run smoke:character
 ```
 
+### World seed (Valheim-style)
+
+```bash
+# Authoritative generate (same as SPA)
+curl -s "https://grudge-multiverse-room-production.up.railway.app/api/world?seed=GRUDGEHOLD"
+# Play
+# https://grudge-multiverse.vercel.app/?seed=GRUDGEHOLD#room1
+```
+
+Doc: `docs/WORLD_SEED_SSOT.md` · generator: `shared/worldSeedGen.mjs`
+
 ### Character integrity (fail-closed)
 
 Live tab after spawn: top-right **CHAR** badge (green/yellow/red) from `window.__mvCharacterSource`.

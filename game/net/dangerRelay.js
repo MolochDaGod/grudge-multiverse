@@ -46,7 +46,11 @@ function httpToWs(base) {
  * Build WS URL for Multiverse room server.
  * @param {string} roomHint e.g. room1 / MVROOM1
  */
-export function multiverseWsUrl(roomHint) {
+/**
+ * @param {string} roomHint e.g. room1 / MVROOM1
+ * @param {string} [seed] world seed (Valheim-style) — locked per room on server
+ */
+export function multiverseWsUrl(roomHint, seed) {
   const room = String(roomHint || "room1")
     .replace(/^MV/i, "")
     .replace(/[^a-zA-Z0-9_-]/g, "")
@@ -57,14 +61,22 @@ export function multiverseWsUrl(roomHint) {
     (typeof window !== "undefined" && window.__MV_GAME_SERVER_URL) ||
     DEFAULT_MV_RAILWAY;
   const wsBase = httpToWs(origin);
-  return `${wsBase}${WS_PATH}?room=${encodeURIComponent(room)}`;
+  let q = `room=${encodeURIComponent(room)}`;
+  if (seed) {
+    const s = String(seed)
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, "")
+      .slice(0, 24);
+    if (s) q += `&seed=${encodeURIComponent(s)}`;
+  }
+  return `${wsBase}${WS_PATH}?${q}`;
 }
 
 /**
  * Multiverse room client (own Railway).
  */
 export class DangerRelay {
-  constructor(roomHint = "room1") {
+  constructor(roomHint = "room1", seed = null) {
     this.ws = null;
     this.wantOpen = false;
     this.reconnectTimer = null;
@@ -74,6 +86,8 @@ export class DangerRelay {
     this.hostId = null;
     this.mode = "coop";
     this.roomHint = roomHint;
+    this.seed = seed || null;
+    this.world = null;
     this.playerName = "Player";
     this.classId = "warrior";
     this.raceId = "western-kingdoms";
@@ -89,8 +103,9 @@ export class DangerRelay {
       combat: new Set(),
       chat: new Set(),
       error: new Set(),
+      world: new Set(),
     };
-    this._url = multiverseWsUrl(roomHint);
+    this._url = multiverseWsUrl(roomHint, this.seed);
   }
 
   on(event, cb) {
@@ -117,7 +132,7 @@ export class DangerRelay {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
-    this._url = multiverseWsUrl(this.roomHint);
+    this._url = multiverseWsUrl(this.roomHint, this.seed);
     let ws;
     try {
       ws = new WebSocket(this._url);
@@ -129,13 +144,14 @@ export class DangerRelay {
     console.info("[MvRelay] connecting Multiverse Railway", this._url);
 
     ws.onopen = () => {
-      // Identify to room server
+      // Identify to room server (+ optional seed request)
       this.send(
         encode({
           t: "hello",
           name: this.playerName,
           classId: this.classId,
           raceId: this.raceId,
+          seed: this.seed || undefined,
         }),
       );
       for (const f of this.outbox.splice(0)) {
@@ -178,7 +194,18 @@ export class DangerRelay {
         this.roomCode = msg.code;
         this.hostId = msg.hostId;
         this.mode = msg.mode || "coop";
+        if (msg.seed) this.seed = msg.seed;
+        if (msg.world) this.world = msg.world;
+        if (typeof window !== "undefined") {
+          window.__mvWorldSeed = this.seed;
+          window.__mvWorldWelcome = msg.world || null;
+        }
         this.emit("welcome", msg);
+        break;
+      case "world":
+        if (msg.seed) this.seed = msg.seed;
+        if (msg.world) this.world = msg.world;
+        this.emit("world", msg);
         break;
       case "snapshot":
         this.emit("snapshot", msg.players, msg.time);
@@ -242,6 +269,17 @@ export class DangerRelay {
     this.send(encode({ t: "combat", ev }));
   }
 
+  /** Report measured Bermuda landRadius so room re-bakes world at SI scale. */
+  sendWorldMeta({ landRadius, seed } = {}) {
+    this.send(
+      encode({
+        t: "world_meta",
+        landRadius: Number(landRadius) || undefined,
+        seed: seed || this.seed || undefined,
+      }),
+    );
+  }
+
   dispose() {
     this.wantOpen = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -265,10 +303,20 @@ export class DangerRelay {
  */
 export async function connectMultiverseDanger(playerName, roomHint, meta = {}) {
   const hint = (roomHint || "room1").replace(/^MV/i, "") || "room1";
-  const client = new DangerRelay(hint);
+  // seed from meta or ?seed=
+  let seed = meta.seed || null;
+  if (!seed && typeof window !== "undefined") {
+    try {
+      seed = new URLSearchParams(window.location.search).get("seed");
+    } catch {
+      /* */
+    }
+  }
+  const client = new DangerRelay(hint, seed);
   client.playerName = String(playerName || "Player").slice(0, 24);
   client.classId = meta.classId || localStorage.getItem("mv_class_id") || "warrior";
   client.raceId = meta.raceId || localStorage.getItem("mv_race_id") || "western-kingdoms";
+  client.seed = seed;
 
   return new Promise((resolve) => {
     let settled = false;
@@ -280,6 +328,8 @@ export async function connectMultiverseDanger(playerName, roomHint, meta = {}) {
         ok,
         err,
         code: client.roomCode || hint,
+        seed: client.seed,
+        world: client.world,
         backend: "multiverse-railway",
       });
     };
