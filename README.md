@@ -39,12 +39,13 @@ Contract: `game/grudge6SSOT.js` · version stamp `GRUDGE6_SSOT_VERSION` · deplo
 ### Systems (production)
 
 - **Map:** Bermuda CDN GLB, SI metres, land-only navmesh + A\*  
+- **Realm overlay (Island-Crusade ingest):** faction wedges, towns/farms/camps, NPC market, raider AI, wildlife — `game/realmLife.js` · docs `docs/ISLAND_CRUSADE_INGEST.md`  
 - **Hero:** Toon RTS ★ load → SI fit (`characterDeploy`) → mesh_ids equip  
 - **Harvest:** trees/rocks → wood/stone, Firebase HP sync  
 - **Skills + VFX:** hotbar + `fleetVfx` (slash / bolt / nova / **fire** SI stream)  
 - **Bosses:** Mantis / Ash Ghast / Werelephant — pathfind on land, SI height fit  
 - **Death:** lite Bip001 ragdoll (`game/ragdollLite.js`)  
-- **Vendors / craft / bag:** Main panel + T0–T1 gear  
+- **Vendors / craft / bag:** Main panel + T0–T1 + Crusade market roles (alchemist/fletcher/…)  
 
 ### Multiplayer
 

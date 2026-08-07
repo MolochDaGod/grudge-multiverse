@@ -12,6 +12,7 @@ import { loadGrudge6Class } from "./grudge6Loader.js";
 import { SkillBar } from "./skills.js";
 import {
   loadBag,
+  saveBag,
   rollKillReward,
   ensureStarterGear,
   loadLoadout,
@@ -72,6 +73,12 @@ import {
   showCastBar,
   actionIconForSkill,
 } from "./mvUiTheme.js";
+import {
+  mountRealmLife,
+  updateRealmLife,
+  damageRealmActor,
+  pickNearestHostile,
+} from "./realmLife.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -850,6 +857,38 @@ export async function attachWarlordsWorld(ctx) {
         applyBossHit(b);
       }
 
+      // Crusade raiders / wolves in skill range
+      if (realm && dmg > 0) {
+        const hitDmg = Math.floor(baseDmg * (skill.dmgMul || 1));
+        const t = pickNearestHostile(realm, isAoe ? vfxOrigin : pos, hitRadius * 1.2);
+        if (t?.mesh) {
+          const d = Math.hypot(t.mesh.position.x - pos.x, t.mesh.position.z - pos.z);
+          if (d <= hitRadius * 1.25) {
+            const drop = damageRealmActor(realm, t, hitDmg);
+            impacts.play(ikind, t.mesh.position.clone().add(new THREE.Vector3(0, 0.8, 0)), {
+              radius: 1.2,
+            });
+            if (drop) loot.spawn(t.mesh.position.clone(), { ...drop });
+            if (!t.alive) {
+              flash?.(`${t.def?.label || t.def?.species || "foe"} slain`, 0.9);
+              if (t.type === "raider") {
+                const campId = t.def?.campId;
+                const left = realm.actors.filter(
+                  (a) => a.alive && a.type === "raider" && a.def?.campId === campId,
+                ).length;
+                if (left === 0) {
+                  const bag = loadBag();
+                  bag.gold = (bag.gold || 0) + 40;
+                  saveBag(bag);
+                  flash?.("Camp cleared · +40 gold", 2);
+                  if (realm.mission) realm.mission.done = true;
+                }
+              }
+            }
+          }
+        }
+      }
+
       // PvP — remote players in range (friends blocked by host)
       try {
         const remotes = ctx.remotePlayers || window.__mvRemotePlayers;
@@ -964,6 +1003,15 @@ export async function attachWarlordsWorld(ctx) {
     1.4,
   );
 
+  // Island-Crusade realm overlay: faction towns, camps, NPCs, wildlife AI
+  window.setLoaderStatus?.("Seeding Crusade realm (towns · camps · wildlife)…");
+  const realm = mountRealmLife(scene, island, groundAt);
+  window.__mvRealm = realm;
+  flash?.(
+    `Realm · ${realm.stats.settlements} sites · ${realm.stats.npcs} NPCs · ${realm.stats.raiders} raiders · ${realm.stats.animals} wildlife`,
+    2.2,
+  );
+
   document.addEventListener("keydown", (e) => {
     if (e.code === "Escape" && isVendorShopOpen()) {
       closeVendorShop();
@@ -972,6 +1020,33 @@ export async function attachWarlordsWorld(ctx) {
     if (e.code !== "KeyE" || e.repeat) return;
     const cam = ctx.camera;
     if (!cam || !capsule) return;
+
+    // 0) Crusade market NPCs / captains (realm interactables)
+    if (realm?.near) {
+      const it = realm.near;
+      if (it.kind === "vendor" && it.vendorKey && VENDORS[it.vendorKey]) {
+        window.__mvNearVendor = true;
+        openVendorShop(it.vendorKey);
+        flash?.(`${it.label} · shop open`, 0.6);
+        return;
+      }
+      if (it.kind === "captain") {
+        realm.mission = it.mission || {
+          title: "Clear the nearest raider camp",
+          blurb: "Defeat raiders, return for gold.",
+        };
+        window.__mvMission = realm.mission;
+        flash?.(
+          `Mission: ${realm.mission.title}`,
+          2.4,
+        );
+        return;
+      }
+      if (it.kind === "settlement") {
+        flash?.(`${it.label} · ${it.settlement?.faction || "neutral"} lands`, 1.2);
+        return;
+      }
+    }
 
     // 1) Vendor booth (very near) — trade; else combat block via DrcCombat
     for (const v of island.vendorPads) {
@@ -1107,6 +1182,7 @@ export async function attachWarlordsWorld(ctx) {
     aim,
     classDef,
     groundAt,
+    realm,
     getClassState,
     unbindAim,
     pickRespawn,
@@ -1115,6 +1191,33 @@ export async function attachWarlordsWorld(ctx) {
     /** Boss / PvP damage through defense pipeline */
     resolveDamage(baseDmg, meta) {
       return combat.resolveIncomingHit(baseDmg, meta || {});
+    },
+    /** Damage nearest Crusade raider / wolf for skills */
+    hitRealmHostile(dmg, range = 8) {
+      const pos = capsule?.position;
+      if (!pos || !realm) return null;
+      const t = pickNearestHostile(realm, pos, range);
+      if (!t) return null;
+      const drop = damageRealmActor(realm, t, dmg);
+      if (drop && t.mesh) loot.spawn(t.mesh.position.clone(), { ...drop });
+      if (!t.alive) {
+        flash?.(`${t.def?.label || t.def?.species || "foe"} down`, 0.8);
+        if (t.type === "raider" && realm.mission) {
+          const campId = t.def?.campId;
+          const left = realm.actors.filter(
+            (a) => a.alive && a.type === "raider" && a.def?.campId === campId,
+          ).length;
+          if (left === 0) {
+            const bag = loadBag();
+            bag.gold = (bag.gold || 0) + 40;
+            saveBag(bag);
+            flash?.("Camp cleared · +40 gold — return to Captain", 2);
+            realm.mission.done = true;
+            window.__mvMission = realm.mission;
+          }
+        }
+      }
+      return t;
     },
     update(dt) {
       harvest.update();
@@ -1128,8 +1231,24 @@ export async function attachWarlordsWorld(ctx) {
       const ctrl = localPlayer?._player;
       if (!pos) return;
 
+      // Crusade realm AI + zone
+      const realmTick = updateRealmLife(realm, dt, pos, { groundAt });
+      window.__mvZone = realmTick.zone;
+      window.__mvNearRealm = realmTick.near || null;
+      for (const atk of realmTick.attacks) {
+        const res = combat.resolveIncomingHit(atk.dmg || 8, {
+          boss: atk.actor?.def?.label || "raider",
+          attack: "melee",
+        });
+        if (res.dmg > 0) {
+          impacts.play("hit", pos.clone().add(new THREE.Vector3(0, 1.1, 0)), {
+            color: 0xff6644,
+          });
+        }
+      }
+
       // Near vendor flag for E = trade vs block
-      let nearV = false;
+      let nearV = !!realmTick.near && realmTick.near.kind === "vendor";
       for (const v of island.vendorPads || []) {
         if (!v._mesh) continue;
         if (pos.distanceTo(v._mesh.position) <= (v._interactR || 2.8)) {
@@ -1195,14 +1314,23 @@ export async function attachWarlordsWorld(ctx) {
         }
       }
 
-      // Vendor / loot / harvest proximity prompts (priority: vendor → loot → harvest)
+      // Vendor / loot / harvest proximity prompts (priority: realm vendor → booth → loot → harvest)
       let nearVendor = null;
-      for (const v of island.vendorPads) {
-        if (!v._mesh) continue;
-        const d = pos.distanceTo(v._mesh.position);
-        if (d <= (v._interactR || 2.8)) {
-          nearVendor = v;
-          break;
+      if (realmTick.near?.kind === "vendor") {
+        nearVendor = { label: realmTick.near.label };
+      } else if (realmTick.near?.kind === "captain") {
+        setVendorPrompt(true, realmTick.near.label || "Captain");
+        setHarvestPrompt(false);
+        nearVendor = { label: realmTick.near.label, _captain: true };
+      }
+      if (!nearVendor) {
+        for (const v of island.vendorPads) {
+          if (!v._mesh) continue;
+          const d = pos.distanceTo(v._mesh.position);
+          if (d <= (v._interactR || 2.8)) {
+            nearVendor = v;
+            break;
+          }
         }
       }
       if (nearVendor) {
@@ -1336,6 +1464,14 @@ export async function attachWarlordsWorld(ctx) {
           const y = (-sp.y * 0.5 + 0.5) * window.innerHeight;
           v._label.style.transform = `translate(-50%,-100%) translate(${x}px,${y - 24}px)`;
           v._label.style.display = sp.z < 1 ? "block" : "none";
+        }
+      }
+
+      // Soft-lock Crusade raiders as hostiles (once)
+      if (!this._realmMarked) {
+        this._realmMarked = true;
+        for (const a of realm.actors) {
+          if (a.hostile && a.mesh) markHostile(a.mesh, a.def?.id || "raider", "raider");
         }
       }
 
