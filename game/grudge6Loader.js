@@ -24,7 +24,9 @@ import {
   assetUrlBust,
   kitUrlCandidates,
   isToonRtsKitUrl,
+  assertPlayKitUrl,
   GRUDGE6_SSOT_VERSION,
+  WARLORDS_PLAY_CONTRACT_VERSION,
   HUMAN_HEIGHT_M,
   ANIMS_BAKED,
   CDN,
@@ -197,8 +199,11 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   for (const url of tryUrls) {
     try {
       assertAllowedKitUrl(url);
-      if (!isToonRtsKitUrl(url) && !legacyOk) {
-        throw new Error(`refuse non-Toon kit in production: ${url}`);
+      if (!legacyOk) {
+        // Hardened Warlords play: Toon RTS only (ObjectStore loadRaceKit parity)
+        assertPlayKitUrl(url);
+      } else if (!isToonRtsKitUrl(url)) {
+        console.error("[grudge6Loader] LEGACY kit allowed via mvLegacyKit=1", url);
       }
       template = await loadTemplate(url);
       loadedUrl = url;
@@ -303,7 +308,9 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     if (!o.isMesh && !o.isSkinnedMesh) return;
     o.castShadow = true;
     o.receiveShadow = true;
-    o.frustumCulled = true;
+    // Skinned modular kits: frustumCulled false (partial skins clip wrongly when true)
+    if (o.isSkinnedMesh) o.frustumCulled = false;
+    else o.frustumCulled = true;
     if (o.material) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
@@ -320,16 +327,28 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     }
   });
 
-  // Re-ground after equip visibility (AABB can change)
+  // Re-ground after equip (bone structural via bodyBox → measureBoneStructuralBBox)
   reGroundAfterAnimSample(model, 0);
 
   const root = new THREE.Group();
   root.name = `grudge6_${kit.raceId || classDef.id}_${kit.classId || classId}`;
+  const isToon = isToonRtsKitUrl(loadedUrl);
+  // Single Warlords play stamp — same contract as ObjectStore loadRaceKit
   root.userData.siHuman = true;
   root.userData.deployHeightM = diag.height;
   root.userData.playMesh = source.playMesh;
+  root.userData.grudge6Play = isToon;
+  root.userData.warlordsPlayContract = WARLORDS_PLAY_CONTRACT_VERSION;
+  root.userData.importPipeline = isToon ? "toon-rts-glb" : "legacy-races";
+  root.userData.ssotVersion = GRUDGE6_SSOT_VERSION;
+  model.userData.warlordsPlayContract = WARLORDS_PLAY_CONTRACT_VERSION;
+  model.userData.grudge6Play = isToon;
+  model.userData.importPipeline = root.userData.importPipeline;
   root.userData.characterSource = {
     ...source,
+    warlordsPlayContract: WARLORDS_PLAY_CONTRACT_VERSION,
+    grudge6Play: isToon,
+    importPipeline: root.userData.importPipeline,
     heightM: diag.height,
     beforeHeightM: diag.beforeHeight,
     scaleFactor: diag.scaleFactor,
@@ -337,6 +356,8 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     meshLabels,
     meshCatalogCount: labeledCatalog.length,
     degraded: false,
+    facePlusZ: false,
+    measure: "bone_structural_bbox",
   };
   root.userData.meshLabels = meshLabels;
   root.userData.shownMeshes = shownMeshes;
@@ -412,9 +433,11 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     console.error("[grudge6Loader] anim pack load failed", animPack, e);
   }
 
-  const isToon = isToonRtsKitUrl(loadedUrl);
   const finalSource = {
     ...source,
+    warlordsPlayContract: WARLORDS_PLAY_CONTRACT_VERSION,
+    grudge6Play: isToon,
+    importPipeline: isToon ? "toon-rts-glb" : "legacy-races",
     heightM: diag.height,
     beforeHeightM: diag.beforeHeight,
     scaleFactor: diag.scaleFactor,
@@ -433,6 +456,8 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
     humanHeightM: HUMAN_HEIGHT_M,
     cdn: CDN,
     animsHost: ANIMS_BAKED,
+    facePlusZ: false,
+    measure: "bone_structural_bbox",
     coreBonesOk: coreKit.ok,
     coreBonesFound: coreKit.found,
     coreBonesMissing: coreKit.missing,

@@ -35,6 +35,16 @@ export function gradeCharacterSource(source) {
   if (s.playMesh !== "toon-rts" && s.isToonRtsKit !== true) {
     reasons.push("not_toon_rts_play_mesh");
   }
+  // ObjectStore hardened contract stamp (single Warlords play system)
+  if (s.grudge6Play !== true && s.playMesh === "toon-rts") {
+    // soft: older stamps may omit — require contract when present path claims Toon
+  }
+  if (s.warlordsPlayContract && !/^2026-08-07\.harden/.test(String(s.warlordsPlayContract))) {
+    reasons.push(`stale_play_contract:${s.warlordsPlayContract}`);
+  }
+  if (!s.warlordsPlayContract && s.playMesh === "toon-rts") {
+    reasons.push("missing_warlords_play_contract");
+  }
   if (!s.director) {
     reasons.push("no_animation_director");
   }

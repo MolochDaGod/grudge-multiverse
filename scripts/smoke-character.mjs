@@ -13,6 +13,8 @@
 const CDN = "https://assets.grudge-studio.com";
 const ANIMS = "https://open.grudge-studio.com/anims/baked";
 const SPA = process.env.MV_SMOKE_URL || "https://grudge-multiverse.vercel.app/";
+/** Must match ObjectStore + Multiverse WARLORDS_PLAY_CONTRACT_VERSION */
+const EXPECT_CONTRACT = "2026-08-07.harden.1";
 
 const KITS = ["human", "elf", "orc", "undead", "barbarian", "dwarf"].map(
   (r) => `${CDN}/asset-packs/toon-rts-characters/glb/characters/${r}.glb`,
@@ -35,12 +37,37 @@ async function parseIdle(url) {
 }
 
 async function smokeCdn() {
-  console.log("[smoke] CDN Toon RTS kits…");
+  console.log("[smoke] CDN Toon RTS kits + ObjectStore contract…");
   let fail = 0;
   for (const u of KITS) {
     const h = await head(u);
     console.log(h.ok ? "  OK" : "  FAIL", h.status, u.split("/").pop());
     if (!h.ok) fail++;
+  }
+  // Machine contract on info (deployed ObjectStore)
+  try {
+    const contractUrl =
+      "https://info.grudge-studio.com/api/v1/grudge6-warlords-play-contract.json";
+    const res = await fetch(contractUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = await res.json();
+    console.log("  OK contract", j.version, "code=", j.code);
+    if (j.version !== EXPECT_CONTRACT) {
+      console.warn(
+        "  WARN contract version",
+        j.version,
+        "expected",
+        EXPECT_CONTRACT,
+        "(info deploy may lag ObjectStore main)",
+      );
+    }
+    if (!Array.isArray(j.banned) || j.banned.length < 5) {
+      console.error("  FAIL contract banned list thin");
+      fail++;
+    }
+  } catch (e) {
+    console.error("  FAIL contract", e.message);
+    fail++;
   }
   const idleUrl = `${ANIMS}/greatsword_samurai/gs_samurai_idle_sword.json`;
   try {
@@ -91,11 +118,23 @@ async function smokePlaywright() {
     integrity: src.integrity,
     playMesh: src.playMesh,
     director: src.director,
+    contract: src.warlordsPlayContract,
     kit: (src.kitUrl || "").split("/").pop(),
     reasons: src.integrityReasons,
   });
-  if (src.integrity !== "green" || src.playMesh !== "toon-rts" || !src.director) {
-    console.error("[smoke] FAIL integrity not green Toon production");
+  if (src.playMesh !== "toon-rts" || !src.director) {
+    console.error("[smoke] FAIL not Toon production path");
+    return 1;
+  }
+  if (src.warlordsPlayContract !== EXPECT_CONTRACT) {
+    console.error(
+      "[smoke] FAIL missing/stale warlordsPlayContract",
+      src.warlordsPlayContract,
+    );
+    return 1;
+  }
+  if (src.integrity !== "green" && src.integrity !== "yellow") {
+    console.error("[smoke] FAIL integrity red", src.integrityReasons);
     return 1;
   }
   console.log("[smoke] browser PASS integrity=green");

@@ -24,8 +24,14 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-/** Bump when kit/atlas/anim contracts change — used as asset query bust. */
-export const GRUDGE6_SSOT_VERSION = "2026-08-07.1-failclosed";
+/**
+ * Bump when kit/atlas/anim contracts change — used as asset query bust.
+ * Must stay aligned with ObjectStore WARLORDS_PLAY_CONTRACT_VERSION for play.
+ */
+export const GRUDGE6_SSOT_VERSION = "2026-08-07.harden.1";
+
+/** Same stamp as ObjectStore js/grudge6-kit.js — no second character system. */
+export const WARLORDS_PLAY_CONTRACT_VERSION = "2026-08-07.harden.1";
 
 /** Append to CDN asset URLs so clients drop stale browser cache after SSOT ship. */
 export function assetUrlBust(url) {
@@ -264,9 +270,22 @@ export function raceList() {
 /** Runtime stamp so console proves which SSOT shipped. */
 export function logSSOT() {
   console.info(
-    `[grudge6SSOT ${GRUDGE6_SSOT_VERSION}] CDN=${CDN} races=${Object.keys(RACES).length} ` +
-      `play=ToonRTS★ human=${HUMAN_HEIGHT_M}m R2=grudge-assets anims=${ANIMS_BAKED}`,
+    `[grudge6SSOT ${GRUDGE6_SSOT_VERSION}] contract=${WARLORDS_PLAY_CONTRACT_VERSION} ` +
+      `CDN=${CDN} races=${Object.keys(RACES).length} play=ToonRTS★ human=${HUMAN_HEIGHT_M}m ` +
+      `R2=grudge-assets anims=${ANIMS_BAKED}`,
   );
+}
+
+/** Assert URL is Warlords PLAY Toon RTS (ObjectStore parity). */
+export function assertPlayKitUrl(url) {
+  const u = String(url || "");
+  if (!isToonRtsKitUrl(u)) {
+    throw new Error(
+      `[grudge6SSOT] PLAY refuse non-Toon kit: ${u} ` +
+        `(need asset-packs/toon-rts-characters/glb/characters/{race}.glb)`,
+    );
+  }
+  return u;
 }
 
 /**
@@ -281,8 +300,12 @@ export function resolveCharacterSource(raceId, classId = "warrior", extra = {}) 
   const race = getRace(raceId);
   const kit = assertAllowedKitUrl(extra.kitUrl || race.kitGlb);
   const atlas = extra.atlasUrl || race.atlasUrl;
+  const playOk = isToonRtsKitUrl(kit);
   return {
     ssotVersion: GRUDGE6_SSOT_VERSION,
+    warlordsPlayContract: WARLORDS_PLAY_CONTRACT_VERSION,
+    grudge6Play: playOk,
+    importPipeline: playOk ? "toon-rts-glb" : "non-play",
     units: "si_metres",
     humanHeightM: HUMAN_HEIGHT_M,
     raceId: race.raceId,
@@ -296,6 +319,8 @@ export function resolveCharacterSource(raceId, classId = "warrior", extra = {}) 
     meshIds: Array.isArray(extra.visibleMeshes) ? extra.visibleMeshes.slice() : [],
     cdn: CDN,
     forbidden: FORBIDDEN_PATH_FRAGMENTS,
+    measure: "bone_structural_bbox",
+    facePlusZ: false,
   };
 }
 
