@@ -251,11 +251,48 @@ export function rematchClipTracks(clip, root) {
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
+/**
+ * Snap skinned feet to a ground plane after an anim sample.
+ *
+ * CRITICAL: Box3 is world-space; root.position is local.
+ * When the kit is parented under a world-placed SI root (island height ≠ 0),
+ * grounding to world Y=0 sinks the hero by island altitude.
+ *
+ * - Unparented / deploy at origin: groundY is world Y (usually 0).
+ * - Child of grudge6 root: groundY is **local** feet plane of the parent (usually 0).
+ */
 export function reGroundAfterAnimSample(root, groundY = 0) {
+  if (!root) return;
+  root.updateMatrixWorld(true);
+  // Pose skeleton so skinned bounds match current clip
+  root.traverse((o) => {
+    if (o.isSkinnedMesh && o.skeleton) o.skeleton.update();
+  });
   root.updateMatrixWorld(true);
   const box = bodyBox(root);
   if (!Number.isFinite(box.min.y)) return;
-  root.position.y += groundY - box.min.y;
+
+  let targetWorldY = groundY;
+  if (root.parent) {
+    // Feet on parent's local y=groundY plane (SI hero root sits on island ground)
+    const parentOrigin = new THREE.Vector3();
+    root.parent.getWorldPosition(parentOrigin);
+    // Parent Y-rotation only → world Y of local ground plane ≈ parentWorldY + groundY * scaleY
+    const sy = root.parent.scale?.y ?? 1;
+    targetWorldY = parentOrigin.y + groundY * sy;
+  }
+
+  const dyWorld = targetWorldY - box.min.y;
+  if (!Number.isFinite(dyWorld) || Math.abs(dyWorld) < 1e-5) return;
+
+  // Apply as local Y delta (valid for Y-up hierarchy with no parent pitch/roll)
+  if (root.parent) {
+    const parent = root.parent;
+    const scaleY = parent.scale?.y || 1;
+    root.position.y += dyWorld / scaleY;
+  } else {
+    root.position.y += dyWorld;
+  }
 }
 
 export function diagnoseCharacterLook(root, groundY = 0) {

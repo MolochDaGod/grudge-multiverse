@@ -645,9 +645,11 @@ export async function attachWarlordsWorld(ctx) {
       if (g6?.director) {
         const role = skillAnimRole(skill);
         g6.director.requestOneShot(role) || g6.director.requestOneShot("attack");
+        // Re-ground kit **relative to SI root** (local y=0) — never world y=0
+        // (that sunk heroes by island altitude after every skill).
         setTimeout(() => {
           if (g6?.model) reGroundAfterAnimSample(g6.model, 0);
-        }, 80);
+        }, 90);
       }
 
       const cam = ctx.camera;
@@ -1249,8 +1251,14 @@ export async function attachWarlordsWorld(ctx) {
       if (g6?.root) {
         // Feet on ground (Box3 feet Y) — same groundY as nav / water clamp
         g6.root.position.set(pos.x, groundY, pos.z);
-        // Yaw only — never copy full capsule quaternion
+        // Yaw only on SI root — art-forward +π/2 lives on child model (never overwrite)
         g6.root.rotation.set(0, bodyYaw, 0);
+        // Keep Mixamo/proxy ghost hidden every frame (controller may re-show)
+        try {
+          if (ctrl?.playerModel) ctrl.playerModel.visible = false;
+        } catch {
+          /* */
+        }
 
         if (g6.director) {
           g6.director.setGaitTarget(moving, sprinting, speed01);
@@ -1263,6 +1271,14 @@ export async function attachWarlordsWorld(ctx) {
           };
         } else {
           g6.mixer?.update(dt);
+        }
+
+        // Periodic feet clamp if anim residual floats kit (parent-local, not world 0)
+        if (!this._groundAcc) this._groundAcc = 0;
+        this._groundAcc += dt;
+        if (this._groundAcc > 0.5 && g6.model && !g6.root.userData?.ragdollLite) {
+          this._groundAcc = 0;
+          reGroundAfterAnimSample(g6.model, 0);
         }
       }
 
