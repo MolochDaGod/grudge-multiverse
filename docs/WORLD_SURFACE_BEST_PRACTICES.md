@@ -9,12 +9,15 @@ Sources wired into Multiverse (not forked as parallel engines):
 | [three.js Water](https://threejs.org/docs/#examples/en/objects/Water) | Reflective ocean + waterNormals | `game/oceanWater.js` |
 | [three.js RapierPhysics](https://threejs.org/docs/#examples/en/physics/RapierPhysics) | Static heightfields / cuboids | `game/worldPhysics.js` (**local** `@dimforge/rapier3d-compat`) |
 
-## Terrain (5 km seed)
+## Terrain (5 km seed) — player-ready
 
 1. **Hub** = Bermuda GLB mesh (authored SI) — never dollhouse-squash.  
-2. **Faction discs** = FBM heightfields (Simon-style erosion/rivers) with slope/height vertex colours (sand → grass → rock).  
-3. **Nav** rebakes from composed `island.sampleY` after expand.  
-4. Infinite chunk streaming is **out of scope** for Multiverse room play; same noise API can later stream tiles.
+2. **Faction discs** = FBM heightfields (Simon-style erosion/rivers) with slope/height vertex colours (sand → grass → rock); walkable peaks ~12–18 m.  
+3. **Nav** rebakes from composed `island.sampleY` after expand with **landDiscs** water mask (ocean between islands = sea).  
+4. **Spawns** rebuilt after expand nav (never use Bermuda-only pre-expand spawns).  
+5. **Colliders** = Bermuda walkable + FBM seed-terrain meshes (BVH rebind).  
+6. **Gate** = `assertMapSeedReady(island)` → `seedReady.ok` (walkable ≥ 80, hubWalk ≥ 12, spawns ≥ 1).  
+7. Infinite chunk streaming is **out of scope** for Multiverse room play; same noise API can later stream tiles.
 
 ## Water
 

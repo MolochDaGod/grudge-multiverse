@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import { getClass } from "./classes.js";
 import { loadBermudaIsland, makeGroundSampler } from "./island.js";
-import { expandIslandToSeedWorld } from "./worldSpace.js";
+import { expandIslandToSeedWorld, assertMapSeedReady } from "./worldSpace.js";
 import { collectColliderMeshes, COLLIDER_LAYER } from "./mapLiteracy.js";
 import { HarvestSystem } from "./harvest.js";
 import { BossFight } from "./bosses.js";
@@ -211,8 +211,16 @@ function skillAnimRole(skill) {
  * NEVER pass the full GLB root — ~1500 meshes (leaves/props) hang mergeGeometries
  * and leave collider=null so update() early-exits (void / frozen).
  */
-export function rebindIslandStaticCollider(localPlayer, islandRoot) {
+/**
+ * Rebuild PlayerController static BVH from Bermuda + seed FBM terrain meshes.
+ * @param {object} localPlayer
+ * @param {THREE.Object3D|object} islandRootOrIsland — root or full island (with seedTerrains)
+ */
+export function rebindIslandStaticCollider(localPlayer, islandRootOrIsland) {
   const ctrl = localPlayer?._player;
+  const islandRoot = islandRootOrIsland?.isObject3D
+    ? islandRootOrIsland
+    : islandRootOrIsland?.root || islandRootOrIsland;
   if (!ctrl?.buildStaticCollider || !islandRoot) {
     console.warn("[warlords] cannot rebind static collider");
     return false;
@@ -224,14 +232,33 @@ export function rebindIslandStaticCollider(localPlayer, islandRoot) {
       [COLLIDER_LAYER.WALKABLE, COLLIDER_LAYER.SOLID],
       { maxMeshes: 420 },
     );
-    // Fallback: name-based walk surfaces if tagging missed (should not happen after loadBermudaIsland)
+    // Include Simon FBM faction pads (not under Bermuda root)
+    const seedMeshes = islandRootOrIsland?.seedTerrains?.meshes;
+    if (Array.isArray(seedMeshes)) {
+      for (const m of seedMeshes) {
+        if (m?.isMesh && m.geometry && !meshes.includes(m)) meshes.push(m);
+      }
+    }
+    const seedRoot = islandRootOrIsland?.seedTerrains?.root;
+    if (seedRoot) {
+      seedRoot.updateMatrixWorld(true);
+      const extra = collectColliderMeshes(
+        seedRoot,
+        [COLLIDER_LAYER.WALKABLE],
+        { maxMeshes: 32 },
+      );
+      for (const m of extra) {
+        if (!meshes.includes(m)) meshes.push(m);
+      }
+    }
+    // Fallback: name-based walk surfaces if tagging missed
     if (meshes.length < 2) {
       meshes = [];
       islandRoot.traverse((o) => {
         if (!o.isMesh || !o.visible || !o.geometry) return;
         if (/leave|leaf|plant_01|bush|flower|LOD[12]|WeaponBox|Table|Bed/i.test(o.name || "")) return;
         if (
-          /Main_Large_Terrain|ground|Floor|road|Road|terrain|CementFactory|house|building|wall|fence|Hangar|island-safety/i.test(
+          /Main_Large_Terrain|ground|Floor|road|Road|terrain|CementFactory|house|building|wall|fence|Hangar|island-safety|seed-terrain/i.test(
             o.name || "",
           )
         ) {
@@ -349,8 +376,10 @@ export async function attachWarlordsWorld(ctx) {
   }
   const groundAt = island.sampleY || makeGroundSampler(island.root);
   const mapW = island.worldSizeM || island.halfW * 2;
+  const mapGate = assertMapSeedReady(island);
   console.info(
-    `[warlords] SEED WORLD ${mapW.toFixed(0)}×${mapW.toFixed(0)} m · radius=${island.worldRadiusM}m · hub meshLandR=${island.meshLandRadius?.toFixed?.(0)} · navCell=${island.navCellSize}m walkable=${island.nav?.cells?.filter?.((c) => c.walkable).length ?? "?"}`,
+    `[warlords] SEED WORLD ${mapW.toFixed(0)}×${mapW.toFixed(0)} m · ready=${mapGate.ok} · walk=${island.seedReady?.walkable} hubWalk=${island.seedReady?.hubWalkable} · navCell=${island.navCellSize}m · spawns=${island.spawns?.length}`,
+    mapGate.reasons,
   );
   window.__mvMapMeta = {
     units: "si_metres",
@@ -363,22 +392,46 @@ export async function attachWarlordsWorld(ctx) {
     waterY: island.waterY,
     scale: island.scale,
     widthM: mapW,
+    seed: earlySeed,
+    seedReady: island.seedReady,
+    mapGate,
     nav: island.nav
       ? {
           cellSize: island.nav.cellSize,
-          walkable: island.nav.cells.filter((c) => c.walkable).length,
+          walkable: island.nav.walkCount ?? island.nav.cells.filter((c) => c.walkable).length,
           total: island.nav.cells.length,
           waterY: island.nav.waterY,
           landRadius: island.nav.landRadius,
+          discs: island.landDiscs?.length || 0,
         }
       : null,
   };
   window.__mvNav = island.nav || null;
   window.__mvIsland = island;
   window.__mvWater = island.waterPhysics || null;
+  window.__mvMapGate = mapGate;
 
-  // Start ON LAND — spawns already nav-picked; re-snap for safety
-  let spawn = (island.spawns[Math.floor(Math.random() * island.spawns.length)] || island.spawns[0]).clone();
+  if (!mapGate.ok) {
+    flash?.(
+      `Map nav incomplete (${mapGate.reasons.join(", ")}) — hub safety spawn`,
+      3.5,
+    );
+  } else {
+    flash?.(
+      `Map ready · seed ${earlySeed} · ${island.seedReady.walkable} walk cells · ${island.spawns.length} spawns`,
+      2.2,
+    );
+  }
+
+  // Start ON LAND — spawns rebuilt after expand nav
+  const spawnList = island.spawns?.length
+    ? island.spawns
+    : island.nav?.pickLandSpawns?.(8, island.hubRadius || 120)?.map(
+        (p) => new THREE.Vector3(p.x, p.y, p.z),
+      ) || [new THREE.Vector3(0, 2, 0)];
+  let spawn = (
+    spawnList[Math.floor(Math.random() * spawnList.length)] || spawnList[0]
+  ).clone();
   if (island.nav?.snap) {
     const sn = island.nav.snap(spawn.x, spawn.z);
     spawn = new THREE.Vector3(sn.x, sn.y + 1.05, sn.z);
@@ -386,9 +439,12 @@ export async function attachWarlordsWorld(ctx) {
     const gy = groundAt(spawn.x, spawn.z);
     spawn.y = (Number.isFinite(gy) ? gy : 0) + 1.15;
   }
-  // Refuse water start
-  if (island.nav?.isWaterWorld?.(spawn.x, spawn.z) || island.waterPhysics?.isInWater?.(spawn.x, spawn.z, spawn.y - 1)) {
-    const land = island.nav?.pickLandSpawns?.(1, island.hubRadius)?.[0];
+  // Refuse water start — force hub land
+  if (
+    island.nav?.isWaterWorld?.(spawn.x, spawn.z) ||
+    !island.nav?.isWalkableWorld?.(spawn.x, spawn.z)
+  ) {
+    const land = island.nav?.pickLandSpawns?.(1, island.hubRadius || 120)?.[0];
     if (land) spawn.set(land.x, land.y, land.z);
     else if (island.nav?.snap) {
       const sn = island.nav.snap(0, 0);
@@ -396,6 +452,7 @@ export async function attachWarlordsWorld(ctx) {
     }
   }
   const spawnGroundY = groundAt(spawn.x, spawn.z);
+  if (Number.isFinite(spawnGroundY)) spawn.y = spawnGroundY + 1.12;
   console.info(
     `[warlords] LAND spawn xz=(${spawn.x.toFixed(1)},${spawn.z.toFixed(1)}) y=${spawn.y.toFixed(2)} ground=${Number.isFinite(spawnGroundY) ? spawnGroundY.toFixed(2) : "?"} walkable=${!!island.nav?.isWalkableWorld?.(spawn.x, spawn.z)}`,
   );
@@ -411,8 +468,8 @@ export async function attachWarlordsWorld(ctx) {
     }
   }
 
-  // Static collider rebind BEFORE placing player (walkable + solid BVH)
-  const colliderOk = rebindIslandStaticCollider(localPlayer, island.root);
+  // Static collider rebind: Bermuda + FBM seed terrains (player-ready feet)
+  const colliderOk = rebindIslandStaticCollider(localPlayer, island);
   if (!colliderOk) {
     console.error("[warlords] island collider missing — player may void; safety ground still on root");
     flash?.("Map colliders failed — safety ground only", 2.5);
@@ -1405,7 +1462,7 @@ export async function attachWarlordsWorld(ctx) {
     unbindAim,
     pickRespawn,
     onRespawn,
-    rebindCollider: () => rebindIslandStaticCollider(localPlayer, island.root),
+    rebindCollider: () => rebindIslandStaticCollider(localPlayer, island),
     /** Boss / PvP damage through defense pipeline */
     resolveDamage(baseDmg, meta) {
       return combat.resolveIncomingHit(baseDmg, meta || {});

@@ -150,15 +150,20 @@ export function measureLandRadius(sampleY, halfW, waterY) {
 
 /**
  * Heightfield navmesh over island bounds (SI metres).
- * Cell walkable only on LAND: inside landRadius, ground above water, gentle slope.
+ * Cell walkable only on LAND: inside land discs (or landRadius), ground above water, gentle slope.
  *
- * @param {object} island — { bounds, halfW, hubRadius, scale, waterY?, landRadius? }
+ * Player-ready: landDiscs preferred so open ocean between islands is not walkable.
+ *
+ * @param {object} island — { bounds, halfW, hubRadius, scale, waterY?, landRadius?, landDiscs? }
  * @param {(x:number,z:number)=>number} sampleY
- * @param {{ cellSize?: number, maxSlope?: number, waterY?: number, landRadius?: number }} opts
+ * @param {{ cellSize?: number, maxSlope?: number, waterY?: number, landRadius?: number, landDiscs?: {x:number,z:number,r:number}[] }} opts
  */
 export function buildNavGrid(island, sampleY, opts = {}) {
   const cellSize = opts.cellSize ?? 5; // metres — Bermuda ~800 m → ~160² cells
-  const maxSlope = opts.maxSlope ?? 0.9; // dy per metre of cell
+  // Large cells need looser slope (dy/m); scale so 20 m cells stay walkable on rolling hills
+  const maxSlope =
+    opts.maxSlope ??
+    Math.max(0.9, 0.55 + cellSize * 0.04); // ~1.35 at 20 m cells
   const box = island.bounds;
   const halfW = island.halfW;
   const waterY =
@@ -173,6 +178,18 @@ export function buildNavGrid(island, sampleY, opts = {}) {
       : typeof island.landRadius === "number"
         ? island.landRadius
         : measureLandRadius(sampleY, halfW, waterY);
+  const landDiscs =
+    opts.landDiscs ||
+    island.landDiscs ||
+    null;
+
+  const inAnyLandDisc = (x, z) => {
+    if (!landDiscs?.length) return Math.hypot(x, z) < landRadius;
+    for (const d of landDiscs) {
+      if (Math.hypot(x - d.x, z - d.z) <= d.r * 0.98) return true;
+    }
+    return false;
+  };
 
   const minX = box.min.x;
   const maxX = box.max.x;
@@ -196,7 +213,10 @@ export function buildNavGrid(island, sampleY, opts = {}) {
       const z = minZ + (j + 0.5) * cellSize;
       const dist = Math.hypot(x, z);
       let y = 0;
-      let inWater = dist >= landRadius;
+      // Ocean if outside all land discs (or legacy landRadius circle)
+      let inWater = landDiscs?.length
+        ? !inAnyLandDisc(x, z)
+        : dist >= landRadius;
       let ok = !inWater;
       if (ok) {
         try {
@@ -234,7 +254,7 @@ export function buildNavGrid(island, sampleY, opts = {}) {
 
   const walkCount = cells.filter((c) => c.walkable).length;
   console.info(
-    `[navmesh] grid ${cols}×${rows} cell=${cellSize}m walkable=${walkCount}/${cells.length} (~${((walkCount / cells.length) * 100).toFixed(0)}%) waterY=${waterY.toFixed(2)} landR=${landRadius.toFixed(1)}m`,
+    `[navmesh] grid ${cols}×${rows} cell=${cellSize}m walkable=${walkCount}/${cells.length} (~${((walkCount / cells.length) * 100).toFixed(0)}%) waterY=${waterY.toFixed(2)} landR=${landRadius.toFixed(1)}m discs=${landDiscs?.length || 0} maxSlope=${maxSlope.toFixed(2)}`,
   );
 
   const cellAt = (x, z) => {
@@ -244,18 +264,32 @@ export function buildNavGrid(island, sampleY, opts = {}) {
     return cells[j * cols + i] || null;
   };
 
+  /** O(1) cell + expanding ring search — 5 km grids must not scan all cells. */
   const snap = (x, z) => {
-    let best = null;
-    let bestD = Infinity;
-    for (const c of cells) {
-      if (!c.walkable) continue;
-      const d = (c.x - x) ** 2 + (c.z - z) ** 2;
-      if (d < bestD) {
-        bestD = d;
-        best = c;
+    const i0 = Math.floor((x - minX) / cellSize);
+    const j0 = Math.floor((z - minZ) / cellSize);
+    const maxR = Math.max(cols, rows);
+    for (let r = 0; r < maxR; r++) {
+      let best = null;
+      let bestD = Infinity;
+      const jMin = Math.max(0, j0 - r);
+      const jMax = Math.min(rows - 1, j0 + r);
+      const iMin = Math.max(0, i0 - r);
+      const iMax = Math.min(cols - 1, i0 + r);
+      for (let j = jMin; j <= jMax; j++) {
+        for (let i = iMin; i <= iMax; i++) {
+          if (r > 0 && j !== jMin && j !== jMax && i !== iMin && i !== iMax) continue;
+          const c = cells[j * cols + i];
+          if (!c?.walkable) continue;
+          const d = (c.x - x) ** 2 + (c.z - z) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = c;
+          }
+        }
       }
+      if (best) return { x: best.x, y: best.y + 0.05, z: best.z, cell: best };
     }
-    if (best) return { x: best.x, y: best.y + 0.05, z: best.z, cell: best };
     let y = waterY + 1;
     try {
       y = sampleY(x, z) + 0.05;
@@ -332,26 +366,37 @@ export function buildNavGrid(island, sampleY, opts = {}) {
    * @returns {{ x:number, y:number, z:number }[]}
    */
   const pickLandSpawns = (count = 12, hubRadius = island.hubRadius || landRadius * 0.2) => {
-    const ringMin = hubRadius * 1.15;
-    const ringMax = Math.min(landRadius * 0.72, hubRadius * 2.4);
+    // Prefer hub ring on Bermuda (near origin) for player start
+    const meshR = island.meshLandRadius || hubRadius * 2 || 400;
+    const ringMin = Math.min(hubRadius * 1.1, meshR * 0.15);
+    const ringMax = Math.min(meshR * 0.85, hubRadius * 3.2, meshR * 0.92);
     /** @type {typeof cells} */
     const band = cells.filter((c) => {
       if (!c.walkable) return false;
       const d = Math.hypot(c.x, c.z);
       return d >= ringMin && d <= ringMax && c.y >= waterY + 0.45;
     });
-    const pool = band.length >= count ? band : cells.filter((c) => c.walkable && c.y >= waterY + 0.45);
+    // Hub-only walkable first (player-ready start island)
+    const hubPool = cells.filter((c) => {
+      if (!c.walkable || c.y < waterY + 0.45) return false;
+      return Math.hypot(c.x, c.z) <= meshR * 0.95;
+    });
+    const pool =
+      band.length >= count
+        ? band
+        : hubPool.length >= count
+          ? hubPool
+          : cells.filter((c) => c.walkable && c.y >= waterY + 0.45);
     if (!pool.length) {
-      // Absolute fallback — origin snap
       const s = snap(0, 0);
       return Array.from({ length: count }, () => ({ x: s.x, y: s.y + 1.0, z: s.z }));
     }
-    // Even angular spacing
     const out = [];
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2;
-      const tx = Math.cos(a) * ((ringMin + ringMax) * 0.5);
-      const tz = Math.sin(a) * ((ringMin + ringMax) * 0.5);
+      const midR = (ringMin + Math.min(ringMax, meshR * 0.5)) * 0.5;
+      const tx = Math.cos(a) * midR;
+      const tz = Math.sin(a) * midR;
       let best = pool[0];
       let bestD = Infinity;
       for (const c of pool) {
@@ -447,6 +492,8 @@ export function buildNavGrid(island, sampleY, opts = {}) {
     waterMask,
     waterY,
     landRadius,
+    landDiscs: landDiscs || null,
+    walkCount,
     sampleY,
     cellAt,
     snap,
@@ -459,7 +506,10 @@ export function buildNavGrid(island, sampleY, opts = {}) {
     },
     isWaterWorld(x, z) {
       const c = cellAt(x, z);
-      if (!c) return Math.hypot(x, z) >= landRadius;
+      if (!c) {
+        if (landDiscs?.length) return !inAnyLandDisc(x, z);
+        return Math.hypot(x, z) >= landRadius;
+      }
       return !!c.water || !c.walkable;
     },
   };

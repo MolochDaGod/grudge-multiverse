@@ -117,12 +117,20 @@ export function expandIslandToSeedWorld(island, scene, opts = {}) {
       bounds,
       halfW: worldHalf,
       hubRadius: landDiscs[0].r,
+      meshLandRadius: meshLandR,
       scale: 1,
       waterY,
       landRadius: worldRadius,
+      landDiscs,
     },
     sampleY,
-    { cellSize, waterY, landRadius: worldRadius, maxSlope: 1.4 },
+    {
+      cellSize,
+      waterY,
+      landRadius: worldRadius,
+      landDiscs,
+      // Rolling FBM hills — dy/m from adaptive formula in buildNavGrid
+    },
   );
 
   island.sampleY = sampleY;
@@ -134,17 +142,72 @@ export function expandIslandToSeedWorld(island, scene, opts = {}) {
   island.units = "si_metres";
   island.seedWorld = true;
   island.landDiscs = landDiscs;
+  island.meshLandRadius = meshLandR;
+
+  // Rebuild spawns AFTER expanded nav (Bermuda-only spawns from load are stale)
+  const hubR = island.hubRadius || landDiscs[0].r * 0.35 || 120;
+  const landPts = nav.pickLandSpawns(16, hubR);
+  island.spawns = landPts.map(
+    (p) => new THREE.Vector3(p.x, p.y, p.z),
+  );
+  // Snap bosses/vendors onto post-expand nav if present
+  for (const b of island.bossPads || []) {
+    const sn = nav.snap(b.position.x, b.position.z);
+    b.position.set(sn.x, sn.y + 0.1, sn.z);
+  }
+  for (const v of island.vendorPads || []) {
+    const sn = nav.snap(v.position.x, v.position.z);
+    v.position.set(sn.x, sn.y + 0.05, sn.z);
+  }
 
   if (island.waterPhysics) {
     island.waterPhysics.landRadius = worldRadius;
     island.waterPhysics.surfaceY = waterY;
   }
 
+  const walkN = nav.walkCount ?? nav.cells?.filter?.((c) => c.walkable).length ?? 0;
+  const hubWalk = (nav.cells || []).filter(
+    (c) => c.walkable && Math.hypot(c.x, c.z) <= meshLandR * 0.95,
+  ).length;
+  island.seedReady = {
+    ok: walkN >= 80 && island.spawns.length >= 1 && hubWalk >= 20,
+    walkable: walkN,
+    hubWalkable: hubWalk,
+    spawns: island.spawns.length,
+    discs: landDiscs.length,
+    fbmMeshes: island.seedTerrains?.meshes?.length || 0,
+    navCell: cellSize,
+    worldSizeM: worldSize,
+    seed: opts.seed || opts.world?.seed || null,
+  };
+
   console.info(
-    `[worldSpace] 5×5 km seed size=${worldSize}m radius=${worldRadius}m navCell=${cellSize}m meshLandR=${meshLandR.toFixed(0)}m discs=${landDiscs.length} fbm=${island.seedTerrains?.meshes?.length || 0}`,
+    `[worldSpace] 5×5 km seed ready=${island.seedReady.ok} walk=${walkN} hubWalk=${hubWalk} spawns=${island.spawns.length} size=${worldSize}m cell=${cellSize}m discs=${landDiscs.length} fbm=${island.seedReady.fbmMeshes}`,
   );
 
   return island;
+}
+
+/**
+ * Player-ready map gate — fail-closed if nav/spawn broken.
+ * @param {object} island
+ * @returns {{ ok: boolean, reasons: string[], seedReady: object }}
+ */
+export function assertMapSeedReady(island) {
+  const reasons = [];
+  const sr = island?.seedReady || {};
+  if (!island?.nav) reasons.push("no_navmesh");
+  if (!island?.sampleY) reasons.push("no_sampleY");
+  if ((sr.walkable ?? 0) < 80) reasons.push(`walkable_low:${sr.walkable ?? 0}`);
+  if ((sr.hubWalkable ?? 0) < 12) reasons.push(`hub_walkable_low:${sr.hubWalkable ?? 0}`);
+  if (!(island?.spawns?.length > 0)) reasons.push("no_land_spawns");
+  if (!island?.seedWorld) reasons.push("not_seed_world");
+  if (island?.units !== "si_metres") reasons.push("units_not_si");
+  return {
+    ok: reasons.length === 0,
+    reasons,
+    seedReady: sr,
+  };
 }
 
 /**

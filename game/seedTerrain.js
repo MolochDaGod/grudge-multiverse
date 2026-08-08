@@ -27,10 +27,12 @@ export const TERRAIN_DEFAULTS = {
   riverFalloff: 0.6,
   smoothLowerPlanes: 0.4,
   octaves: 5,
-  /** Peak height above water on island centre (m) */
-  peakM: 28,
+  /** Peak height above water on island centre (m) — walkable hills, not cliffs */
+  peakM: 14,
   /** Mesh resolution per disc (segments) */
-  resolution: 64,
+  resolution: 72,
+  /** Flatten near shore for landings / boats / nav */
+  shoreFlatM: 1.4,
 };
 
 function hash2(x, z, seed) {
@@ -179,13 +181,18 @@ export function sampleSeedTerrainHeight(x, z, seedU32, disc, waterY, args = {}) 
   terrainNoise = lerp(n2, n3, a.smoothLowerPlanes);
 
   // Map noise to SI height; island dome falloff at disc edge
-  const h =
+  let h =
     waterY +
-    0.6 +
-    Math.max(0, terrainNoise) * a.peakM * Math.pow(edge, 0.85) -
-    rivers * a.rivers * a.peakM * 0.35 * edge;
+    a.shoreFlatM +
+    Math.max(0, terrainNoise) * a.peakM * Math.pow(edge, 1.05) -
+    rivers * a.rivers * a.peakM * 0.28 * edge;
 
-  return Math.max(waterY + 0.05, h);
+  // Soft shore ring — keep walkable beach for nav (player-ready)
+  if (edge < 0.18) {
+    h = lerp(waterY + 0.4, h, edge / 0.18);
+  }
+
+  return Math.max(waterY + 0.08, h);
 }
 
 /**
@@ -292,8 +299,10 @@ export function mountSeedTerrains(scene, island, opts = {}) {
     if (isHub) continue;
 
     const { mesh, sampleY } = createDiscTerrainMesh(disc, seedU32, waterY, {
-      peakM: 22 + (seedU32 % 12),
-      frequency: 0.0038 + (seedU32 % 7) * 0.0002,
+      peakM: 12 + (seedU32 % 6),
+      frequency: 0.0035 + (seedU32 % 5) * 0.00015,
+      erosion: 0.5,
+      rivers: 0.35,
     });
     root.add(mesh);
     meshes.push(mesh);
