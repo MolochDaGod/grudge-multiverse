@@ -177,6 +177,21 @@ export function equippedWeaponDmg(fallback = 12) {
 
 export function addItem(bag, item, qty = 1) {
   const q = qty || item.qty || 1;
+  // Food stacks by id (consumable)
+  if (item.slot === "food" || item.consumable) {
+    const existing = bag.items.find((i) => i.id === item.id && i.slot === "food");
+    if (existing) {
+      existing.qty = (existing.qty || 1) + q;
+      return bag;
+    }
+    bag.items.push({
+      ...item,
+      slot: "food",
+      consumable: true,
+      qty: q,
+    });
+    return bag;
+  }
   if (item.slot === "mat") {
     const existing = bag.items.find((i) => i.id === item.id);
     if (existing) {
@@ -199,6 +214,25 @@ export function rollKillReward(isBoss = false) {
 
   /** @type {Item[]} */
   const dropped = [];
+
+  // Food drop chance (Kenney kit — loaded async; soft fail if catalog empty)
+  try {
+    import("./foodKit.js").then(({ rollFoodDrop, loadFoodCatalog }) => {
+      loadFoodCatalog().then(() => {
+        if (Math.random() < (isBoss ? 0.55 : 0.22)) {
+          const food = rollFoodDrop();
+          if (food) {
+            const b = loadBag();
+            addItem(b, food, 1);
+            saveBag(b);
+            window.dispatchEvent(new CustomEvent("mv-bag", { detail: b }));
+          }
+        }
+      });
+    });
+  } catch {
+    /* */
+  }
 
   // T0 mats always
   const mat = { ...T0_DROPS[Math.floor(Math.random() * T0_DROPS.length)] };

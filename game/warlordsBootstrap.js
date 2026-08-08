@@ -334,6 +334,16 @@ export async function attachWarlordsWorld(ctx) {
 
   // Seed RTS starter gear into bag + loadout so Equipment / drops work immediately
   ensureStarterGear(classDef.starterGear);
+  // Kenney food kit — real foods with icons + GLB prefabs
+  import("./foodKit.js")
+    .then(async ({ loadFoodCatalog, ensureStarterFoods }) => {
+      await loadFoodCatalog();
+      const bag = loadBag();
+      const n = await ensureStarterFoods(bag);
+      if (n) window.dispatchEvent(new CustomEvent("mv-bag", { detail: bag }));
+      window.__mvFoodKit = { ready: true };
+    })
+    .catch((e) => console.warn("[warlords] food kit", e));
 
   mountWarlordsHud();
   ensureMvUiTheme();

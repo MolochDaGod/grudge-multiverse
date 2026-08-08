@@ -14,6 +14,13 @@ import { WORLD_GEN_VERSION, DEFAULT_WORLD_SEED } from "./worldSeedGen.js";
 import { FLEET_NATURE_CDN, ORE_VEINS } from "./natureSsot.js";
 import { BIOME_GEN } from "./biomeSsot.js";
 import { loadBag, loadLoadout } from "./inventory.js";
+import {
+  loadFoodCatalog,
+  allFoodPrefabs,
+  FOOD_KIT_GEN,
+  foodIconUrl,
+  foodModelUrl,
+} from "./foodKit.js";
 
 export const ADMIN_TABS = [
   { id: "player", key: "F1", title: "Player", blurb: "Hero · agents · integrity · seed id" },
@@ -222,6 +229,15 @@ function renderAssetsTab() {
       <p class="hint">Boats: ${boats?.boats?.length ?? 0} · Watercraft on CDN · Build B = 1 m snap</p>
     </section>
     <section class="mv-admin-card">
+      <h3>Kenney food kit (${FOOD_KIT_GEN})</h3>
+      <p class="hint">Real foods: icon PNG + GLB model + prefab sprite (same preview). Eat from bag (I).</p>
+      <div id="mv-admin-food-preview" class="mv-admin-food-grid"></div>
+      <div class="mv-admin-actions">
+        <button type="button" data-act="grant-food">Grant starter foods</button>
+        <button type="button" data-act="log-food-prefabs">Log food prefabs</button>
+      </div>
+    </section>
+    <section class="mv-admin-card">
       <h3>Actions</h3>
       <div class="mv-admin-actions">
         <button type="button" data-act="log-harvest">Log harvest nodes</button>
@@ -357,6 +373,24 @@ function wireAdminActions(body) {
       runAdminAction(act);
     });
   });
+  // Food preview strip (async catalog)
+  const grid = body.querySelector("#mv-admin-food-preview");
+  if (grid) {
+    loadFoodCatalog().then(() => {
+      const prefs = allFoodPrefabs()
+        .filter((p) => p.slot === "food" && p.heal > 0)
+        .slice(0, 24);
+      grid.innerHTML = prefs
+        .map(
+          (p) =>
+            `<div class="mv-food-tile" title="${esc(p.name)} · heal ${p.heal}" data-food="${esc(p.id)}">
+              <img src="${esc(p.icon)}" alt="" />
+              <span>${esc(p.name)}</span>
+            </div>`,
+        )
+        .join("");
+    });
+  }
 }
 
 function runAdminAction(act) {
@@ -375,6 +409,19 @@ function runAdminAction(act) {
   } else if (act === "copy-cdn") {
     navigator.clipboard?.writeText?.(CDN);
     flash("CDN base copied");
+  } else if (act === "grant-food") {
+    import("./foodKit.js").then(async ({ loadFoodCatalog, ensureStarterFoods }) => {
+      await loadFoodCatalog();
+      const bag = loadBag();
+      const n = await ensureStarterFoods(bag);
+      window.dispatchEvent(new CustomEvent("mv-bag", { detail: bag }));
+      flash(`Food bag +${n} stacks`);
+    });
+  } else if (act === "log-food-prefabs") {
+    import("./foodKit.js").then(async ({ loadFoodCatalog, allFoodPrefabs }) => {
+      await loadFoodCatalog();
+      console.info("[admin] food prefabs", allFoodPrefabs());
+    });
   } else if (act === "list-hostiles") {
     console.info(
       "[admin] hostiles",
@@ -535,6 +582,14 @@ function ensureAdminStyles() {
       padding: 8px 12px; border-top: 1px solid #3a3428; font-size: 10px; opacity: 0.8;
     }
     .mv-admin-err { color: #f88; white-space: pre-wrap; }
+    .mv-admin-food-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-height: 200px; overflow: auto;
+    }
+    .mv-food-tile {
+      background: #14120e; border: 1px solid #3a4a30; border-radius: 6px; padding: 4px;
+      text-align: center; font-size: 9px;
+    }
+    .mv-food-tile img { width: 40px; height: 40px; object-fit: contain; display: block; margin: 0 auto 2px; }
   `;
   document.head.appendChild(st);
 }

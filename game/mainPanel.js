@@ -293,11 +293,17 @@ function renderInvGrid() {
     if (it) {
       const tier = typeof it.tier === "number" ? it.tier : 0;
       const tc = TIER_COLORS[tier] || TIER_COLORS[0];
-      const url = itemIconUrl(it.id || it.name);
+      const url = itemIconUrl(it.id || it.name, it);
       const canEquip = ["weapon", "armor", "shield"].includes(it.slot);
-      html += `<div class="mp-inv-cell has-item ${canEquip ? "can-equip" : ""}" data-item-id="${escape(it.id)}" data-slot="${escape(it.slot || "")}" style="border-color:${tc}" title="${escape(it.name)}${canEquip ? " · click to equip" : ""}">
+      const canEat = it.slot === "food" || it.consumable;
+      const tip = canEquip
+        ? " · click to equip"
+        : canEat
+          ? " · click to eat"
+          : "";
+      html += `<div class="mp-inv-cell has-item ${canEquip ? "can-equip" : ""} ${canEat ? "can-eat" : ""}" data-item-id="${escape(it.id)}" data-slot="${escape(it.slot || "")}" style="border-color:${canEat ? "#4a8f3a" : tc}" title="${escape(it.name)}${tip}">
         <img src="${escape(url)}" alt="" onerror="this.style.display='none'" />
-        <span class="mp-inv-tier" style="background:${tc}">T${tier}</span>
+        <span class="mp-inv-tier" style="background:${canEat ? "#3a7a32" : tc}">${canEat ? "HP" : `T${tier}`}</span>
         ${it.qty > 1 ? `<span class="mp-inv-stack">${it.qty}</span>` : ""}
       </div>`;
     } else {
@@ -312,6 +318,27 @@ function renderInvGrid() {
       if (res.ok) {
         window.dispatchEvent(new CustomEvent("mv-loadout", { detail: res.loadout }));
         renderMainPanelTab("equipment");
+      }
+    });
+  });
+  // Kenney food — click to eat
+  grid.querySelectorAll('.mp-inv-cell.has-item[data-slot="food"]').forEach((el) => {
+    el.classList.add("can-eat");
+    el.title = (el.title || "") + " · click to eat";
+    el.addEventListener("click", async () => {
+      const id = el.getAttribute("data-item-id");
+      const { useFood } = await import("./foodKit.js");
+      const res = useFood(id);
+      if (res.ok) {
+        window.dispatchEvent(
+          new CustomEvent("mv-flash", {
+            detail: { msg: `Ate ${res.name || id} · +${res.healed} HP` },
+          }),
+        );
+        // soft flash via console if no handler
+        console.info("[food] ate", res);
+        renderInvGrid();
+        window.dispatchEvent(new CustomEvent("mv-hp", { detail: { hp: res.hp, maxHp: res.maxHp } }));
       }
     });
   });

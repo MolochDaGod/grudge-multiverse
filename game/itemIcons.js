@@ -128,6 +128,16 @@ function localIconFor(hint) {
   if (/dodge|dash|roll|slide/.test(h)) return desktopIconUrl("entities/barb warrior.png");
   if (/wood|tree|harvest/.test(h)) return desktopIconUrl("resources/Loot_01.png");
   if (/stone|ore|rock|scrap/.test(h)) return desktopIconUrl("resources/Loot_02.png");
+  // Kenney food kit icons (local)
+  if (/^food_/.test(h) || /apple|bread|cheese|meat|burger|pizza|fish|fruit|food/.test(h)) {
+    const slug = String(hint || "")
+      .replace(/^food_/, "")
+      .replace(/_/g, "-");
+    const BASE =
+      (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.BASE_URL) ||
+      "/";
+    return `${BASE}icons/kenney/food/${slug}.png`;
+  }
   if (/armor|mail|leather|robe|chest/.test(h)) return desktopIconUrl("armor/Chest_01.png");
   if (/potion|heal|mana/.test(h)) return desktopIconUrl("potions/P_Red03.png");
   if (/blacksmith|weapon.?smith|vendor.?weapon/.test(h))
@@ -214,7 +224,25 @@ export function resolveItem(idOrName) {
   );
 }
 
-export function itemIconUrl(idOrName) {
+/**
+ * Resolve item icon — Kenney food prefab sprites, catalog, then local fallbacks.
+ * @param {string} idOrName
+ * @param {{ iconUrl?: string, prefabSprite?: string, slot?: string, slug?: string, kit?: string, id?: string }} [item]
+ */
+export function itemIconUrl(idOrName, item) {
+  if (item?.iconUrl) return item.iconUrl;
+  if (item?.prefabSprite) return item.prefabSprite;
+  const id = String(idOrName || item?.id || "");
+  if (id.startsWith("food_") || item?.slot === "food" || item?.kit === "kenney-food") {
+    const slug = (item?.slug || id.replace(/^food_/, "").replace(/_/g, "-")).replace(
+      /^food-/,
+      "",
+    );
+    const BASE =
+      (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.BASE_URL) ||
+      "/";
+    return `${BASE}icons/kenney/food/${slug}.png`;
+  }
   const row = resolveItem(idOrName);
   if (row?.iconUrl) return rewriteIconUrl(row.iconUrl, idOrName);
   return localIconFor(idOrName);

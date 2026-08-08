@@ -1,0 +1,1809 @@
+{
+  "version": "2026-08-08.1-kenney-food",
+  "cdnLocal": true,
+  "foods": [
+    {
+      "slug": "advocado-half",
+      "id": "food_advocado_half",
+      "name": "Advocado Half",
+      "heal": 14,
+      "model": "models/kenney/food-kit/advocado-half.glb",
+      "icon": "icons/kenney/food/advocado-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "apple",
+      "id": "food_apple",
+      "name": "Apple",
+      "heal": 14,
+      "model": "models/kenney/food-kit/apple.glb",
+      "icon": "icons/kenney/food/apple.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "apple-half",
+      "id": "food_apple_half",
+      "name": "Apple Half",
+      "heal": 14,
+      "model": "models/kenney/food-kit/apple-half.glb",
+      "icon": "icons/kenney/food/apple-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "avocado",
+      "id": "food_avocado",
+      "name": "Avocado",
+      "heal": 14,
+      "model": "models/kenney/food-kit/avocado.glb",
+      "icon": "icons/kenney/food/avocado.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "bacon",
+      "id": "food_bacon",
+      "name": "Bacon",
+      "heal": 28,
+      "model": "models/kenney/food-kit/bacon.glb",
+      "icon": "icons/kenney/food/bacon.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "bacon-raw",
+      "id": "food_bacon_raw",
+      "name": "Bacon Raw",
+      "heal": 0,
+      "model": "models/kenney/food-kit/bacon-raw.glb",
+      "icon": "icons/kenney/food/bacon-raw.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "banana",
+      "id": "food_banana",
+      "name": "Banana",
+      "heal": 14,
+      "model": "models/kenney/food-kit/banana.glb",
+      "icon": "icons/kenney/food/banana.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "beet",
+      "id": "food_beet",
+      "name": "Beet",
+      "heal": 14,
+      "model": "models/kenney/food-kit/beet.glb",
+      "icon": "icons/kenney/food/beet.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "bread",
+      "id": "food_bread",
+      "name": "Bread",
+      "heal": 18,
+      "model": "models/kenney/food-kit/bread.glb",
+      "icon": "icons/kenney/food/bread.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "broccoli",
+      "id": "food_broccoli",
+      "name": "Broccoli",
+      "heal": 14,
+      "model": "models/kenney/food-kit/broccoli.glb",
+      "icon": "icons/kenney/food/broccoli.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "burger",
+      "id": "food_burger",
+      "name": "Burger",
+      "heal": 35,
+      "model": "models/kenney/food-kit/burger.glb",
+      "icon": "icons/kenney/food/burger.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "burger-cheese",
+      "id": "food_burger_cheese",
+      "name": "Burger Cheese",
+      "heal": 35,
+      "model": "models/kenney/food-kit/burger-cheese.glb",
+      "icon": "icons/kenney/food/burger-cheese.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "burger-cheese-double",
+      "id": "food_burger_cheese_double",
+      "name": "Burger Cheese Double",
+      "heal": 35,
+      "model": "models/kenney/food-kit/burger-cheese-double.glb",
+      "icon": "icons/kenney/food/burger-cheese-double.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "burger-double",
+      "id": "food_burger_double",
+      "name": "Burger Double",
+      "heal": 35,
+      "model": "models/kenney/food-kit/burger-double.glb",
+      "icon": "icons/kenney/food/burger-double.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cake",
+      "id": "food_cake",
+      "name": "Cake",
+      "heal": 18,
+      "model": "models/kenney/food-kit/cake.glb",
+      "icon": "icons/kenney/food/cake.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cake-birthday",
+      "id": "food_cake_birthday",
+      "name": "Cake Birthday",
+      "heal": 18,
+      "model": "models/kenney/food-kit/cake-birthday.glb",
+      "icon": "icons/kenney/food/cake-birthday.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "candy-bar",
+      "id": "food_candy_bar",
+      "name": "Candy Bar",
+      "heal": 10,
+      "model": "models/kenney/food-kit/candy-bar.glb",
+      "icon": "icons/kenney/food/candy-bar.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "carrot",
+      "id": "food_carrot",
+      "name": "Carrot",
+      "heal": 14,
+      "model": "models/kenney/food-kit/carrot.glb",
+      "icon": "icons/kenney/food/carrot.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cauliflower",
+      "id": "food_cauliflower",
+      "name": "Cauliflower",
+      "heal": 10,
+      "model": "models/kenney/food-kit/cauliflower.glb",
+      "icon": "icons/kenney/food/cauliflower.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cheese",
+      "id": "food_cheese",
+      "name": "Cheese",
+      "heal": 14,
+      "model": "models/kenney/food-kit/cheese.glb",
+      "icon": "icons/kenney/food/cheese.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cheese-cut",
+      "id": "food_cheese_cut",
+      "name": "Cheese Cut",
+      "heal": 14,
+      "model": "models/kenney/food-kit/cheese-cut.glb",
+      "icon": "icons/kenney/food/cheese-cut.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cherries",
+      "id": "food_cherries",
+      "name": "Cherries",
+      "heal": 14,
+      "model": "models/kenney/food-kit/cherries.glb",
+      "icon": "icons/kenney/food/cherries.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "chinese",
+      "id": "food_chinese",
+      "name": "Chinese",
+      "heal": 28,
+      "model": "models/kenney/food-kit/chinese.glb",
+      "icon": "icons/kenney/food/chinese.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "chocolate",
+      "id": "food_chocolate",
+      "name": "Chocolate",
+      "heal": 18,
+      "model": "models/kenney/food-kit/chocolate.glb",
+      "icon": "icons/kenney/food/chocolate.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cocktail",
+      "id": "food_cocktail",
+      "name": "Cocktail",
+      "heal": 8,
+      "model": "models/kenney/food-kit/cocktail.glb",
+      "icon": "icons/kenney/food/cocktail.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "coconut",
+      "id": "food_coconut",
+      "name": "Coconut",
+      "heal": 14,
+      "model": "models/kenney/food-kit/coconut.glb",
+      "icon": "icons/kenney/food/coconut.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "coconut-half",
+      "id": "food_coconut_half",
+      "name": "Coconut Half",
+      "heal": 14,
+      "model": "models/kenney/food-kit/coconut-half.glb",
+      "icon": "icons/kenney/food/coconut-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cookie",
+      "id": "food_cookie",
+      "name": "Cookie",
+      "heal": 18,
+      "model": "models/kenney/food-kit/cookie.glb",
+      "icon": "icons/kenney/food/cookie.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "cookie-chocolate",
+      "id": "food_cookie_chocolate",
+      "name": "Cookie Chocolate",
+      "heal": 18,
+      "model": "models/kenney/food-kit/cookie-chocolate.glb",
+      "icon": "icons/kenney/food/cookie-chocolate.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "corn",
+      "id": "food_corn",
+      "name": "Corn",
+      "heal": 14,
+      "model": "models/kenney/food-kit/corn.glb",
+      "icon": "icons/kenney/food/corn.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "corn-dog",
+      "id": "food_corn_dog",
+      "name": "Corn Dog",
+      "heal": 14,
+      "model": "models/kenney/food-kit/corn-dog.glb",
+      "icon": "icons/kenney/food/corn-dog.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "croissant",
+      "id": "food_croissant",
+      "name": "Croissant",
+      "heal": 18,
+      "model": "models/kenney/food-kit/croissant.glb",
+      "icon": "icons/kenney/food/croissant.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "dim-sum",
+      "id": "food_dim_sum",
+      "name": "Dim Sum",
+      "heal": 35,
+      "model": "models/kenney/food-kit/dim-sum.glb",
+      "icon": "icons/kenney/food/dim-sum.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "donut",
+      "id": "food_donut",
+      "name": "Donut",
+      "heal": 18,
+      "model": "models/kenney/food-kit/donut.glb",
+      "icon": "icons/kenney/food/donut.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "donut-chocolate",
+      "id": "food_donut_chocolate",
+      "name": "Donut Chocolate",
+      "heal": 18,
+      "model": "models/kenney/food-kit/donut-chocolate.glb",
+      "icon": "icons/kenney/food/donut-chocolate.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "donut-sprinkles",
+      "id": "food_donut_sprinkles",
+      "name": "Donut Sprinkles",
+      "heal": 18,
+      "model": "models/kenney/food-kit/donut-sprinkles.glb",
+      "icon": "icons/kenney/food/donut-sprinkles.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "egg",
+      "id": "food_egg",
+      "name": "Egg",
+      "heal": 14,
+      "model": "models/kenney/food-kit/egg.glb",
+      "icon": "icons/kenney/food/egg.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "egg-cooked",
+      "id": "food_egg_cooked",
+      "name": "Egg Cooked",
+      "heal": 14,
+      "model": "models/kenney/food-kit/egg-cooked.glb",
+      "icon": "icons/kenney/food/egg-cooked.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "egg-half",
+      "id": "food_egg_half",
+      "name": "Egg Half",
+      "heal": 14,
+      "model": "models/kenney/food-kit/egg-half.glb",
+      "icon": "icons/kenney/food/egg-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "eggplant",
+      "id": "food_eggplant",
+      "name": "Eggplant",
+      "heal": 14,
+      "model": "models/kenney/food-kit/eggplant.glb",
+      "icon": "icons/kenney/food/eggplant.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "fish",
+      "id": "food_fish",
+      "name": "Fish",
+      "heal": 28,
+      "model": "models/kenney/food-kit/fish.glb",
+      "icon": "icons/kenney/food/fish.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "fish-bones",
+      "id": "food_fish_bones",
+      "name": "Fish Bones",
+      "heal": 0,
+      "model": "models/kenney/food-kit/fish-bones.glb",
+      "icon": "icons/kenney/food/fish-bones.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "frappe",
+      "id": "food_frappe",
+      "name": "Frappe",
+      "heal": 18,
+      "model": "models/kenney/food-kit/frappe.glb",
+      "icon": "icons/kenney/food/frappe.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "fries",
+      "id": "food_fries",
+      "name": "Fries",
+      "heal": 10,
+      "model": "models/kenney/food-kit/fries.glb",
+      "icon": "icons/kenney/food/fries.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "fries-empty",
+      "id": "food_fries_empty",
+      "name": "Fries Empty",
+      "heal": 0,
+      "model": "models/kenney/food-kit/fries-empty.glb",
+      "icon": "icons/kenney/food/fries-empty.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "frikandel-speciaal",
+      "id": "food_frikandel_speciaal",
+      "name": "Frikandel Speciaal",
+      "heal": 28,
+      "model": "models/kenney/food-kit/frikandel-speciaal.glb",
+      "icon": "icons/kenney/food/frikandel-speciaal.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "ginger-bread",
+      "id": "food_ginger_bread",
+      "name": "Ginger Bread",
+      "heal": 18,
+      "model": "models/kenney/food-kit/ginger-bread.glb",
+      "icon": "icons/kenney/food/ginger-bread.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "ginger-bread-cutter",
+      "id": "food_ginger_bread_cutter",
+      "name": "Ginger Bread Cutter",
+      "heal": 18,
+      "model": "models/kenney/food-kit/ginger-bread-cutter.glb",
+      "icon": "icons/kenney/food/ginger-bread-cutter.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "grapes",
+      "id": "food_grapes",
+      "name": "Grapes",
+      "heal": 14,
+      "model": "models/kenney/food-kit/grapes.glb",
+      "icon": "icons/kenney/food/grapes.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "honey",
+      "id": "food_honey",
+      "name": "Honey",
+      "heal": 14,
+      "model": "models/kenney/food-kit/honey.glb",
+      "icon": "icons/kenney/food/honey.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "hot-dog",
+      "id": "food_hot_dog",
+      "name": "Hot Dog",
+      "heal": 28,
+      "model": "models/kenney/food-kit/hot-dog.glb",
+      "icon": "icons/kenney/food/hot-dog.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "hot-dog-raw",
+      "id": "food_hot_dog_raw",
+      "name": "Hot Dog Raw",
+      "heal": 0,
+      "model": "models/kenney/food-kit/hot-dog-raw.glb",
+      "icon": "icons/kenney/food/hot-dog-raw.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "ice-cream",
+      "id": "food_ice_cream",
+      "name": "Ice Cream",
+      "heal": 18,
+      "model": "models/kenney/food-kit/ice-cream.glb",
+      "icon": "icons/kenney/food/ice-cream.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "ice-cream-cne",
+      "id": "food_ice_cream_cne",
+      "name": "Ice Cream Cne",
+      "heal": 18,
+      "model": "models/kenney/food-kit/ice-cream-cne.glb",
+      "icon": "icons/kenney/food/ice-cream-cne.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "ice-cream-scoop-chocolate",
+      "id": "food_ice_cream_scoop_chocolate",
+      "name": "Ice Cream Scoop Chocolate",
+      "heal": 18,
+      "model": "models/kenney/food-kit/ice-cream-scoop-chocolate.glb",
+      "icon": "icons/kenney/food/ice-cream-scoop-chocolate.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "ice-cream-scoop-mint",
+      "id": "food_ice_cream_scoop_mint",
+      "name": "Ice Cream Scoop Mint",
+      "heal": 18,
+      "model": "models/kenney/food-kit/ice-cream-scoop-mint.glb",
+      "icon": "icons/kenney/food/ice-cream-scoop-mint.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "leek",
+      "id": "food_leek",
+      "name": "Leek",
+      "heal": 14,
+      "model": "models/kenney/food-kit/leek.glb",
+      "icon": "icons/kenney/food/leek.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "lemon",
+      "id": "food_lemon",
+      "name": "Lemon",
+      "heal": 14,
+      "model": "models/kenney/food-kit/lemon.glb",
+      "icon": "icons/kenney/food/lemon.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "lemon-half",
+      "id": "food_lemon_half",
+      "name": "Lemon Half",
+      "heal": 14,
+      "model": "models/kenney/food-kit/lemon-half.glb",
+      "icon": "icons/kenney/food/lemon-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "loaf",
+      "id": "food_loaf",
+      "name": "Loaf",
+      "heal": 18,
+      "model": "models/kenney/food-kit/loaf.glb",
+      "icon": "icons/kenney/food/loaf.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "loaf-round",
+      "id": "food_loaf_round",
+      "name": "Loaf Round",
+      "heal": 18,
+      "model": "models/kenney/food-kit/loaf-round.glb",
+      "icon": "icons/kenney/food/loaf-round.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "maki-roe",
+      "id": "food_maki_roe",
+      "name": "Maki Roe",
+      "heal": 28,
+      "model": "models/kenney/food-kit/maki-roe.glb",
+      "icon": "icons/kenney/food/maki-roe.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "maki-salmon",
+      "id": "food_maki_salmon",
+      "name": "Maki Salmon",
+      "heal": 28,
+      "model": "models/kenney/food-kit/maki-salmon.glb",
+      "icon": "icons/kenney/food/maki-salmon.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "maki-vegetable",
+      "id": "food_maki_vegetable",
+      "name": "Maki Vegetable",
+      "heal": 28,
+      "model": "models/kenney/food-kit/maki-vegetable.glb",
+      "icon": "icons/kenney/food/maki-vegetable.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "meat-cooked",
+      "id": "food_meat_cooked",
+      "name": "Meat Cooked",
+      "heal": 28,
+      "model": "models/kenney/food-kit/meat-cooked.glb",
+      "icon": "icons/kenney/food/meat-cooked.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "meat-patty",
+      "id": "food_meat_patty",
+      "name": "Meat Patty",
+      "heal": 28,
+      "model": "models/kenney/food-kit/meat-patty.glb",
+      "icon": "icons/kenney/food/meat-patty.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "meat-raw",
+      "id": "food_meat_raw",
+      "name": "Meat Raw",
+      "heal": 0,
+      "model": "models/kenney/food-kit/meat-raw.glb",
+      "icon": "icons/kenney/food/meat-raw.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "meat-ribs",
+      "id": "food_meat_ribs",
+      "name": "Meat Ribs",
+      "heal": 28,
+      "model": "models/kenney/food-kit/meat-ribs.glb",
+      "icon": "icons/kenney/food/meat-ribs.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "meat-sausage",
+      "id": "food_meat_sausage",
+      "name": "Meat Sausage",
+      "heal": 28,
+      "model": "models/kenney/food-kit/meat-sausage.glb",
+      "icon": "icons/kenney/food/meat-sausage.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "mincemeat-pie",
+      "id": "food_mincemeat_pie",
+      "name": "Mincemeat Pie",
+      "heal": 28,
+      "model": "models/kenney/food-kit/mincemeat-pie.glb",
+      "icon": "icons/kenney/food/mincemeat-pie.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "muffin",
+      "id": "food_muffin",
+      "name": "Muffin",
+      "heal": 18,
+      "model": "models/kenney/food-kit/muffin.glb",
+      "icon": "icons/kenney/food/muffin.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "mushroom",
+      "id": "food_mushroom",
+      "name": "Mushroom",
+      "heal": 14,
+      "model": "models/kenney/food-kit/mushroom.glb",
+      "icon": "icons/kenney/food/mushroom.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "mushroom-half",
+      "id": "food_mushroom_half",
+      "name": "Mushroom Half",
+      "heal": 14,
+      "model": "models/kenney/food-kit/mushroom-half.glb",
+      "icon": "icons/kenney/food/mushroom-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "mussel",
+      "id": "food_mussel",
+      "name": "Mussel",
+      "heal": 14,
+      "model": "models/kenney/food-kit/mussel.glb",
+      "icon": "icons/kenney/food/mussel.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "mussel-open",
+      "id": "food_mussel_open",
+      "name": "Mussel Open",
+      "heal": 14,
+      "model": "models/kenney/food-kit/mussel-open.glb",
+      "icon": "icons/kenney/food/mussel-open.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "onion",
+      "id": "food_onion",
+      "name": "Onion",
+      "heal": 14,
+      "model": "models/kenney/food-kit/onion.glb",
+      "icon": "icons/kenney/food/onion.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "onion-half",
+      "id": "food_onion_half",
+      "name": "Onion Half",
+      "heal": 14,
+      "model": "models/kenney/food-kit/onion-half.glb",
+      "icon": "icons/kenney/food/onion-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "orange",
+      "id": "food_orange",
+      "name": "Orange",
+      "heal": 14,
+      "model": "models/kenney/food-kit/orange.glb",
+      "icon": "icons/kenney/food/orange.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "paprika",
+      "id": "food_paprika",
+      "name": "Paprika",
+      "heal": 14,
+      "model": "models/kenney/food-kit/paprika.glb",
+      "icon": "icons/kenney/food/paprika.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "paprika-slice",
+      "id": "food_paprika_slice",
+      "name": "Paprika Slice",
+      "heal": 14,
+      "model": "models/kenney/food-kit/paprika-slice.glb",
+      "icon": "icons/kenney/food/paprika-slice.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "peanut-butter",
+      "id": "food_peanut_butter",
+      "name": "Peanut Butter",
+      "heal": 8,
+      "model": "models/kenney/food-kit/peanut-butter.glb",
+      "icon": "icons/kenney/food/peanut-butter.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pear",
+      "id": "food_pear",
+      "name": "Pear",
+      "heal": 14,
+      "model": "models/kenney/food-kit/pear.glb",
+      "icon": "icons/kenney/food/pear.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pear-half",
+      "id": "food_pear_half",
+      "name": "Pear Half",
+      "heal": 14,
+      "model": "models/kenney/food-kit/pear-half.glb",
+      "icon": "icons/kenney/food/pear-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pepper",
+      "id": "food_pepper",
+      "name": "Pepper",
+      "heal": 14,
+      "model": "models/kenney/food-kit/pepper.glb",
+      "icon": "icons/kenney/food/pepper.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pie",
+      "id": "food_pie",
+      "name": "Pie",
+      "heal": 18,
+      "model": "models/kenney/food-kit/pie.glb",
+      "icon": "icons/kenney/food/pie.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pineapple",
+      "id": "food_pineapple",
+      "name": "Pineapple",
+      "heal": 14,
+      "model": "models/kenney/food-kit/pineapple.glb",
+      "icon": "icons/kenney/food/pineapple.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pizza",
+      "id": "food_pizza",
+      "name": "Pizza",
+      "heal": 35,
+      "model": "models/kenney/food-kit/pizza.glb",
+      "icon": "icons/kenney/food/pizza.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pizza-cutter",
+      "id": "food_pizza_cutter",
+      "name": "Pizza Cutter",
+      "heal": 10,
+      "model": "models/kenney/food-kit/pizza-cutter.glb",
+      "icon": "icons/kenney/food/pizza-cutter.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "popsicle",
+      "id": "food_popsicle",
+      "name": "Popsicle",
+      "heal": 10,
+      "model": "models/kenney/food-kit/popsicle.glb",
+      "icon": "icons/kenney/food/popsicle.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "popsicle-chocolate",
+      "id": "food_popsicle_chocolate",
+      "name": "Popsicle Chocolate",
+      "heal": 18,
+      "model": "models/kenney/food-kit/popsicle-chocolate.glb",
+      "icon": "icons/kenney/food/popsicle-chocolate.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pudding",
+      "id": "food_pudding",
+      "name": "Pudding",
+      "heal": 18,
+      "model": "models/kenney/food-kit/pudding.glb",
+      "icon": "icons/kenney/food/pudding.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pumpkin",
+      "id": "food_pumpkin",
+      "name": "Pumpkin",
+      "heal": 14,
+      "model": "models/kenney/food-kit/pumpkin.glb",
+      "icon": "icons/kenney/food/pumpkin.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "pumpkin-basic",
+      "id": "food_pumpkin_basic",
+      "name": "Pumpkin Basic",
+      "heal": 14,
+      "model": "models/kenney/food-kit/pumpkin-basic.glb",
+      "icon": "icons/kenney/food/pumpkin-basic.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "radish",
+      "id": "food_radish",
+      "name": "Radish",
+      "heal": 14,
+      "model": "models/kenney/food-kit/radish.glb",
+      "icon": "icons/kenney/food/radish.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "rice-ball",
+      "id": "food_rice_ball",
+      "name": "Rice Ball",
+      "heal": 14,
+      "model": "models/kenney/food-kit/rice-ball.glb",
+      "icon": "icons/kenney/food/rice-ball.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "salad",
+      "id": "food_salad",
+      "name": "Salad",
+      "heal": 14,
+      "model": "models/kenney/food-kit/salad.glb",
+      "icon": "icons/kenney/food/salad.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "sandwich",
+      "id": "food_sandwich",
+      "name": "Sandwich",
+      "heal": 35,
+      "model": "models/kenney/food-kit/sandwich.glb",
+      "icon": "icons/kenney/food/sandwich.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "sausage",
+      "id": "food_sausage",
+      "name": "Sausage",
+      "heal": 28,
+      "model": "models/kenney/food-kit/sausage.glb",
+      "icon": "icons/kenney/food/sausage.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "sausage-half",
+      "id": "food_sausage_half",
+      "name": "Sausage Half",
+      "heal": 28,
+      "model": "models/kenney/food-kit/sausage-half.glb",
+      "icon": "icons/kenney/food/sausage-half.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "skewer",
+      "id": "food_skewer",
+      "name": "Skewer",
+      "heal": 28,
+      "model": "models/kenney/food-kit/skewer.glb",
+      "icon": "icons/kenney/food/skewer.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "skewer-vegetables",
+      "id": "food_skewer_vegetables",
+      "name": "Skewer Vegetables",
+      "heal": 28,
+      "model": "models/kenney/food-kit/skewer-vegetables.glb",
+      "icon": "icons/kenney/food/skewer-vegetables.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "soda",
+      "id": "food_soda",
+      "name": "Soda",
+      "heal": 8,
+      "model": "models/kenney/food-kit/soda.glb",
+      "icon": "icons/kenney/food/soda.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "soy",
+      "id": "food_soy",
+      "name": "Soy",
+      "heal": 8,
+      "model": "models/kenney/food-kit/soy.glb",
+      "icon": "icons/kenney/food/soy.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "strawberry",
+      "id": "food_strawberry",
+      "name": "Strawberry",
+      "heal": 0,
+      "model": "models/kenney/food-kit/strawberry.glb",
+      "icon": "icons/kenney/food/strawberry.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "sub",
+      "id": "food_sub",
+      "name": "Sub",
+      "heal": 35,
+      "model": "models/kenney/food-kit/sub.glb",
+      "icon": "icons/kenney/food/sub.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "sundae",
+      "id": "food_sundae",
+      "name": "Sundae",
+      "heal": 18,
+      "model": "models/kenney/food-kit/sundae.glb",
+      "icon": "icons/kenney/food/sundae.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "sushi-egg",
+      "id": "food_sushi_egg",
+      "name": "Sushi Egg",
+      "heal": 35,
+      "model": "models/kenney/food-kit/sushi-egg.glb",
+      "icon": "icons/kenney/food/sushi-egg.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "sushi-salmon",
+      "id": "food_sushi_salmon",
+      "name": "Sushi Salmon",
+      "heal": 35,
+      "model": "models/kenney/food-kit/sushi-salmon.glb",
+      "icon": "icons/kenney/food/sushi-salmon.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "taco",
+      "id": "food_taco",
+      "name": "Taco",
+      "heal": 28,
+      "model": "models/kenney/food-kit/taco.glb",
+      "icon": "icons/kenney/food/taco.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "tajine",
+      "id": "food_tajine",
+      "name": "Tajine",
+      "heal": 10,
+      "model": "models/kenney/food-kit/tajine.glb",
+      "icon": "icons/kenney/food/tajine.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "tomato",
+      "id": "food_tomato",
+      "name": "Tomato",
+      "heal": 14,
+      "model": "models/kenney/food-kit/tomato.glb",
+      "icon": "icons/kenney/food/tomato.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "tomato-slice",
+      "id": "food_tomato_slice",
+      "name": "Tomato Slice",
+      "heal": 14,
+      "model": "models/kenney/food-kit/tomato-slice.glb",
+      "icon": "icons/kenney/food/tomato-slice.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "turkey",
+      "id": "food_turkey",
+      "name": "Turkey",
+      "heal": 35,
+      "model": "models/kenney/food-kit/turkey.glb",
+      "icon": "icons/kenney/food/turkey.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "waffle",
+      "id": "food_waffle",
+      "name": "Waffle",
+      "heal": 18,
+      "model": "models/kenney/food-kit/waffle.glb",
+      "icon": "icons/kenney/food/waffle.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "watermelon",
+      "id": "food_watermelon",
+      "name": "Watermelon",
+      "heal": 14,
+      "model": "models/kenney/food-kit/watermelon.glb",
+      "icon": "icons/kenney/food/watermelon.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "whipped-cream",
+      "id": "food_whipped_cream",
+      "name": "Whipped Cream",
+      "heal": 10,
+      "model": "models/kenney/food-kit/whipped-cream.glb",
+      "icon": "icons/kenney/food/whipped-cream.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "whole-ham",
+      "id": "food_whole_ham",
+      "name": "Whole Ham",
+      "heal": 35,
+      "model": "models/kenney/food-kit/whole-ham.glb",
+      "icon": "icons/kenney/food/whole-ham.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "wholer-ham",
+      "id": "food_wholer_ham",
+      "name": "Wholer Ham",
+      "heal": 10,
+      "model": "models/kenney/food-kit/wholer-ham.glb",
+      "icon": "icons/kenney/food/wholer-ham.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "wine-red",
+      "id": "food_wine_red",
+      "name": "Wine Red",
+      "heal": 8,
+      "model": "models/kenney/food-kit/wine-red.glb",
+      "icon": "icons/kenney/food/wine-red.png",
+      "targetHeightM": 0.12
+    },
+    {
+      "slug": "wine-white",
+      "id": "food_wine_white",
+      "name": "Wine White",
+      "heal": 8,
+      "model": "models/kenney/food-kit/wine-white.glb",
+      "icon": "icons/kenney/food/wine-white.png",
+      "targetHeightM": 0.12
+    }
+  ],
+  "props": [
+    {
+      "slug": "bag",
+      "id": "prop_bag",
+      "name": "Bag",
+      "model": "models/kenney/food-kit/bag.glb",
+      "icon": "icons/kenney/food/bag.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "bag-flat",
+      "id": "prop_bag_flat",
+      "name": "Bag Flat",
+      "model": "models/kenney/food-kit/bag-flat.glb",
+      "icon": "icons/kenney/food/bag-flat.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "barrel",
+      "id": "prop_barrel",
+      "name": "Barrel",
+      "model": "models/kenney/food-kit/barrel.glb",
+      "icon": "icons/kenney/food/barrel.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "bottle-ketchup",
+      "id": "prop_bottle_ketchup",
+      "name": "Bottle Ketchup",
+      "model": "models/kenney/food-kit/bottle-ketchup.glb",
+      "icon": "icons/kenney/food/bottle-ketchup.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "bottle-musterd",
+      "id": "prop_bottle_musterd",
+      "name": "Bottle Musterd",
+      "model": "models/kenney/food-kit/bottle-musterd.glb",
+      "icon": "icons/kenney/food/bottle-musterd.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "bottle-oil",
+      "id": "prop_bottle_oil",
+      "name": "Bottle Oil",
+      "model": "models/kenney/food-kit/bottle-oil.glb",
+      "icon": "icons/kenney/food/bottle-oil.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "bowl",
+      "id": "prop_bowl",
+      "name": "Bowl",
+      "model": "models/kenney/food-kit/bowl.glb",
+      "icon": "icons/kenney/food/bowl.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "bowl-broth",
+      "id": "prop_bowl_broth",
+      "name": "Bowl Broth",
+      "model": "models/kenney/food-kit/bowl-broth.glb",
+      "icon": "icons/kenney/food/bowl-broth.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "bowl-cereal",
+      "id": "prop_bowl_cereal",
+      "name": "Bowl Cereal",
+      "model": "models/kenney/food-kit/bowl-cereal.glb",
+      "icon": "icons/kenney/food/bowl-cereal.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "bowl-soup",
+      "id": "prop_bowl_soup",
+      "name": "Bowl Soup",
+      "model": "models/kenney/food-kit/bowl-soup.glb",
+      "icon": "icons/kenney/food/bowl-soup.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cabbage",
+      "id": "prop_cabbage",
+      "name": "Cabbage",
+      "model": "models/kenney/food-kit/cabbage.glb",
+      "icon": "icons/kenney/food/cabbage.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cake-slicer",
+      "id": "prop_cake_slicer",
+      "name": "Cake Slicer",
+      "model": "models/kenney/food-kit/cake-slicer.glb",
+      "icon": "icons/kenney/food/cake-slicer.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "can",
+      "id": "prop_can",
+      "name": "Can",
+      "model": "models/kenney/food-kit/can.glb",
+      "icon": "icons/kenney/food/can.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "candy-bar-wrapper",
+      "id": "prop_candy_bar_wrapper",
+      "name": "Candy Bar Wrapper",
+      "model": "models/kenney/food-kit/candy-bar-wrapper.glb",
+      "icon": "icons/kenney/food/candy-bar-wrapper.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "can-open",
+      "id": "prop_can_open",
+      "name": "Can Open",
+      "model": "models/kenney/food-kit/can-open.glb",
+      "icon": "icons/kenney/food/can-open.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "can-small",
+      "id": "prop_can_small",
+      "name": "Can Small",
+      "model": "models/kenney/food-kit/can-small.glb",
+      "icon": "icons/kenney/food/can-small.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "carton",
+      "id": "prop_carton",
+      "name": "Carton",
+      "model": "models/kenney/food-kit/carton.glb",
+      "icon": "icons/kenney/food/carton.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "carton-small",
+      "id": "prop_carton_small",
+      "name": "Carton Small",
+      "model": "models/kenney/food-kit/carton-small.glb",
+      "icon": "icons/kenney/food/carton-small.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "celery-stick",
+      "id": "prop_celery_stick",
+      "name": "Celery Stick",
+      "model": "models/kenney/food-kit/celery-stick.glb",
+      "icon": "icons/kenney/food/celery-stick.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cheese-slicer",
+      "id": "prop_cheese_slicer",
+      "name": "Cheese Slicer",
+      "model": "models/kenney/food-kit/cheese-slicer.glb",
+      "icon": "icons/kenney/food/cheese-slicer.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "chocolate-wrapper",
+      "id": "prop_chocolate_wrapper",
+      "name": "Chocolate Wrapper",
+      "model": "models/kenney/food-kit/chocolate-wrapper.glb",
+      "icon": "icons/kenney/food/chocolate-wrapper.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "chopstic-decorative",
+      "id": "prop_chopstic_decorative",
+      "name": "Chopstic Decorative",
+      "model": "models/kenney/food-kit/chopstic-decorative.glb",
+      "icon": "icons/kenney/food/chopstic-decorative.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "chopstick",
+      "id": "prop_chopstick",
+      "name": "Chopstick",
+      "model": "models/kenney/food-kit/chopstick.glb",
+      "icon": "icons/kenney/food/chopstick.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cooking-fork",
+      "id": "prop_cooking_fork",
+      "name": "Cooking Fork",
+      "model": "models/kenney/food-kit/cooking-fork.glb",
+      "icon": "icons/kenney/food/cooking-fork.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cooking-knife",
+      "id": "prop_cooking_knife",
+      "name": "Cooking Knife",
+      "model": "models/kenney/food-kit/cooking-knife.glb",
+      "icon": "icons/kenney/food/cooking-knife.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cooking-knife-chopping",
+      "id": "prop_cooking_knife_chopping",
+      "name": "Cooking Knife Chopping",
+      "model": "models/kenney/food-kit/cooking-knife-chopping.glb",
+      "icon": "icons/kenney/food/cooking-knife-chopping.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cooking-spatula",
+      "id": "prop_cooking_spatula",
+      "name": "Cooking Spatula",
+      "model": "models/kenney/food-kit/cooking-spatula.glb",
+      "icon": "icons/kenney/food/cooking-spatula.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cooking-spoon",
+      "id": "prop_cooking_spoon",
+      "name": "Cooking Spoon",
+      "model": "models/kenney/food-kit/cooking-spoon.glb",
+      "icon": "icons/kenney/food/cooking-spoon.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cup",
+      "id": "prop_cup",
+      "name": "Cup",
+      "model": "models/kenney/food-kit/cup.glb",
+      "icon": "icons/kenney/food/cup.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cupcake",
+      "id": "prop_cupcake",
+      "name": "Cupcake",
+      "model": "models/kenney/food-kit/cupcake.glb",
+      "icon": "icons/kenney/food/cupcake.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cup-coffee",
+      "id": "prop_cup_coffee",
+      "name": "Cup Coffee",
+      "model": "models/kenney/food-kit/cup-coffee.glb",
+      "icon": "icons/kenney/food/cup-coffee.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cup-saucer",
+      "id": "prop_cup_saucer",
+      "name": "Cup Saucer",
+      "model": "models/kenney/food-kit/cup-saucer.glb",
+      "icon": "icons/kenney/food/cup-saucer.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cup-tea",
+      "id": "prop_cup_tea",
+      "name": "Cup Tea",
+      "model": "models/kenney/food-kit/cup-tea.glb",
+      "icon": "icons/kenney/food/cup-tea.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cutting-board",
+      "id": "prop_cutting_board",
+      "name": "Cutting Board",
+      "model": "models/kenney/food-kit/cutting-board.glb",
+      "icon": "icons/kenney/food/cutting-board.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cutting-board-japanese",
+      "id": "prop_cutting_board_japanese",
+      "name": "Cutting Board Japanese",
+      "model": "models/kenney/food-kit/cutting-board-japanese.glb",
+      "icon": "icons/kenney/food/cutting-board-japanese.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "cutting-board-round",
+      "id": "prop_cutting_board_round",
+      "name": "Cutting Board Round",
+      "model": "models/kenney/food-kit/cutting-board-round.glb",
+      "icon": "icons/kenney/food/cutting-board-round.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "egg-cup",
+      "id": "prop_egg_cup",
+      "name": "Egg Cup",
+      "model": "models/kenney/food-kit/egg-cup.glb",
+      "icon": "icons/kenney/food/egg-cup.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "frying-pan",
+      "id": "prop_frying_pan",
+      "name": "Frying Pan",
+      "model": "models/kenney/food-kit/frying-pan.glb",
+      "icon": "icons/kenney/food/frying-pan.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "frying-pan-lid",
+      "id": "prop_frying_pan_lid",
+      "name": "Frying Pan Lid",
+      "model": "models/kenney/food-kit/frying-pan-lid.glb",
+      "icon": "icons/kenney/food/frying-pan-lid.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "glass",
+      "id": "prop_glass",
+      "name": "Glass",
+      "model": "models/kenney/food-kit/glass.glb",
+      "icon": "icons/kenney/food/glass.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "glass-wine",
+      "id": "prop_glass_wine",
+      "name": "Glass Wine",
+      "model": "models/kenney/food-kit/glass-wine.glb",
+      "icon": "icons/kenney/food/glass-wine.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "ice-cream-cup",
+      "id": "prop_ice_cream_cup",
+      "name": "Ice Cream Cup",
+      "model": "models/kenney/food-kit/ice-cream-cup.glb",
+      "icon": "icons/kenney/food/ice-cream-cup.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "knife-block",
+      "id": "prop_knife_block",
+      "name": "Knife Block",
+      "model": "models/kenney/food-kit/knife-block.glb",
+      "icon": "icons/kenney/food/knife-block.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "loaf-baguette",
+      "id": "prop_loaf_baguette",
+      "name": "Loaf Baguette",
+      "model": "models/kenney/food-kit/loaf-baguette.glb",
+      "icon": "icons/kenney/food/loaf-baguette.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "lollypop",
+      "id": "prop_lollypop",
+      "name": "Lollypop",
+      "model": "models/kenney/food-kit/lollypop.glb",
+      "icon": "icons/kenney/food/lollypop.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "meat-tenderizer",
+      "id": "prop_meat_tenderizer",
+      "name": "Meat Tenderizer",
+      "model": "models/kenney/food-kit/meat-tenderizer.glb",
+      "icon": "icons/kenney/food/meat-tenderizer.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "mortar",
+      "id": "prop_mortar",
+      "name": "Mortar",
+      "model": "models/kenney/food-kit/mortar.glb",
+      "icon": "icons/kenney/food/mortar.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "mortar-pestle",
+      "id": "prop_mortar_pestle",
+      "name": "Mortar Pestle",
+      "model": "models/kenney/food-kit/mortar-pestle.glb",
+      "icon": "icons/kenney/food/mortar-pestle.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "mug",
+      "id": "prop_mug",
+      "name": "Mug",
+      "model": "models/kenney/food-kit/mug.glb",
+      "icon": "icons/kenney/food/mug.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pan",
+      "id": "prop_pan",
+      "name": "Pan",
+      "model": "models/kenney/food-kit/pan.glb",
+      "icon": "icons/kenney/food/pan.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pancakes",
+      "id": "prop_pancakes",
+      "name": "Pancakes",
+      "model": "models/kenney/food-kit/pancakes.glb",
+      "icon": "icons/kenney/food/pancakes.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pan-stew",
+      "id": "prop_pan_stew",
+      "name": "Pan Stew",
+      "model": "models/kenney/food-kit/pan-stew.glb",
+      "icon": "icons/kenney/food/pan-stew.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pepper-mill",
+      "id": "prop_pepper_mill",
+      "name": "Pepper Mill",
+      "model": "models/kenney/food-kit/pepper-mill.glb",
+      "icon": "icons/kenney/food/pepper-mill.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pizza-box",
+      "id": "prop_pizza_box",
+      "name": "Pizza Box",
+      "model": "models/kenney/food-kit/pizza-box.glb",
+      "icon": "icons/kenney/food/pizza-box.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "plate",
+      "id": "prop_plate",
+      "name": "Plate",
+      "model": "models/kenney/food-kit/plate.glb",
+      "icon": "icons/kenney/food/plate.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "plate-broken",
+      "id": "prop_plate_broken",
+      "name": "Plate Broken",
+      "model": "models/kenney/food-kit/plate-broken.glb",
+      "icon": "icons/kenney/food/plate-broken.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "plate-deep",
+      "id": "prop_plate_deep",
+      "name": "Plate Deep",
+      "model": "models/kenney/food-kit/plate-deep.glb",
+      "icon": "icons/kenney/food/plate-deep.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "plate-dinner",
+      "id": "prop_plate_dinner",
+      "name": "Plate Dinner",
+      "model": "models/kenney/food-kit/plate-dinner.glb",
+      "icon": "icons/kenney/food/plate-dinner.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "plate-rectangle",
+      "id": "prop_plate_rectangle",
+      "name": "Plate Rectangle",
+      "model": "models/kenney/food-kit/plate-rectangle.glb",
+      "icon": "icons/kenney/food/plate-rectangle.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "plate-sauerkraut",
+      "id": "prop_plate_sauerkraut",
+      "name": "Plate Sauerkraut",
+      "model": "models/kenney/food-kit/plate-sauerkraut.glb",
+      "icon": "icons/kenney/food/plate-sauerkraut.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "popsicle-stick",
+      "id": "prop_popsicle_stick",
+      "name": "Popsicle Stick",
+      "model": "models/kenney/food-kit/popsicle-stick.glb",
+      "icon": "icons/kenney/food/popsicle-stick.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pot",
+      "id": "prop_pot",
+      "name": "Pot",
+      "model": "models/kenney/food-kit/pot.glb",
+      "icon": "icons/kenney/food/pot.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pot-lid",
+      "id": "prop_pot_lid",
+      "name": "Pot Lid",
+      "model": "models/kenney/food-kit/pot-lid.glb",
+      "icon": "icons/kenney/food/pot-lid.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pot-stew",
+      "id": "prop_pot_stew",
+      "name": "Pot Stew",
+      "model": "models/kenney/food-kit/pot-stew.glb",
+      "icon": "icons/kenney/food/pot-stew.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "pot-stew-lid",
+      "id": "prop_pot_stew_lid",
+      "name": "Pot Stew Lid",
+      "model": "models/kenney/food-kit/pot-stew-lid.glb",
+      "icon": "icons/kenney/food/pot-stew-lid.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "rollingPin",
+      "id": "prop_rollingPin",
+      "name": "RollingPin",
+      "model": "models/kenney/food-kit/rollingPin.glb",
+      "icon": "icons/kenney/food/rollingPin.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "shaker-pepper",
+      "id": "prop_shaker_pepper",
+      "name": "Shaker Pepper",
+      "model": "models/kenney/food-kit/shaker-pepper.glb",
+      "icon": "icons/kenney/food/shaker-pepper.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "shaker-salt",
+      "id": "prop_shaker_salt",
+      "name": "Shaker Salt",
+      "model": "models/kenney/food-kit/shaker-salt.glb",
+      "icon": "icons/kenney/food/shaker-salt.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "soda-bottle",
+      "id": "prop_soda_bottle",
+      "name": "Soda Bottle",
+      "model": "models/kenney/food-kit/soda-bottle.glb",
+      "icon": "icons/kenney/food/soda-bottle.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "soda-can",
+      "id": "prop_soda_can",
+      "name": "Soda Can",
+      "model": "models/kenney/food-kit/soda-can.glb",
+      "icon": "icons/kenney/food/soda-can.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "soda-can-crushed",
+      "id": "prop_soda_can_crushed",
+      "name": "Soda Can Crushed",
+      "model": "models/kenney/food-kit/soda-can-crushed.glb",
+      "icon": "icons/kenney/food/soda-can-crushed.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "soda-glass",
+      "id": "prop_soda_glass",
+      "name": "Soda Glass",
+      "model": "models/kenney/food-kit/soda-glass.glb",
+      "icon": "icons/kenney/food/soda-glass.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "steamer",
+      "id": "prop_steamer",
+      "name": "Steamer",
+      "model": "models/kenney/food-kit/steamer.glb",
+      "icon": "icons/kenney/food/steamer.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "styrofoam",
+      "id": "prop_styrofoam",
+      "name": "Styrofoam",
+      "model": "models/kenney/food-kit/styrofoam.glb",
+      "icon": "icons/kenney/food/styrofoam.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "styrofoam-dinner",
+      "id": "prop_styrofoam_dinner",
+      "name": "Styrofoam Dinner",
+      "model": "models/kenney/food-kit/styrofoam-dinner.glb",
+      "icon": "icons/kenney/food/styrofoam-dinner.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "tajine-lid",
+      "id": "prop_tajine_lid",
+      "name": "Tajine Lid",
+      "model": "models/kenney/food-kit/tajine-lid.glb",
+      "icon": "icons/kenney/food/tajine-lid.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "utensil-fork",
+      "id": "prop_utensil_fork",
+      "name": "Utensil Fork",
+      "model": "models/kenney/food-kit/utensil-fork.glb",
+      "icon": "icons/kenney/food/utensil-fork.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "utensil-knife",
+      "id": "prop_utensil_knife",
+      "name": "Utensil Knife",
+      "model": "models/kenney/food-kit/utensil-knife.glb",
+      "icon": "icons/kenney/food/utensil-knife.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "utensil-spoon",
+      "id": "prop_utensil_spoon",
+      "name": "Utensil Spoon",
+      "model": "models/kenney/food-kit/utensil-spoon.glb",
+      "icon": "icons/kenney/food/utensil-spoon.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    },
+    {
+      "slug": "whisk",
+      "id": "prop_whisk",
+      "name": "Whisk",
+      "model": "models/kenney/food-kit/whisk.glb",
+      "icon": "icons/kenney/food/whisk.png",
+      "targetHeightM": 0.2,
+      "slot": "prop"
+    }
+  ],
+  "count": 200
+}
