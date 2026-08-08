@@ -99,6 +99,7 @@ import { ROCK_HEIGHT_M, ROCK_BURY_FRAC, NATURE_GEN } from "./natureSsot.js";
 import { mountOceanWater } from "./oceanWater.js";
 import { mountWorldPhysics } from "./worldPhysics.js";
 import { mountBuildSnap } from "./buildSnap.js";
+import { mountAdminEditors } from "./adminEditors.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -339,10 +340,16 @@ export async function attachWarlordsWorld(ctx) {
   mountGameMenu({
     bag: () => window.dispatchEvent(new CustomEvent("mv-open-tab", { detail: { tab: "bag" } })),
     skills: () => window.dispatchEvent(new CustomEvent("mv-open-tab", { detail: { tab: "skills" } })),
-    help: () => document.dispatchEvent(new KeyboardEvent("keydown", { code: "F1", bubbles: true })),
+    help: () => {
+      const ov = document.getElementById("mv-help-overlay");
+      if (ov) ov.style.display = ov.style.display === "none" ? "flex" : "none";
+    },
   });
   setGameCursor("combat");
   ensureItemCatalog().catch(() => {});
+  // F1–F5 admin / editors / prefab tools (player · assets · creatures · prefabs · world)
+  mountAdminEditors({ flash });
+  window.__mvThreeScene = scene;
   window.setLoaderStatus?.("Loading Bermuda island…");
   flash?.("DRC · Toon RTS · Bermuda…", 1.2);
 
@@ -495,6 +502,7 @@ export async function attachWarlordsWorld(ctx) {
   }
 
   const capsule = localPlayer._player?.getPlayerCapsule?.();
+  window.__mvLocalCapsule = capsule;
   if (capsule) {
     const gy2 = groundAt(spawn.x, spawn.z);
     spawn.y = (Number.isFinite(gy2) ? gy2 : spawnGroundY || 0) + 1.15;

@@ -18,16 +18,22 @@ export function mountWarlordsHud() {
 
   const el = document.querySelector(".hud");
   if (el) {
-    // No permanent WASD wall — F1 help only
+    // Admin F1–F5 + ? help (no permanent WASD wall)
     el.innerHTML = `
+      <button type="button" id="mv-admin-chip" class="mv-help-chip" title="Admin editors F1–F5">
+        <kbd>F1–F5</kbd> <span>Admin</span>
+      </button>
       <button type="button" id="mv-help-btn" class="mv-help-chip" title="Keyboard help">
-        <kbd>F1</kbd> <span>Help</span>
+        <kbd>?</kbd> <span>Help</span>
       </button>
     `;
-    el.setAttribute("aria-label", "Controls help");
+    el.setAttribute("aria-label", "Admin and help");
     el.style.cssText =
-      "position:fixed;top:10px;left:12px;z-index:9994;background:transparent;padding:0;border:none;pointer-events:auto;";
+      "position:fixed;top:10px;left:12px;z-index:9994;background:transparent;padding:0;border:none;pointer-events:auto;display:flex;gap:6px;";
     el.querySelector("#mv-help-btn")?.addEventListener("click", () => toggleHelpOverlay(true));
+    el.querySelector("#mv-admin-chip")?.addEventListener("click", () => {
+      window.__mvAdmin?.open?.("player");
+    });
   }
 
   window.addEventListener("mv-bag", () => {
@@ -84,19 +90,21 @@ export function mountWarlordsHud() {
   });
   ensureHudStyles();
 
-  // F1 / ? help
+  // ? help only — F1–F5 owned by adminEditors.js
   if (!window.__mvHelpKeysBound) {
     window.__mvHelpKeysBound = true;
     window.addEventListener("keydown", (e) => {
       if (e.repeat) return;
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if (e.code === "F1" || (e.key === "?" && !e.ctrlKey && !e.metaKey)) {
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         const ov = document.getElementById("mv-help-overlay");
         toggleHelpOverlay(!ov || ov.style.display === "none");
       }
-      if (e.code === "Escape") toggleHelpOverlay(false);
+      if (e.code === "Escape") {
+        toggleHelpOverlay(false);
+      }
     });
   }
 }
@@ -186,7 +194,13 @@ const HELP_ROWS = [
   ["Space", "Jump · double jump"],
   ["I", "Bag / equipment"],
   ["Enter", "Chat"],
-  ["F1", "This help"],
+  ["B", "Build mode (1 m snap)"],
+  ["?", "This help"],
+  ["F1", "Admin · Player / agents"],
+  ["F2", "Admin · Assets / harvest / CDN"],
+  ["F3", "Admin · Creatures / dummies"],
+  ["F4", "Admin · Weapons / mesh prefabs"],
+  ["F5", "Admin · World seed / map / nav"],
 ];
 
 function mountHelpOverlay() {

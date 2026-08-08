@@ -311,7 +311,7 @@ export function mountGameMenu(handlers = {}) {
         <button type="button" class="menu-item" data-act="resume">Resume</button>
         <button type="button" class="menu-item" data-act="bag">Inventory</button>
         <button type="button" class="menu-item" data-act="skills">Spell Book</button>
-        <button type="button" class="menu-item" data-act="help">Controls (F1)</button>
+        <button type="button" class="menu-item" data-act="help">Controls (?)</button>
       </div>`;
     document.body.appendChild(el);
     el.addEventListener("click", (e) => {
