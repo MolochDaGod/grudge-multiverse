@@ -60,6 +60,7 @@ import { loadSelection } from "./fleetGearPresets.js";
 import { ensureItemCatalog } from "./itemIcons.js";
 import { reGroundAfterAnimSample } from "./characterDeploy.js";
 import { LootField } from "./lootField.js";
+import { mountBreakableField, BREAKABLE_GEN } from "./breakableProps.js";
 import { refreshOpenTab } from "./mainPanel.js";
 import { logDrcContract, DRC_MULTIVERSE } from "./drcContract.js";
 import { DrcCombatController, DRC_COMBAT_LEGEND } from "./drcCombat.js";
@@ -823,8 +824,15 @@ export async function attachWarlordsWorld(ctx) {
         by: playerId,
       });
       refreshCombatFrame();
-      // Rare gear drop sparkle near resource
-      if (Math.random() < 0.12 && n.position) {
+      // Rare gear drop sparkle near resource (not breakables — they roll own tables)
+      if (
+        !n.breakable &&
+        n.kind !== "crate" &&
+        n.kind !== "barrel" &&
+        n.kind !== "jar" &&
+        Math.random() < 0.12 &&
+        n.position
+      ) {
         const gearPool = [
           { id: "t0_scrap", name: "Scrap Ore", tier: 0, slot: "mat", qty: 1 },
           { id: "t1_sword", name: "Iron Sword", tier: 1, slot: "weapon", dmg: 18 },
@@ -1370,6 +1378,26 @@ export async function attachWarlordsWorld(ctx) {
     `World ${realm.seed} · ${realm.stats.settlements} sites · ${realm.stats.npcs} NPCs · ${realm.stats.harbors || boats?.boats?.length || 0} harbors · boats E board / F leave`,
     2.6,
   );
+
+  // Breakable crates/barrels/jars at camps, hostiles, POIs — E smash → loot drops
+  window.__mvLoot = loot;
+  try {
+    window.setLoaderStatus?.("Scattering breakable crates…");
+    const brk = await mountBreakableField(scene, island, groundAt, {
+      world: realm.world,
+      seed: realm.seed,
+      harvest,
+      loot,
+      flash,
+    });
+    window.__mvBreakables = brk;
+    flash?.(
+      `Breakables ${BREAKABLE_GEN} · ${brk.stats?.total || 0} crates/barrels/jars · E smash for loot`,
+      1.8,
+    );
+  } catch (e) {
+    console.warn("[warlords] breakables", e);
+  }
 
   document.addEventListener("keydown", (e) => {
     if (e.code === "Escape" && isVendorShopOpen()) {

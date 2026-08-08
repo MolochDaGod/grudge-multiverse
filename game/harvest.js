@@ -74,12 +74,22 @@ export class HarvestSystem {
   hit(id, tool, power = 12) {
     const n = this.nodes.get(id);
     if (!n || n.broken) return { ok: false };
+    const isBreakable =
+      n.breakable ||
+      n.kind === "crate" ||
+      n.kind === "barrel" ||
+      n.kind === "jar";
     const match =
       tool === "any" ||
       tool === n.tool ||
+      isBreakable ||
       (tool === "axe" && n.kind === "tree") ||
       (tool === "pick" && (n.kind === "rock" || n.kind === "ore"));
-    const dmg = Math.max(1, Math.floor(power * (match ? 1 : 0.45)));
+    // Breakables smash faster with weapons / any tool
+    const dmg = Math.max(
+      1,
+      Math.floor(power * (isBreakable ? 1.35 : match ? 1 : 0.45)),
+    );
     n.hp = Math.max(0, n.hp - dmg);
 
     const perChunk = Math.max(1, Math.floor(n.maxHp / Math.max(1, n.maxChunks)));
@@ -130,6 +140,15 @@ export class HarvestSystem {
   }
 
   _grantLoot(n, chunkCount = 1) {
+    // Breakables: primary loot is world drops via breakableProps onBreak — skip bag mats spam
+    if (
+      n.breakable ||
+      n.kind === "crate" ||
+      n.kind === "barrel" ||
+      n.kind === "jar"
+    ) {
+      return;
+    }
     const bag = loadBag();
     const qty = Math.max(1, chunkCount) * (1 + Math.floor(Math.random() * 2));
     const matId =

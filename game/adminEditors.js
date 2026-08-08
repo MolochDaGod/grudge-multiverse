@@ -38,6 +38,7 @@ import {
   allDungeonPrefabs,
   DUNGEON_KIT_GEN,
 } from "./modularDungeonKit.js";
+import { BREAKABLE_GEN, BREAKABLE_TYPES } from "./breakableProps.js";
 
 export const ADMIN_TABS = [
   { id: "player", key: "F1", title: "Player", blurb: "Hero · agents · integrity · seed id" },
@@ -244,6 +245,18 @@ function renderAssetsTab() {
           .join("")}
       </ul>
       <p class="hint">Boats: ${boats?.boats?.length ?? 0} · Watercraft on CDN · Build B = 1 m snap</p>
+    </section>
+    <section class="mv-admin-card">
+      <h3>Breakable props (${BREAKABLE_GEN})</h3>
+      <p class="hint">Loafbrr CC0 crates/barrels/jars · camps · hostiles · POIs. E smash → world loot drops.</p>
+      <table class="mv-admin-table">
+        <tr><th>Placed</th><td>${window.__mvBreakables?.stats?.total ?? "—"}</td></tr>
+        <tr><th>Crate / barrel / jar</th><td>${window.__mvBreakables?.stats?.crate ?? "—"} / ${window.__mvBreakables?.stats?.barrel ?? "—"} / ${window.__mvBreakables?.stats?.jar ?? "—"}</td></tr>
+        <tr><th>Types</th><td class="mono">${Object.keys(BREAKABLE_TYPES).join(", ")}</td></tr>
+      </table>
+      <div class="mv-admin-actions">
+        <button type="button" data-act="log-breakables">Log breakables</button>
+      </div>
     </section>
     <section class="mv-admin-card">
       <h3>Kenney food kit (${FOOD_KIT_GEN})</h3>
@@ -512,6 +525,11 @@ function runAdminAction(act) {
       console.info("[admin] dungeon prefabs", allDungeonPrefabs());
       flash(`Dungeon prefabs ${allDungeonPrefabs().length}`);
     });
+  } else if (act === "log-breakables") {
+    console.info("[admin] breakables", window.__mvBreakables);
+    flash(
+      `Breakables ${window.__mvBreakables?.stats?.total ?? 0} · ${BREAKABLE_GEN}`,
+    );
   } else if (act === "list-hostiles") {
     console.info(
       "[admin] hostiles",

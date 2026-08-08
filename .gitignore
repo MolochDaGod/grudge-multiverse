@@ -11,3 +11,6 @@ dist/
 # Keep a local copy for offline dev; do not commit (GitHub 50 MB warning).
 public/maps/bermuda.glb
 
+
+_tmp_breakable/
+
