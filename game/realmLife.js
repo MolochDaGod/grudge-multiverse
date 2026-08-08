@@ -16,6 +16,8 @@ import {
   FACTION_THEMES,
   resolveSeedFromContext,
   DEFAULT_WORLD_SEED,
+  WORLD_SIZE_M,
+  DEFAULT_LAND_RADIUS_M,
 } from "./worldSeedGen.js";
 import {
   createBrain,
@@ -26,25 +28,50 @@ import {
   WOLF_AI,
 } from "./realmAi.js";
 import { createActorLod } from "./worldLod.js";
+import { addSettlementFooting, seedGroundAt } from "./worldSpace.js";
 
-function snapLand(x, z, island, groundAt) {
+/**
+ * Snap seed XZ onto land nav or footing on 5 km ocean pads.
+ * Never shrinks 5 km coords onto Bermuda — full SI placement.
+ */
+function snapLand(x, z, island, groundAt, _footingBag) {
   let sx = x;
   let sz = z;
-  if (island?.nav?.snap) {
+  const meshR = island?.meshLandRadius || 0;
+  const onMesh = meshR > 0 && Math.hypot(x, z) <= meshR * 1.05;
+
+  if (onMesh && island?.nav?.snap) {
     const sn = island.nav.snap(x, z);
     sx = sn.x;
     sz = sn.z;
-  }
-  if (island?.nav?.isWaterWorld?.(sx, sz)) {
-    for (let i = 0; i < 8; i++) {
-      sx *= 0.85;
-      sz *= 0.85;
-      if (!island.nav.isWaterWorld(sx, sz)) break;
+    if (island?.nav?.isWaterWorld?.(sx, sz)) {
+      for (let i = 0; i < 6; i++) {
+        sx *= 0.9;
+        sz *= 0.9;
+        if (!island.nav.isWaterWorld(sx, sz)) break;
+      }
     }
   }
-  const gy = groundAt?.(sx, sz);
+
+  let gy = seedGroundAt(island, sx, sz);
+  if (groundAt && onMesh) {
+    try {
+      const g = groundAt(sx, sz);
+      if (Number.isFinite(g) && g > (island.waterY || 0) + 0.3) gy = g;
+    } catch {
+      /* */
+    }
+  }
+
+  const needFooting =
+    !onMesh ||
+    (island?.nav?.isWaterWorld?.(sx, sz) && Math.hypot(x, z) > meshR * 0.95);
+  if (needFooting) {
+    gy = (island.waterY || 0) + 1.2;
+  }
+
   if (!Number.isFinite(gy)) return null;
-  return { x: sx, y: gy, z: sz };
+  return { x: sx, y: gy, z: sz, footing: needFooting };
 }
 
 function makeMarker(color, height = 2.2, radius = 0.45) {
@@ -161,27 +188,48 @@ export function resolvePlaySeed(opts = {}) {
  * @param {{ seed?: string, world?: object, density?: number }} [opts]
  */
 export function mountRealmLife(scene, island, groundAt, opts = {}) {
-  const landR = island.landRadius || island.halfW * 0.85 || 320;
+  // Always generate in 5 km seed space (island.worldRadiusM after expandIslandToSeedWorld)
+  const landR =
+    island.worldRadiusM ||
+    island.landRadius ||
+    opts.landRadius ||
+    DEFAULT_LAND_RADIUS_M;
   const seed = opts.seed || resolvePlaySeed({ roomCode: opts.roomCode });
   const world =
-    opts.world && opts.world.seed === seed
+    opts.world && opts.world.seed === seed && (opts.world.worldSizeM || 0) >= 4000
       ? opts.world
       : generateWorld(seed, {
           landRadius: landR,
           density: opts.density || 1.15,
+          worldSize: opts.worldSizeM || island.worldSizeM || WORLD_SIZE_M,
         });
 
-  // Land-snap all world entities
+  const footingBag = new Map();
+  const footingRoot = new THREE.Group();
+  footingRoot.name = "seed_footing";
+  scene.add(footingRoot);
+
+  // Land-snap all world entities (full 5 km coords — no shrink to Bermuda)
   for (const s of world.settlements || []) {
-    const p = snapLand(s.x, s.z, island, groundAt);
+    const p = snapLand(s.x, s.z, island, groundAt, footingBag);
     if (p) {
       s.x = p.x;
       s.z = p.z;
       s.y = p.y;
+      if (p.footing) {
+        addSettlementFooting(
+          footingRoot,
+          p.x,
+          p.z,
+          (s.radius || 20) * 1.2,
+          p.y,
+          new THREE.Color(s.accent || "#3a4a3a").getHex(),
+        );
+      }
     } else s.y = 0;
   }
   for (const n of world.npcs || []) {
-    const p = snapLand(n.x, n.z, island, groundAt);
+    const p = snapLand(n.x, n.z, island, groundAt, footingBag);
     if (p) {
       n.x = p.x;
       n.z = p.z;
@@ -189,7 +237,7 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
     }
   }
   for (const h of world.hostiles || []) {
-    const p = snapLand(h.x, h.z, island, groundAt);
+    const p = snapLand(h.x, h.z, island, groundAt, footingBag);
     if (p) {
       h.x = p.x;
       h.z = p.z;
@@ -197,7 +245,7 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
     }
   }
   for (const a of world.animals || []) {
-    const p = snapLand(a.x, a.z, island, groundAt);
+    const p = snapLand(a.x, a.z, island, groundAt, footingBag);
     if (p) {
       a.x = p.x;
       a.z = p.z;
@@ -205,17 +253,21 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
     }
   }
   for (const p0 of world.pois || []) {
-    const p = snapLand(p0.x, p0.z, island, groundAt);
+    const p = snapLand(p0.x, p0.z, island, groundAt, footingBag);
     if (p) {
       p0.x = p.x;
       p0.z = p.z;
       p0.y = p.y;
+      if (p.footing && (p0.kind === "harbor" || p0.kind === "dock")) {
+        addSettlementFooting(footingRoot, p.x, p.z, 12, p.y, 0x4a5560);
+      }
     }
   }
 
   const root = new THREE.Group();
   root.name = "realm_life";
   scene.add(root);
+  root.add(footingRoot);
 
   /** @type {object[]} */
   const actors = [];

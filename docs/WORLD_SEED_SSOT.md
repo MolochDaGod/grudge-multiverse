@@ -25,7 +25,22 @@
 | Browser | `game/worldSeedGen.js` → re-exports shared |
 | Railway | `server/worldSeedGen.mjs` (copy of shared for deploy) |
 
-Schema: `grudge.multiverse.world/v1` · gen: `WORLD_GEN_VERSION`
+Schema: `grudge.multiverse.world/v1` · gen: `WORLD_GEN_VERSION` (**`2026-08-08.3-5km`**)
+
+## Seed size (SI)
+
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `WORLD_SIZE_M` | **5000** | Box edge — **5 km × 5 km** |
+| `WORLD_HALF_M` | 2500 | ± half |
+| `WORLD_RADIUS_M` | **2400** | Playable ocean disc (content clamp) |
+| `HUB_RADIUS_M` | 340 | Neutral hub / Bermuda mesh disc |
+| `FACTION_RING_M` | ~1550 | Faction capital ring from origin |
+| `DEFAULT_LAND_RADIUS_M` | 2400 | Same as `WORLD_RADIUS_M` |
+
+- **One seed → one 5×5 km realm.** FE and BE both emit `worldSizeM: 5000`.
+- Bermuda GLB stays at the **hub**; ocean + nav expand to full seed; faction islands get footing pads.
+- Summary stamp includes `· 5×5 km ·` (e.g. `VALHEIM42 · 5×5 km · …`).
 
 ## How to play a seed
 

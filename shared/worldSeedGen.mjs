@@ -13,7 +13,22 @@
  */
 
 export const WORLD_SCHEMA = "grudge.multiverse.world/v1";
-export const WORLD_GEN_VERSION = "2026-08-08.2-boats-lod-nav";
+export const WORLD_GEN_VERSION = "2026-08-08.3-5km";
+
+/**
+ * Seed play space — SI metres (same as Island-Crusade / Valheim-scale).
+ * 5 km × 5 km world box; playable disc radius WORLD_RADIUS_M.
+ */
+export const WORLD_SIZE_M = 5000;
+export const WORLD_HALF_M = WORLD_SIZE_M / 2;
+/** Playable ocean disc radius (content clamps outside this). */
+export const WORLD_RADIUS_M = 2400;
+/** Neutral hub island / town radius. */
+export const HUB_RADIUS_M = 340;
+/** Faction capitals ring radius from origin. */
+export const FACTION_RING_M = 1550;
+/** Default land/coast radius for generation (full 5 km realm). */
+export const DEFAULT_LAND_RADIUS_M = WORLD_RADIUS_M;
 
 /** Grudge Info (info.grudge-studio.com) — product SSOT links, not mesh CDN. */
 export const GRUDGE_INFO = {
@@ -185,10 +200,11 @@ const VILLAGE_NAMES = {
 };
 
 /**
- * Generate full world document for Multiverse Bermuda overlay.
+ * Generate full world document — **5 km × 5 km SI** seed space.
+ * Bermuda mesh may sit at the hub; faction islands ring at FACTION_RING_M.
  *
  * @param {string|number} seedInput
- * @param {{ landRadius?: number, hubFrac?: number, density?: number }} [opts]
+ * @param {{ landRadius?: number, hubRadius?: number, density?: number, worldSize?: number }} [opts]
  * @returns {object} WorldDocument
  */
 export function generateWorld(seedInput, opts = {}) {
@@ -196,12 +212,18 @@ export function generateWorld(seedInput, opts = {}) {
     typeof seedInput === "string" ? seedInput : String(seedInput ?? DEFAULT_WORLD_SEED),
   );
   const seedU32 = parseSeed(seedLabel);
-  const landRadius = Math.max(80, Number(opts.landRadius) || 320);
-  const hubFrac = Number(opts.hubFrac) || 0.2;
+  // Fixed 5 km realm unless explicitly overridden (e.g. tests)
+  const worldSize = Math.max(1000, Number(opts.worldSize) || WORLD_SIZE_M);
+  const worldHalf = worldSize / 2;
+  const landRadius = Math.max(
+    500,
+    Number(opts.landRadius) || DEFAULT_LAND_RADIUS_M,
+  );
+  const hubRadius = Math.max(80, Number(opts.hubRadius) || HUB_RADIUS_M);
   const density = Math.min(2, Math.max(0.6, Number(opts.density) || 1.15));
-  const hubRadius = landRadius * hubFrac;
   const rng = mulberry32(seedU32);
   const ringRot = rng() * Math.PI * 2;
+  const ringR = FACTION_RING_M * (0.92 + rng() * 0.16);
 
   const factions = FACTION_ORDER.map((f, i) => {
     const theme = FACTION_THEMES[f];
@@ -209,8 +231,10 @@ export function generateWorld(seedInput, opts = {}) {
     return {
       ...theme,
       angle: ang,
-      // capital sits mid-ring
-      capitalR: landRadius * (0.48 + rng() * 0.08),
+      // capital on faction island centre (Crusade-style ring)
+      capitalR: ringR,
+      islandRadius: 600 * (0.9 + rng() * 0.25),
+      islandPeak: 30 + rng() * 16,
     };
   });
 
@@ -235,6 +259,10 @@ export function generateWorld(seedInput, opts = {}) {
       name: f.name,
       kind: "territory",
       angle: f.angle,
+      // Island disc around capital
+      x: Math.cos(f.angle) * f.capitalR,
+      z: Math.sin(f.angle) * f.capitalR,
+      radius: f.islandRadius,
       innerR: hubRadius * 1.05,
       outerR: landRadius * 0.98,
       accent: f.accent,
@@ -506,10 +534,16 @@ export function generateWorld(seedInput, opts = {}) {
     genVersion: WORLD_GEN_VERSION,
     seed: seedLabel,
     seedU32,
+    /** 5 km × 5 km SI box */
+    worldSizeM: worldSize,
+    worldHalfM: worldHalf,
+    worldRadiusM: landRadius,
     landRadius,
     hubRadius,
+    factionRingM: ringR,
     density,
     ringRotation: ringRot,
+    units: "si_metres",
     factions: factions.map((f) => ({
       faction: f.faction,
       name: f.name,
@@ -538,16 +572,17 @@ export function generateWorld(seedInput, opts = {}) {
     },
     grudgeInfo: GRUDGE_INFO,
     playMesh: {
-      kind: "bermuda_glb",
+      kind: "bermuda_glb_hub",
       url: "https://assets.grudge-studio.com/models/maps/bermuda.glb",
-      note: "Seed places content on Bermuda SI land + coastal sailing; terrain mesh is Bermuda GLB",
+      note: "5 km seed space; Bermuda mesh at hub; faction islands use footing pads + ocean",
     },
     nav: {
-      land: "heightfield_grid",
+      land: "heightfield_grid_5km",
       sea: "water_mask_inverse",
       lod: true,
+      worldSizeM: worldSize,
     },
-    summary: `${seedLabel} · ${settlements.length} sites · ${npcs.length} NPCs · ${hostiles.length} hostiles · ${animals.length} wildlife · ${harbors.length} harbors`,
+    summary: `${seedLabel} · 5×5 km · ${settlements.length} sites · ${npcs.length} NPCs · ${hostiles.length} hostiles · ${harbors.length} harbors`,
   };
 
   return doc;
@@ -651,8 +686,17 @@ function pushVillageNpcs(npcs, village, theme, rng) {
 export function factionAtWorld(x, z, world) {
   if (!world) return FACTION_THEMES.neutral;
   const d = Math.hypot(x, z);
-  if (d <= (world.hubRadius || 60)) return FACTION_THEMES.neutral;
-  if (d > (world.landRadius || 300) * 1.05) return FACTION_THEMES.neutral;
+  const hubR = world.hubRadius || HUB_RADIUS_M;
+  if (d <= hubR) return FACTION_THEMES.neutral;
+  // Prefer island discs when present
+  for (const z0 of world.zones || []) {
+    if (z0.kind !== "territory" || z0.x == null) continue;
+    const rd = Math.hypot(x - z0.x, z - z0.z);
+    if (rd <= (z0.radius || 600)) {
+      return FACTION_THEMES[z0.faction] || FACTION_THEMES.neutral;
+    }
+  }
+  if (d > (world.landRadius || WORLD_RADIUS_M) * 1.05) return FACTION_THEMES.neutral;
   const ang = Math.atan2(z, x);
   let best = FACTION_ORDER[0];
   let bestDa = Infinity;

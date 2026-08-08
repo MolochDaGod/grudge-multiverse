@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { getClass } from "./classes.js";
 import { loadBermudaIsland, makeGroundSampler } from "./island.js";
+import { expandIslandToSeedWorld } from "./worldSpace.js";
 import { collectColliderMeshes, COLLIDER_LAYER } from "./mapLiteracy.js";
 import { HarvestSystem } from "./harvest.js";
 import { BossFight } from "./bosses.js";
@@ -85,7 +86,12 @@ import {
   pickNearestHostile,
   resolvePlaySeed,
 } from "./realmLife.js";
-import { generateWorld } from "./worldSeedGen.js";
+import {
+  generateWorld,
+  WORLD_SIZE_M,
+  WORLD_RADIUS_M,
+  DEFAULT_WORLD_SEED,
+} from "./worldSeedGen.js";
 import { mountBoats } from "./boats.js";
 import { updateMeshTerrainLod } from "./worldLod.js";
 
@@ -310,17 +316,34 @@ export async function attachWarlordsWorld(ctx) {
 
   // Map is SI metres (bermuda ~843×614 m, buildings ~5–10 m). Never squash to 120 m.
   // Characters on CDN measure ~12–22 m raw → deploy applies ONE uniform unit normalize to ~1.8 m.
-  const island = await loadBermudaIsland(scene, { maxHarvest: 70 });
+  const islandRaw = await loadBermudaIsland(scene, { maxHarvest: 70 });
+  // Seed first (5×5 km), then expand nav/water using faction island discs
+  const earlySeed =
+    (typeof window !== "undefined" && window.__mvWorldSeed) ||
+    DEFAULT_WORLD_SEED;
+  const seedDoc = generateWorld(earlySeed, {
+    worldSize: WORLD_SIZE_M,
+    landRadius: WORLD_RADIUS_M,
+    density: 1.15,
+  });
+  const island = expandIslandToSeedWorld(islandRaw, scene, {
+    worldSizeM: WORLD_SIZE_M,
+    worldRadiusM: WORLD_RADIUS_M,
+    world: seedDoc,
+  });
   const groundAt = island.sampleY || makeGroundSampler(island.root);
-  const mapW = island.halfW * 2;
+  const mapW = island.worldSizeM || island.halfW * 2;
   console.info(
-    `[warlords] MAP SI ≈ ${mapW.toFixed(0)} m across · hubR=${island.hubRadius?.toFixed?.(1)} · scale=${island.scale} · nav walkable=${island.nav?.cells?.filter?.((c) => c.walkable).length ?? "?"}`,
+    `[warlords] SEED WORLD ${mapW.toFixed(0)}×${mapW.toFixed(0)} m · radius=${island.worldRadiusM}m · hub meshLandR=${island.meshLandRadius?.toFixed?.(0)} · navCell=${island.navCellSize}m walkable=${island.nav?.cells?.filter?.((c) => c.walkable).length ?? "?"}`,
   );
   window.__mvMapMeta = {
     units: "si_metres",
     humanHeightM: 1.8,
+    worldSizeM: island.worldSizeM || WORLD_SIZE_M,
+    worldRadiusM: island.worldRadiusM || WORLD_RADIUS_M,
     halfW: island.halfW,
     landRadius: island.landRadius,
+    meshLandRadius: island.meshLandRadius,
     waterY: island.waterY,
     scale: island.scale,
     widthM: mapW,
@@ -1045,13 +1068,16 @@ export async function attachWarlordsWorld(ctx) {
   const playSeed =
     (typeof window !== "undefined" && window.__mvWorldSeed) ||
     resolvePlaySeed({ roomCode: roomHint }) ||
-    "VALHEIM42";
-  window.setLoaderStatus?.(`Generating world seed ${playSeed}…`);
-  // Prefer welcome world meta seed; always re-generate locally at measured landRadius
+    DEFAULT_WORLD_SEED;
+  window.setLoaderStatus?.(`Generating 5×5 km world seed ${playSeed}…`);
+  // Full 5 km realm (same as Railway); reuse early seedDoc when seed matches
   const realm = mountRealmLife(scene, island, groundAt, {
     seed: playSeed,
     roomCode: roomHint,
     density: 1.15,
+    world: playSeed === earlySeed ? seedDoc : undefined,
+    worldSizeM: WORLD_SIZE_M,
+    landRadius: WORLD_RADIUS_M,
   });
   window.__mvRealm = realm;
   window.__mvWorldSeed = realm.seed;

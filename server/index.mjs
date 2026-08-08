@@ -48,8 +48,8 @@ const TICK_MS = Number(process.env.TICK_MS || 50); // 20 Hz snapshots
 const STALE_MS = Number(process.env.STALE_MS || 15000);
 const MAX_PER_ROOM = Number(process.env.MAX_PER_ROOM || 16);
 const SERVICE = "grudge-multiverse-room";
-/** Default land radius for seed gen when client has not measured Bermuda yet. */
-const DEFAULT_LAND_RADIUS = Number(process.env.WORLD_LAND_RADIUS || 320);
+/** Default land/play radius for 5 km × 5 km seed realm (SI metres). */
+const DEFAULT_LAND_RADIUS = Number(process.env.WORLD_LAND_RADIUS || 2400);
 
 /** @type {Map<string, Room>} */
 const rooms = new Map();

@@ -1,27 +1,28 @@
 /**
- * Large-scale world LOD — distance bands for seed content + mesh culling.
- * Best practice: do not simulate every NPC/raider every frame at 800 m+.
+ * Large-scale world LOD — distance bands for 5 km seed realms.
+ * Best practice: do not simulate every NPC/raider every frame at multi-km range.
  *
- * Tiers (SI metres from player):
- *   near   0–80   full AI + full mesh
- *   mid    80–180 AI every 3 frames, simplified
- *   far    180–320 visible only (no AI), flags only
- *   cull   >320   hidden
+ * Tiers (SI metres from player) — tuned for WORLD_SIZE 5000:
+ *   near   0–150    full AI + full mesh
+ *   mid    150–450  AI every 3 frames
+ *   far    450–1200 visible only (no AI)
+ *   cull   >1200    hidden
  */
 import * as THREE from "three";
 
 export const LOD_BANDS = {
-  near: 80,
-  mid: 180,
-  far: 320,
+  near: 150,
+  mid: 450,
+  far: 1200,
 };
 
 /**
  * Adaptive nav cell size for large maps (metres).
- * Bermuda ~800 m → 6–8 m; 2 km+ → 12–16 m.
+ * 5 km realm → 16–20 m cells (~250–312 per axis).
  */
 export function adaptiveNavCellSize(landRadius, halfW) {
   const span = Math.max(landRadius || 0, halfW || 0) * 2;
+  if (span >= 4500) return 20;
   if (span > 2500) return 16;
   if (span > 1400) return 12;
   if (span > 900) return 8;
