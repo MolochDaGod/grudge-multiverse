@@ -21,6 +21,13 @@ import {
   foodIconUrl,
   foodModelUrl,
 } from "./foodKit.js";
+import {
+  loadRetroCatalog,
+  allPrefabs as allBuildPrefabs,
+  playerBuildPalette,
+  RETRO_FANTASY_GEN,
+  RETRO_CDN,
+} from "./retroFantasyKit.js";
 
 export const ADMIN_TABS = [
   { id: "player", key: "F1", title: "Player", blurb: "Hero · agents · integrity · seed id" },
@@ -238,6 +245,15 @@ function renderAssetsTab() {
       </div>
     </section>
     <section class="mv-admin-card">
+      <h3>Kenney retro-fantasy buildings (${RETRO_FANTASY_GEN})</h3>
+      <p class="hint">Modular structures · camps · player build (B). Icon + GLB + prefab sprite. CDN: <span class="mono">${esc(RETRO_CDN)}</span></p>
+      <div id="mv-admin-build-preview" class="mv-admin-food-grid"></div>
+      <div class="mv-admin-actions">
+        <button type="button" data-act="log-build-prefabs">Log build prefabs</button>
+        <button type="button" data-act="toggle-build">Toggle build mode (B)</button>
+      </div>
+    </section>
+    <section class="mv-admin-card">
       <h3>Actions</h3>
       <div class="mv-admin-actions">
         <button type="button" data-act="log-harvest">Log harvest nodes</button>
@@ -391,6 +407,23 @@ function wireAdminActions(body) {
         .join("");
     });
   }
+  // Building / camp prefab strip
+  const buildGrid = body.querySelector("#mv-admin-build-preview");
+  if (buildGrid) {
+    loadRetroCatalog().then(() => {
+      const prefs = playerBuildPalette().slice(0, 24);
+      buildGrid.innerHTML =
+        prefs
+          .map(
+            (p) =>
+              `<div class="mv-food-tile" title="${esc(p.name)} · ${esc(p.role)} · ${esc(p.slug)}" data-build="${esc(p.id)}">
+              <img src="${esc(p.iconUrl)}" alt="" />
+              <span>${esc(p.name)}</span>
+            </div>`,
+          )
+          .join("") || "<span class='hint'>No build palette</span>";
+    });
+  }
 }
 
 function runAdminAction(act) {
@@ -421,6 +454,12 @@ function runAdminAction(act) {
     import("./foodKit.js").then(async ({ loadFoodCatalog, allFoodPrefabs }) => {
       await loadFoodCatalog();
       console.info("[admin] food prefabs", allFoodPrefabs());
+    });
+  } else if (act === "log-build-prefabs") {
+    loadRetroCatalog().then(() => {
+      console.info("[admin] retro-fantasy prefabs", allBuildPrefabs());
+      console.info("[admin] player build palette", playerBuildPalette());
+      flash(`Build prefabs ${allBuildPrefabs().length} · palette ${playerBuildPalette().length}`);
     });
   } else if (act === "list-hostiles") {
     console.info(

@@ -29,6 +29,11 @@ import {
 } from "./realmAi.js";
 import { createActorLod } from "./worldLod.js";
 import { addSettlementFooting, seedGroundAt } from "./worldSpace.js";
+import {
+  loadRetroCatalog,
+  spawnSettlementModular,
+  RETRO_FANTASY_GEN,
+} from "./retroFantasyKit.js";
 
 /**
  * Snap seed XZ onto land nav or footing on 5 km ocean pads.
@@ -329,6 +334,11 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
   /** @type {object[]} */
   const interactables = [];
 
+  /** Modular Kenney buildings for towns / farms / camps (async). */
+  const settlementBuildRoot = new THREE.Group();
+  settlementBuildRoot.name = "settlement_modular_builds";
+  root.add(settlementBuildRoot);
+
   for (const s of world.settlements || []) {
     const col = new THREE.Color(s.accent || "#888");
     const flag = makeFlag(col.getHex());
@@ -357,6 +367,28 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
       settlement: s,
     });
   }
+
+  // Fire-and-forget modular structure spawn (Kenney retro-fantasy style)
+  loadRetroCatalog()
+    .then(async () => {
+      const list = world.settlements || [];
+      // Cap concurrent loads — full seed may have many camps
+      const batch = 4;
+      for (let i = 0; i < list.length; i += batch) {
+        const slice = list.slice(i, i + batch);
+        await Promise.all(
+          slice.map((s) =>
+            spawnSettlementModular(settlementBuildRoot, s, groundAt).catch((e) =>
+              console.warn("[realmLife] settlement build", s.id, e?.message || e),
+            ),
+          ),
+        );
+      }
+      console.info(
+        `[realmLife] ${RETRO_FANTASY_GEN} modular sites=${list.length}`,
+      );
+    })
+    .catch((e) => console.warn("[realmLife] retro kit", e?.message || e));
 
   for (const n of world.npcs || []) {
     if (n.x == null) continue;

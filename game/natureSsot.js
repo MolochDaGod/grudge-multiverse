@@ -147,6 +147,12 @@ export const FLEET_NATURE_CDN = {
   palmPirate: "https://assets.grudge-studio.com/models/world/kenney/pirate-kit/palm-straight.glb",
   boat: "https://assets.grudge-studio.com/models/world/kenney/watercraft-pack/boat-sail-a.glb",
   tower: "https://assets.grudge-studio.com/models/world/kenney/castle-kit/tower-base.glb",
+  /** Modular buildings / camps — retro-fantasy (single GLBs) */
+  retroWall: "https://assets.grudge-studio.com/models/kenney/retro-fantasy-kit/wall.glb",
+  retroStructure: "https://assets.grudge-studio.com/models/kenney/retro-fantasy-kit/structure.glb",
+  retroFence: "https://assets.grudge-studio.com/models/kenney/retro-fantasy-kit/fence-wood.glb",
+  retroTower: "https://assets.grudge-studio.com/models/kenney/retro-fantasy-kit/tower-base.glb",
+  retroFloor: "https://assets.grudge-studio.com/models/kenney/retro-fantasy-kit/wood-floor.glb",
   /** Multipack — isolate mesh names only when used */
   stylizedRocks: "https://assets.grudge-studio.com/models/nature/stylized/rocks/stylised_rocks.glb",
   rocks70: "https://assets.grudge-studio.com/models/nature/stylized/rocks/70_stylized_rocks.glb",
