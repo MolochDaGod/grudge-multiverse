@@ -39,6 +39,7 @@ import {
   DUNGEON_KIT_GEN,
 } from "./modularDungeonKit.js";
 import { BREAKABLE_GEN, BREAKABLE_TYPES } from "./breakableProps.js";
+import { HUB_TOWN_GEN } from "./hubTown.js";
 
 export const ADMIN_TABS = [
   { id: "player", key: "F1", title: "Player", blurb: "Hero · agents · integrity · seed id" },
@@ -380,6 +381,8 @@ function renderWorldTab() {
         <tr><th>Spawns</th><td>${island.spawns?.length ?? "—"}</td></tr>
         <tr><th>Water</th><td>${window.__mvOcean ? "three.js Water" : "flat"} · y=${num(island.waterY)}</td></tr>
         <tr><th>Physics</th><td>${window.__mvWorldPhysics ? "Rapier" : "BVH only"}</td></tr>
+        <tr><th>Hub town</th><td class="mono">${esc(window.__mvHubTown ? HUB_TOWN_GEN : "—")}</td></tr>
+        <tr><th>Town NPCs</th><td>${window.__mvHubTown?.actors?.length ?? "—"} · PF ${window.__mvHubTown?.pathfinding ? "yes" : "no"}</td></tr>
       </table>
     </section>
     <section class="mv-admin-card">

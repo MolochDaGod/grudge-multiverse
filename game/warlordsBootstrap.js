@@ -61,6 +61,7 @@ import { ensureItemCatalog } from "./itemIcons.js";
 import { reGroundAfterAnimSample } from "./characterDeploy.js";
 import { LootField } from "./lootField.js";
 import { mountBreakableField, BREAKABLE_GEN } from "./breakableProps.js";
+import { mountHubTown, HUB_TOWN_GEN } from "./hubTown.js";
 import { refreshOpenTab } from "./mainPanel.js";
 import { logDrcContract, DRC_MULTIVERSE } from "./drcContract.js";
 import { DrcCombatController, DRC_COMBAT_LEGEND } from "./drcCombat.js";
@@ -442,38 +443,19 @@ export async function attachWarlordsWorld(ctx) {
     );
   }
 
-  // Start ON LAND — spawns rebuilt after expand nav
-  const spawnList = island.spawns?.length
-    ? island.spawns
-    : island.nav?.pickLandSpawns?.(8, island.hubRadius || 120)?.map(
-        (p) => new THREE.Vector3(p.x, p.y, p.z),
-      ) || [new THREE.Vector3(0, 2, 0)];
-  let spawn = (
-    spawnList[Math.floor(Math.random() * spawnList.length)] || spawnList[0]
-  ).clone();
+  // Provisional hub spawn near origin — remade to town gate after mountHubTown
+  let spawn = new THREE.Vector3(0, 2, 8);
   if (island.nav?.snap) {
-    const sn = island.nav.snap(spawn.x, spawn.z);
-    spawn = new THREE.Vector3(sn.x, sn.y + 1.05, sn.z);
+    const sn = island.nav.snap(0, 6);
+    spawn.set(sn.x, sn.y + 1.12, sn.z);
   } else {
-    const gy = groundAt(spawn.x, spawn.z);
-    spawn.y = (Number.isFinite(gy) ? gy : 0) + 1.15;
+    const gy = groundAt(0, 6);
+    spawn.set(0, (Number.isFinite(gy) ? gy : 0) + 1.12, 6);
   }
-  // Refuse water start — force hub land
-  if (
-    island.nav?.isWaterWorld?.(spawn.x, spawn.z) ||
-    !island.nav?.isWalkableWorld?.(spawn.x, spawn.z)
-  ) {
-    const land = island.nav?.pickLandSpawns?.(1, island.hubRadius || 120)?.[0];
-    if (land) spawn.set(land.x, land.y, land.z);
-    else if (island.nav?.snap) {
-      const sn = island.nav.snap(0, 0);
-      spawn.set(sn.x, sn.y + 1.05, sn.z);
-    }
-  }
-  const spawnGroundY = groundAt(spawn.x, spawn.z);
+  let spawnGroundY = groundAt(spawn.x, spawn.z);
   if (Number.isFinite(spawnGroundY)) spawn.y = spawnGroundY + 1.12;
   console.info(
-    `[warlords] LAND spawn xz=(${spawn.x.toFixed(1)},${spawn.z.toFixed(1)}) y=${spawn.y.toFixed(2)} ground=${Number.isFinite(spawnGroundY) ? spawnGroundY.toFixed(2) : "?"} walkable=${!!island.nav?.isWalkableWorld?.(spawn.x, spawn.z)}`,
+    `[warlords] provisional spawn xz=(${spawn.x.toFixed(1)},${spawn.z.toFixed(1)}) — hub town will remake entry`,
   );
 
   // Drop temporary 40 m pad from multiplayer-gltf once real island is up
@@ -793,6 +775,85 @@ export async function attachWarlordsWorld(ctx) {
     window.__mvWorldPhysics = worldPhys;
   } catch (e) {
     console.warn("[warlords] worldPhysics", e);
+  }
+
+  // Neutral starting town (medieval village) — entry gate + NPCs + colliders + pathfinding
+  let hubTown = null;
+  try {
+    window.setLoaderStatus?.("Raising Grudgehold starting town…");
+    hubTown = await mountHubTown(scene, island, {
+      worldPhysics: worldPhys,
+      flash,
+      origin: { x: 0, y: 0, z: 0 },
+    });
+    window.__mvHubTown = hubTown;
+    if (hubTown?.spawn) {
+      spawn.set(hubTown.spawn.x, hubTown.spawn.y, hubTown.spawn.z);
+      spawnGroundY = hubTown.sampleY?.(spawn.x, spawn.z) ?? spawn.y - 1.12;
+      if (capsule) {
+        capsule.position.copy(spawn);
+        if (Number.isFinite(hubTown.spawn.yaw) && capsule.rotation) {
+          capsule.rotation.y = hubTown.spawn.yaw;
+        }
+        try {
+          localPlayer._player.playerVelocity?.set(0, 0, 0);
+        } catch {
+          /* */
+        }
+      }
+      if (ctx.camera && ctx.controls) {
+        const yaw = hubTown.spawn.yaw || Math.PI;
+        ctx.camera.position.set(
+          spawn.x + Math.sin(yaw) * 5,
+          spawn.y + 2.4,
+          spawn.z + Math.cos(yaw) * 5,
+        );
+        ctx.controls.target.set(hubTown.plaza?.x ?? spawn.x, spawn.y + 1, hubTown.plaza?.z ?? spawn.z);
+        ctx.controls.update?.();
+      }
+      // Rebind feet colliders including hub town meshes under island.root
+      try {
+        rebindIslandStaticCollider(localPlayer, island);
+      } catch {
+        /* */
+      }
+      // Also force-include hub collider meshes if tagging missed
+      try {
+        const ctrl = localPlayer?._player;
+        if (ctrl?.buildStaticCollider && hubTown?.groundMeshes?.length) {
+          const extra = [
+            ...(hubTown.groundMeshes || []),
+            ...(hubTown.buildings || []).map((b) => b.mesh).filter(Boolean),
+          ];
+          const all = [];
+          island.root?.traverse?.((o) => {
+            if (
+              o.isMesh &&
+              o.geometry &&
+              (o.userData?.colliderLayer || o.userData?.walkable || o.userData?.townRole)
+            ) {
+              all.push(o);
+            }
+          });
+          for (const m of extra) if (m && !all.includes(m)) all.push(m);
+          if (all.length > 4) {
+            ctrl.buildStaticCollider(all);
+            console.info("[warlords] hub+island collider meshes", all.length);
+          }
+        }
+      } catch (e) {
+        console.warn("[warlords] hub collider merge", e?.message || e);
+      }
+      flash?.(
+        `${HUB_TOWN_GEN} · entry gate · ${hubTown.actors?.length || 0} townsfolk · pathfinding ${hubTown.pathfinding ? "ON" : "off"}`,
+        2.4,
+      );
+      console.info(
+        `[warlords] HUB ENTRY xz=(${spawn.x.toFixed(1)},${spawn.z.toFixed(1)}) y=${spawn.y.toFixed(2)}`,
+      );
+    }
+  } catch (e) {
+    console.warn("[warlords] hub town", e);
   }
 
   // 1 m snap build (B) — Kenney / SeedThree living-scene practice
@@ -1331,6 +1392,14 @@ export async function attachWarlordsWorld(ctx) {
   });
   window.__mvRealm = realm;
   window.__mvWorldSeed = realm.seed;
+  // Merge hub town NPCs + interacts into realm (friendly seed base)
+  if (hubTown) {
+    if (hubTown.actors?.length) realm.actors.push(...hubTown.actors);
+    if (hubTown.interactables?.length) {
+      realm.interactables.push(...hubTown.interactables);
+    }
+    realm.hubTown = hubTown;
+  }
   // Report land radius to Railway so room world stays aligned
   try {
     const net = window.__mvDangerNet;
@@ -1438,6 +1507,26 @@ export async function attachWarlordsWorld(ctx) {
           `Mission: ${realm.mission.title}`,
           2.4,
         );
+        return;
+      }
+      if (it.kind === "class_specialist") {
+        flash?.(
+          `${it.label} · ${it.specialist || "class"} specialist · train skills on the road, return to seed town`,
+          2.2,
+        );
+        return;
+      }
+      if (it.kind === "craft_specialist") {
+        flash?.(
+          `${it.label} · ${it.craft || "craft"} · open bag mats · B build · camp workshops later`,
+          2.2,
+        );
+        // Open craft panel if present
+        try {
+          window.dispatchEvent(new CustomEvent("mv-open-tab", { detail: { tab: "craft" } }));
+        } catch {
+          /* */
+        }
         return;
       }
       if (it.kind === "settlement") {
@@ -1668,7 +1757,10 @@ export async function attachWarlordsWorld(ctx) {
       worldPhys?.step?.(dt);
       vfx.update(dt);
       thorns?.update?.(dt);
-      if (capsule?.position) loot.update(dt, capsule.position);
+      if (capsule?.position) {
+        loot.update(dt, capsule.position);
+        hubTown?.update?.(dt, capsule.position);
+      }
       syncFocusCrosshair(crosshairEl);
       // Soft-lock track moving bosses (chest point stays live)
       if (aim.selectedTarget?.mesh) refreshSelectedTargetPoint();
