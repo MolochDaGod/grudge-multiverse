@@ -317,46 +317,86 @@ export async function loadBermudaIsland(scene, opts = {}) {
     host.userData.selectable = "node";
   });
 
-  // If classification found few trees, seed synthetic grass-ring nodes for gameplay
-  if (harvestNodes.length < 12) {
-    const ringCount = 24;
+  // Synthetic ring only if mesh classified almost nothing — SI Valheim scales.
+  // Primary forest/rocks come from mountNatureField (Kenney + 20 m buried rocks).
+  if (harvestNodes.length < 4) {
+    const ringCount = 8;
     for (let i = 0; i < ringCount; i++) {
       const a = (i / ringCount) * Math.PI * 2;
       const r = hubRadius * 1.6 + (i % 3) * halfW * 0.08;
       const x = Math.cos(a) * r;
       const z = Math.sin(a) * r;
       const kind = i % 3 === 0 ? "rock" : "tree";
-      const mesh = new THREE.Mesh(
-        kind === "tree"
-          ? new THREE.ConeGeometry(0.45, 2.2, 6)
-          : new THREE.DodecahedronGeometry(0.55, 0),
-        new THREE.MeshStandardMaterial({
-          color: kind === "tree" ? 0x2d6b3a : 0x6a6a68,
-          roughness: 0.9,
-        }),
-      );
-      mesh.position.set(x, 1.1, z);
+      const gy = sampleY(x, z) ?? 1;
+      let mesh;
+      if (kind === "tree") {
+        const h = 10 + (i % 4);
+        mesh = new THREE.Group();
+        const trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.25, 0.35, h * 0.55, 6),
+          new THREE.MeshStandardMaterial({ color: 0x3d2a18, roughness: 0.9 }),
+        );
+        trunk.position.y = h * 0.275;
+        const canopy = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(h * 0.2, 1),
+          new THREE.MeshStandardMaterial({ color: 0x2d6b3a, roughness: 0.85 }),
+        );
+        canopy.position.y = h * 0.62;
+        mesh.add(trunk, canopy);
+        mesh.position.set(x, gy, z);
+        mesh.userData.siHeight = h;
+      } else {
+        // 20 m rock, 40% buried
+        const h = 20;
+        const bury = h * 0.4;
+        mesh = new THREE.Mesh(
+          new THREE.DodecahedronGeometry(h * 0.42, 1),
+          new THREE.MeshStandardMaterial({
+            color: 0x6a6a68,
+            roughness: 0.95,
+            flatShading: true,
+          }),
+        );
+        mesh.position.set(x, gy - bury + h * 0.42, z);
+        mesh.userData.siHeight = h;
+        mesh.userData.buryFrac = 0.4;
+      }
       mesh.castShadow = true;
       mesh.userData.selectable = "node";
       layers.harvest.add(mesh);
+      const chunks = kind === "rock" ? 6 : 4;
+      const maxHp = kind === "rock" ? chunks * 22 : chunks * 16;
       harvestNodes.push({
         id: `hrv_seed_${kind}_${i}`,
         kind,
         materialId: kind === "tree" ? "t0_wood" : "t0_stone",
         object: mesh,
-        position: mesh.position.clone(),
-        halfExtents: new THREE.Vector3(0.5, 1, 0.5),
-        hp: kind === "tree" ? 40 : 55,
-        maxHp: kind === "tree" ? 40 : 55,
+        position: new THREE.Vector3(x, gy + (kind === "rock" ? 6 : 4), z),
+        halfExtents: new THREE.Vector3(
+          kind === "rock" ? 6 : 1.2,
+          kind === "rock" ? 6 : 5,
+          kind === "rock" ? 6 : 1.2,
+        ),
+        hp: maxHp,
+        maxHp,
         tool: kind === "tree" ? "axe" : "pick",
         zone: "grass",
         seeded: true,
+        chunkMode: true,
+        chunks,
+        maxChunks: chunks,
+        buryFrac: kind === "rock" ? 0.4 : 0,
+        siHeight: kind === "rock" ? 20 : 12,
+        groundY: gy,
+        valheimRock: kind === "rock",
       });
       mesh.userData.harvestId = harvestNodes[harvestNodes.length - 1].id;
+      mesh.userData.harvestKind = kind;
     }
   }
 
-  const maxH = opts.maxHarvest ?? 80;
+  // Cap only mesh-classified nodes; natureField appends after load
+  const maxH = opts.maxHarvest ?? 120;
   const capped = harvestNodes.slice(0, maxH);
 
   // Mesh terrain LOD tags (frustum + distance bands in bootstrap)

@@ -114,17 +114,72 @@ function makeFlag(color) {
 function makeAnimalMesh(def) {
   const h = def.height || 1;
   const g = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(h * 0.22, h * 0.55, 4, 8),
-    new THREE.MeshStandardMaterial({
-      color: def.color || 0x888888,
-      roughness: 0.85,
-    }),
-  );
-  body.position.y = h * 0.45;
-  body.rotation.z = Math.PI / 2;
-  body.scale.set(1.4, 1, 0.7);
-  g.add(body);
+  const mat = new THREE.MeshStandardMaterial({
+    color: def.color || 0x888888,
+    roughness: 0.85,
+  });
+  // Species silhouettes (SI stand-ins until animal GLBs on CDN)
+  const species = String(def.species || "").toLowerCase();
+  if (species.includes("deer") || species.includes("stag")) {
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(h * 0.18, h * 0.5, 4, 6),
+      mat,
+    );
+    body.position.y = h * 0.42;
+    body.rotation.z = Math.PI / 2;
+    body.scale.set(1.5, 1, 0.65);
+    g.add(body);
+    if (species.includes("stag")) {
+      const ant = new THREE.Mesh(
+        new THREE.ConeGeometry(h * 0.06, h * 0.35, 4),
+        mat,
+      );
+      ant.position.set(h * 0.25, h * 0.75, 0);
+      ant.rotation.z = -0.4;
+      g.add(ant);
+      const ant2 = ant.clone();
+      ant2.position.z = 0.12;
+      ant2.rotation.z = 0.4;
+      g.add(ant2);
+    }
+  } else if (species.includes("wolf") || species.includes("fox")) {
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(h * 0.2, h * 0.45, 4, 6),
+      mat,
+    );
+    body.position.y = h * 0.35;
+    body.rotation.z = Math.PI / 2;
+    body.scale.set(1.6, 1, 0.7);
+    g.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(h * 0.14, 6, 6), mat);
+    head.position.set(h * 0.35, h * 0.42, 0);
+    g.add(head);
+  } else if (species.includes("cow") || species.includes("bull")) {
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(h * 1.1, h * 0.55, h * 0.45),
+      mat,
+    );
+    body.position.y = h * 0.4;
+    g.add(body);
+    const head = new THREE.Mesh(
+      new THREE.BoxGeometry(h * 0.28, h * 0.28, h * 0.22),
+      mat,
+    );
+    head.position.set(h * 0.55, h * 0.5, 0);
+    g.add(head);
+  } else {
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(h * 0.22, h * 0.55, 4, 8),
+      mat,
+    );
+    body.position.y = h * 0.45;
+    body.rotation.z = Math.PI / 2;
+    body.scale.set(1.4, 1, 0.7);
+    g.add(body);
+  }
+  g.traverse((o) => {
+    if (o.isMesh) o.castShadow = true;
+  });
   return g;
 }
 

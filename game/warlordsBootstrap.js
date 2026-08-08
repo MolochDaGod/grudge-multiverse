@@ -94,6 +94,8 @@ import {
 } from "./worldSeedGen.js";
 import { mountBoats } from "./boats.js";
 import { updateMeshTerrainLod } from "./worldLod.js";
+import { mountNatureField } from "./natureField.js";
+import { ROCK_HEIGHT_M, ROCK_BURY_FRAC, NATURE_GEN } from "./natureSsot.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -316,7 +318,7 @@ export async function attachWarlordsWorld(ctx) {
 
   // Map is SI metres (bermuda ~843×614 m, buildings ~5–10 m). Never squash to 120 m.
   // Characters on CDN measure ~12–22 m raw → deploy applies ONE uniform unit normalize to ~1.8 m.
-  const islandRaw = await loadBermudaIsland(scene, { maxHarvest: 70 });
+  const islandRaw = await loadBermudaIsland(scene, { maxHarvest: 40 });
   // Seed first (5×5 km), then expand nav/water using faction island discs
   const earlySeed =
     (typeof window !== "undefined" && window.__mvWorldSeed) ||
@@ -663,12 +665,39 @@ export async function attachWarlordsWorld(ctx) {
 
   const loot = new LootField(scene, { flash, groundAt });
 
+  // Valheim-style nature: 20 m rocks (40% buried), multi-chunk trees/rocks, Kenney variety
+  window.setLoaderStatus?.("Growing forest + mineable rocks…");
+  let natureCtl = null;
+  try {
+    natureCtl = await mountNatureField(scene, island, groundAt, {
+      seed: earlySeed,
+      world: seedDoc,
+    });
+    window.__mvNature = natureCtl;
+    console.info(
+      `[warlords] nature ${NATURE_GEN} rocks ${ROCK_HEIGHT_M}m bury=${ROCK_BURY_FRAC * 100}%`,
+      natureCtl?.stats,
+    );
+  } catch (e) {
+    console.warn("[warlords] nature field", e);
+  }
+
   const harvest = new HarvestSystem(scene, island.harvestNodes, {
     flash,
+    nature: natureCtl,
+    onChunk: (n) => {
+      set?.(ref(db, `rooms/${roomId}/harvest/${n.id}`), {
+        hp: n.hp,
+        broken: false,
+        chunks: n.chunks,
+        t: Date.now(),
+      });
+    },
     onBreak: (n) => {
       set?.(ref(db, `rooms/${roomId}/harvest/${n.id}`), {
         hp: 0,
         broken: true,
+        chunks: 0,
         t: Date.now(),
         by: playerId,
       });
@@ -1224,13 +1253,15 @@ export async function attachWarlordsWorld(ctx) {
     const origin = cam.position.clone();
     const dir = new THREE.Vector3();
     cam.getWorldDirection(dir);
-    const node = harvest.pick(origin, dir, 5);
+    // Tall Valheim rocks (20 m, exposed ~12 m) need longer pick range
+    const node = harvest.pick(origin, dir, 14);
     if (node) {
-      const res = harvest.hit(node.id, "any", 14);
+      const res = harvest.hit(node.id, "any", 18);
       if (res.ok) {
         set?.(ref(db, `rooms/${roomId}/harvest/${node.id}`), {
           hp: node.hp,
           broken: node.broken,
+          chunks: node.chunks,
           t: Date.now(),
         });
       }
@@ -1241,7 +1272,7 @@ export async function attachWarlordsWorld(ctx) {
     onValue(ref(db, `rooms/${roomId}/harvest`), (snap) => {
       const data = snap.val() || {};
       for (const [id, st] of Object.entries(data)) {
-        harvest.applyRemoteState(id, st.hp, st.broken);
+        harvest.applyRemoteState(id, st.hp, st.broken, st.chunks);
       }
     });
     onValue(ref(db, `rooms/${roomId}/bosses`), (snap) => {
@@ -1373,7 +1404,7 @@ export async function attachWarlordsWorld(ctx) {
       return t;
     },
     update(dt) {
-      harvest.update();
+      harvest.update(dt);
       vfx.update(dt);
       if (capsule?.position) loot.update(dt, capsule.position);
       syncFocusCrosshair(crosshairEl);

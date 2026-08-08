@@ -5,13 +5,15 @@
  * Usage: node scripts/purge-redeploy.mjs
  * Then: npm run deploy && npm run deploy:railway
  */
-import { generateWorld, DEFAULT_WORLD_SEED, WORLD_GEN_VERSION } from "../shared/worldSeedGen.mjs";
+import { generateWorld, DEFAULT_WORLD_SEED, WORLD_GEN_VERSION, WORLD_SIZE_M } from "../shared/worldSeedGen.mjs";
 
-const w = generateWorld(DEFAULT_WORLD_SEED, { landRadius: 320 });
+const w = generateWorld(DEFAULT_WORLD_SEED, { landRadius: 2400, worldSize: WORLD_SIZE_M });
 console.log("[purge-redeploy] default seed", DEFAULT_WORLD_SEED);
-console.log("[purge-redeploy] gen", WORLD_GEN_VERSION);
+console.log("[purge-redeploy] worldGen", WORLD_GEN_VERSION);
+console.log("[purge-redeploy] worldSizeM", w.worldSizeM, "landRadius", w.landRadius);
 console.log("[purge-redeploy] world", w.summary);
 console.log("[purge-redeploy] counts", JSON.stringify(w.counts));
+console.log("[purge-redeploy] nature: ROCK 20m @ 40% bury · multi-chunk trees/rocks · Kenney variety");
 console.log(`
 Next:
   1. npm run deploy:gate
