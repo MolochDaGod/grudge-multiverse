@@ -28,6 +28,16 @@ import {
   RETRO_FANTASY_GEN,
   RETRO_CDN,
 } from "./retroFantasyKit.js";
+import {
+  generateDungeon,
+  DUNGEON_GEN_VERSION,
+  dungeonSeedFromWorld,
+} from "./dungeonSeedGen.js";
+import {
+  loadDungeonCatalog,
+  allDungeonPrefabs,
+  DUNGEON_KIT_GEN,
+} from "./modularDungeonKit.js";
 
 export const ADMIN_TABS = [
   { id: "player", key: "F1", title: "Player", blurb: "Hero · agents · integrity · seed id" },
@@ -371,13 +381,27 @@ function renderWorldTab() {
       </ul>
     </section>
     <section class="mv-admin-card">
+      <h3>Kenney modular dungeon (${DUNGEON_GEN_VERSION})</h3>
+      <p class="hint">Seeded entrance → halls → openings → enemies → boss. Kit: ${esc(DUNGEON_KIT_GEN)}. World seed derives dungeon seeds.</p>
+      <table class="mv-admin-table">
+        <tr><th>Hub dungeon seed</th><td class="mono">${esc(dungeonSeedFromWorld(seed, 0))}</td></tr>
+        <tr><th>Wild dungeon seed</th><td class="mono">${esc(dungeonSeedFromWorld(seed, 1))}</td></tr>
+        <tr><th>Mounted fields</th><td>${(window.__mvRealm?.dungeons || []).length}</td></tr>
+      </table>
+      <div id="mv-admin-dungeon-preview" class="mv-admin-food-grid"></div>
+      <div class="mv-admin-actions">
+        <button type="button" data-act="log-dungeon">Log dungeon layout</button>
+        <button type="button" data-act="log-dungeon-prefabs">Log dungeon prefabs</button>
+      </div>
+    </section>
+    <section class="mv-admin-card">
       <h3>World actions</h3>
       <div class="mv-admin-actions">
         <button type="button" data-act="copy-seed">Copy seed</button>
         <button type="button" data-act="log-map">Log __mvMapMeta</button>
         <button type="button" data-act="toggle-build">Toggle build (B)</button>
       </div>
-      <p class="hint">Play: seed oceans + islands · E harvest · board boats · B build</p>
+      <p class="hint">Play: seed oceans + islands · E harvest · board boats · B build · E dungeon entrance</p>
     </section>
   `;
 }
@@ -424,6 +448,23 @@ function wireAdminActions(body) {
           .join("") || "<span class='hint'>No build palette</span>";
     });
   }
+  // Dungeon modular prefab strip
+  const dungGrid = body.querySelector("#mv-admin-dungeon-preview");
+  if (dungGrid) {
+    loadDungeonCatalog().then(() => {
+      const prefs = allDungeonPrefabs().slice(0, 24);
+      dungGrid.innerHTML =
+        prefs
+          .map(
+            (p) =>
+              `<div class="mv-food-tile" title="${esc(p.name)} · ${esc(p.role)}" data-dungeon="${esc(p.id)}">
+              <img src="${esc(p.icon)}" alt="" />
+              <span>${esc(p.name)}</span>
+            </div>`,
+          )
+          .join("") || "<span class='hint'>No dungeon prefabs</span>";
+    });
+  }
 }
 
 function runAdminAction(act) {
@@ -460,6 +501,16 @@ function runAdminAction(act) {
       console.info("[admin] retro-fantasy prefabs", allBuildPrefabs());
       console.info("[admin] player build palette", playerBuildPalette());
       flash(`Build prefabs ${allBuildPrefabs().length} · palette ${playerBuildPalette().length}`);
+    });
+  } else if (act === "log-dungeon") {
+    const seed = window.__mvWorldSeed || DEFAULT_WORLD_SEED;
+    const d0 = generateDungeon(dungeonSeedFromWorld(seed, 0), { worldSeed: seed });
+    console.info("[admin] dungeon layout", d0);
+    flash(d0.summary);
+  } else if (act === "log-dungeon-prefabs") {
+    loadDungeonCatalog().then(() => {
+      console.info("[admin] dungeon prefabs", allDungeonPrefabs());
+      flash(`Dungeon prefabs ${allDungeonPrefabs().length}`);
     });
   } else if (act === "list-hostiles") {
     console.info(

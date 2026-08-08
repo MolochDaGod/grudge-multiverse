@@ -1425,6 +1425,23 @@ export async function attachWarlordsWorld(ctx) {
         }
         return;
       }
+      if (it.kind === "dungeon") {
+        // Face into modular dungeon and walk the halls (layout already mounted)
+        const seed = it.dungeonSeed || it.poi?.dungeonSeed || it.id;
+        const ent = it.poi?._dungeonField?.doc?.entrance;
+        if (ent && capsule) {
+          capsule.position.set(ent.x, (ent.y || it.y || 0) + 0.1, ent.z);
+          if (typeof capsule.rotation?.set === "function") {
+            capsule.rotation.y = ent.yaw || 0;
+          }
+        }
+        window.__mvActiveDungeon = seed;
+        flash?.(
+          `${it.label} · seed ${seed} · halls → rooms → boss · E at exit to leave`,
+          2.4,
+        );
+        return;
+      }
       if (it.kind === "poi") {
         flash?.(`${it.label}`, 1.0);
         return;

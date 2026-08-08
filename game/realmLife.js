@@ -34,6 +34,8 @@ import {
   spawnSettlementModular,
   RETRO_FANTASY_GEN,
 } from "./retroFantasyKit.js";
+import { mountWorldDungeons } from "./dungeonField.js";
+import { DUNGEON_GEN_VERSION } from "./dungeonSeedGen.js";
 
 /**
  * Snap seed XZ onto land nav or footing on 5 km ocean pads.
@@ -201,6 +203,28 @@ function makePoiMesh(kind, color) {
     );
     ob.position.y = 1.6;
     g.add(ob);
+  } else if (kind === "dungeon") {
+    // Entrance marker — real modular gate loads with dungeon field
+    const arch = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4, 3.2, 0.4),
+      new THREE.MeshStandardMaterial({
+        color: color || 0x6a4a8a,
+        roughness: 0.85,
+        emissive: color || 0x6a4a8a,
+        emissiveIntensity: 0.12,
+      }),
+    );
+    arch.position.y = 1.6;
+    g.add(arch);
+    const postL = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 3.4, 0.35),
+      new THREE.MeshStandardMaterial({ color: 0x2a2430 }),
+    );
+    postL.position.set(-1.3, 1.7, 0);
+    g.add(postL);
+    const postR = postL.clone();
+    postR.position.x = 1.3;
+    g.add(postR);
   } else if (kind === "tower") {
     const t = new THREE.Mesh(
       new THREE.CylinderGeometry(0.8, 1.2, 5, 8),
@@ -492,18 +516,29 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
     const mesh = makePoiMesh(p0.kind, col);
     mesh.position.set(p0.x, p0.y || 0, p0.z);
     root.add(mesh);
+    const kind =
+      p0.kind === "info"
+        ? "info"
+        : p0.kind === "dungeon"
+          ? "dungeon"
+          : "poi";
     interactables.push({
-      kind: p0.kind === "info" ? "info" : "poi",
+      kind,
       id: p0.id,
       label: p0.name,
       x: p0.x,
       z: p0.z,
       y: p0.y,
-      radius: p0.radius || 3.5,
+      radius: p0.radius || (kind === "dungeon" ? 5 : 3.5),
       url: p0.url,
       poi: p0,
+      dungeonSeed: p0.dungeonSeed,
     });
   }
+
+  const dungeonRoot = new THREE.Group();
+  dungeonRoot.name = "world_dungeons";
+  root.add(dungeonRoot);
 
   const actorLod = createActorLod(actors);
 
@@ -511,6 +546,7 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
     root,
     world,
     seed: world.seed,
+    dungeons: [],
     layout: {
       landRadius: world.landRadius,
       hubRadius: world.hubRadius,
@@ -546,9 +582,27 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
     `[realmLife] seed=${world.seed} ${world.summary} landR=${landR.toFixed(0)} gen=${world.genVersion}`,
   );
 
+  // Kenney modular dungeons at dungeon POIs (async — after state exists)
+  mountWorldDungeons(dungeonRoot, world, groundAt, { island })
+    .then((fields) => {
+      state.dungeons = fields;
+      for (const { field } of fields) {
+        for (const a of field.actors || []) actors.push(a);
+        for (const it of field.interactables || []) {
+          if (it.kind === "dungeon_exit") continue;
+          interactables.push(it);
+        }
+      }
+      console.info(
+        `[realmLife] ${DUNGEON_GEN_VERSION} dungeons=${fields.length} dungeonActors+=${fields.reduce((n, f) => n + (f.field?.actors?.length || 0), 0)}`,
+      );
+    })
+    .catch((e) => console.warn("[realmLife] dungeons", e?.message || e));
+
   if (typeof window !== "undefined") {
     window.__mvWorldSeed = world.seed;
     window.__mvWorld = world;
+    window.__mvDungeons = state.dungeons;
   }
 
   return state;

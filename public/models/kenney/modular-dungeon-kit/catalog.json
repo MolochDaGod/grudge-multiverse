@@ -1,0 +1,542 @@
+{
+    "version":  "2026-08-08.1-kenney-modular-dungeon",
+    "source":  "kenney_modular-dungeon-kit_1.0.zip",
+    "license":  "CC0",
+    "cdnBase":  "https://assets.grudge-studio.com/models/kenney/modular-dungeon-kit/",
+    "localBase":  "models/kenney/modular-dungeon-kit/",
+    "iconBase":  "icons/kenney/modular-dungeon/",
+    "si":  {
+               "humanYardstickM":  1.8,
+               "corridorClearH":  3,
+               "modularTileM":  4
+           },
+    "pieceCount":  39,
+    "roles":  [
+                  {
+                      "role":  "corridor",
+                      "count":  11
+                  },
+                  {
+                      "role":  "floor",
+                      "count":  7
+                  },
+                  {
+                      "role":  "gate",
+                      "count":  4
+                  },
+                  {
+                      "role":  "room",
+                      "count":  7
+                  },
+                  {
+                      "role":  "stairs",
+                      "count":  2
+                  },
+                  {
+                      "role":  "template",
+                      "count":  2
+                  },
+                  {
+                      "role":  "wall",
+                      "count":  6
+                  }
+              ],
+    "gen":  {
+                "roomPieces":  [
+                                   "room-small",
+                                   "room-large",
+                                   "room-wide",
+                                   "room-small-variation",
+                                   "room-large-variation"
+                               ],
+                "bossRoomPieces":  [
+                                       "room-large",
+                                       "room-large-variation",
+                                       "room-wide"
+                                   ],
+                "hallPieces":  [
+                                   "corridor",
+                                   "corridor-corner",
+                                   "corridor-junction",
+                                   "corridor-intersection",
+                                   "corridor-end"
+                               ],
+                "gatePieces":  [
+                                   "gate-door",
+                                   "gate",
+                                   "gate-metal-bars"
+                               ],
+                "entrancePiece":  "room-small",
+                "algorithm":  "seeded-growth"
+            },
+    "pieces":  [
+                   {
+                       "slug":  "corridor",
+                       "id":  "dungeon_corridor",
+                       "name":  "Corridor",
+                       "role":  "corridor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-corner",
+                       "id":  "dungeon_corridor_corner",
+                       "name":  "Corridor Corner",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-corner.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-corner.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-end",
+                       "id":  "dungeon_corridor_end",
+                       "name":  "Corridor End",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-end.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-end.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-intersection",
+                       "id":  "dungeon_corridor_intersection",
+                       "name":  "Corridor Intersection",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-intersection.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-intersection.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-junction",
+                       "id":  "dungeon_corridor_junction",
+                       "name":  "Corridor Junction",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-junction.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-junction.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-transition",
+                       "id":  "dungeon_corridor_transition",
+                       "name":  "Corridor Transition",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-transition.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-transition.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-wide",
+                       "id":  "dungeon_corridor_wide",
+                       "name":  "Corridor Wide",
+                       "role":  "corridor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-wide.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-wide.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-wide-corner",
+                       "id":  "dungeon_corridor_wide_corner",
+                       "name":  "Corridor Wide Corner",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-wide-corner.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-wide-corner.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-wide-end",
+                       "id":  "dungeon_corridor_wide_end",
+                       "name":  "Corridor Wide End",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-wide-end.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-wide-end.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-wide-intersection",
+                       "id":  "dungeon_corridor_wide_intersection",
+                       "name":  "Corridor Wide Intersection",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-wide-intersection.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-wide-intersection.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "corridor-wide-junction",
+                       "id":  "dungeon_corridor_wide_junction",
+                       "name":  "Corridor Wide Junction",
+                       "role":  "corridor",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/corridor-wide-junction.glb",
+                       "icon":  "icons/kenney/modular-dungeon/corridor-wide-junction.png",
+                       "targetHeightM":  3.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "gate",
+                       "id":  "dungeon_gate",
+                       "name":  "Gate",
+                       "role":  "gate",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/gate.glb",
+                       "icon":  "icons/kenney/modular-dungeon/gate.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "gate-door",
+                       "id":  "dungeon_gate_door",
+                       "name":  "Gate Door",
+                       "role":  "gate",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/gate-door.glb",
+                       "icon":  "icons/kenney/modular-dungeon/gate-door.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "gate-door-window",
+                       "id":  "dungeon_gate_door_window",
+                       "name":  "Gate Door Window",
+                       "role":  "gate",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/gate-door-window.glb",
+                       "icon":  "icons/kenney/modular-dungeon/gate-door-window.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "gate-metal-bars",
+                       "id":  "dungeon_gate_metal_bars",
+                       "name":  "Gate Metal Bars",
+                       "role":  "gate",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/gate-metal-bars.glb",
+                       "icon":  "icons/kenney/modular-dungeon/gate-metal-bars.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "room-corner",
+                       "id":  "dungeon_room_corner",
+                       "name":  "Room Corner",
+                       "role":  "room",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/room-corner.glb",
+                       "icon":  "icons/kenney/modular-dungeon/room-corner.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "room-large",
+                       "id":  "dungeon_room_large",
+                       "name":  "Room Large",
+                       "role":  "room",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/room-large.glb",
+                       "icon":  "icons/kenney/modular-dungeon/room-large.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "room-large-variation",
+                       "id":  "dungeon_room_large_variation",
+                       "name":  "Room Large Variation",
+                       "role":  "room",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/room-large-variation.glb",
+                       "icon":  "icons/kenney/modular-dungeon/room-large-variation.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "room-small",
+                       "id":  "dungeon_room_small",
+                       "name":  "Room Small",
+                       "role":  "room",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/room-small.glb",
+                       "icon":  "icons/kenney/modular-dungeon/room-small.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "room-small-variation",
+                       "id":  "dungeon_room_small_variation",
+                       "name":  "Room Small Variation",
+                       "role":  "room",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/room-small-variation.glb",
+                       "icon":  "icons/kenney/modular-dungeon/room-small-variation.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "room-wide",
+                       "id":  "dungeon_room_wide",
+                       "name":  "Room Wide",
+                       "role":  "room",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/room-wide.glb",
+                       "icon":  "icons/kenney/modular-dungeon/room-wide.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "room-wide-variation",
+                       "id":  "dungeon_room_wide_variation",
+                       "name":  "Room Wide Variation",
+                       "role":  "room",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/room-wide-variation.glb",
+                       "icon":  "icons/kenney/modular-dungeon/room-wide-variation.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "stairs",
+                       "id":  "dungeon_stairs",
+                       "name":  "Stairs",
+                       "role":  "stairs",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/stairs.glb",
+                       "icon":  "icons/kenney/modular-dungeon/stairs.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "stairs-wide",
+                       "id":  "dungeon_stairs_wide",
+                       "name":  "Stairs Wide",
+                       "role":  "stairs",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/stairs-wide.glb",
+                       "icon":  "icons/kenney/modular-dungeon/stairs-wide.png",
+                       "targetHeightM":  3.5,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-corner",
+                       "id":  "dungeon_template_corner",
+                       "name":  "Template Corner",
+                       "role":  "template",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/template-corner.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-corner.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-detail",
+                       "id":  "dungeon_template_detail",
+                       "name":  "Template Detail",
+                       "role":  "template",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-detail.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-detail.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-floor",
+                       "id":  "dungeon_template_floor",
+                       "name":  "Template Floor",
+                       "role":  "floor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-floor.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-floor.png",
+                       "targetHeightM":  0.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-floor-big",
+                       "id":  "dungeon_template_floor_big",
+                       "name":  "Template Floor Big",
+                       "role":  "floor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-floor-big.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-floor-big.png",
+                       "targetHeightM":  0.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-floor-detail",
+                       "id":  "dungeon_template_floor_detail",
+                       "name":  "Template Floor Detail",
+                       "role":  "floor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-floor-detail.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-floor-detail.png",
+                       "targetHeightM":  0.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-floor-detail-a",
+                       "id":  "dungeon_template_floor_detail_a",
+                       "name":  "Template Floor Detail A",
+                       "role":  "floor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-floor-detail-a.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-floor-detail-a.png",
+                       "targetHeightM":  0.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-floor-layer",
+                       "id":  "dungeon_template_floor_layer",
+                       "name":  "Template Floor Layer",
+                       "role":  "floor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-floor-layer.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-floor-layer.png",
+                       "targetHeightM":  0.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-floor-layer-hole",
+                       "id":  "dungeon_template_floor_layer_hole",
+                       "name":  "Template Floor Layer Hole",
+                       "role":  "floor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-floor-layer-hole.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-floor-layer-hole.png",
+                       "targetHeightM":  0.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-floor-layer-raised",
+                       "id":  "dungeon_template_floor_layer_raised",
+                       "name":  "Template Floor Layer Raised",
+                       "role":  "floor",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-floor-layer-raised.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-floor-layer-raised.png",
+                       "targetHeightM":  0.2,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-wall",
+                       "id":  "dungeon_template_wall",
+                       "name":  "Template Wall",
+                       "role":  "wall",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-wall.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-wall.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-wall-corner",
+                       "id":  "dungeon_template_wall_corner",
+                       "name":  "Template Wall Corner",
+                       "role":  "wall",
+                       "opening":  true,
+                       "model":  "models/kenney/modular-dungeon-kit/template-wall-corner.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-wall-corner.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-wall-detail-a",
+                       "id":  "dungeon_template_wall_detail_a",
+                       "name":  "Template Wall Detail A",
+                       "role":  "wall",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-wall-detail-a.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-wall-detail-a.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-wall-half",
+                       "id":  "dungeon_template_wall_half",
+                       "name":  "Template Wall Half",
+                       "role":  "wall",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-wall-half.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-wall-half.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-wall-stairs",
+                       "id":  "dungeon_template_wall_stairs",
+                       "name":  "Template Wall Stairs",
+                       "role":  "wall",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-wall-stairs.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-wall-stairs.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   },
+                   {
+                       "slug":  "template-wall-top",
+                       "id":  "dungeon_template_wall_top",
+                       "name":  "Template Wall Top",
+                       "role":  "wall",
+                       "opening":  false,
+                       "model":  "models/kenney/modular-dungeon-kit/template-wall-top.glb",
+                       "icon":  "icons/kenney/modular-dungeon/template-wall-top.png",
+                       "targetHeightM":  3,
+                       "gridM":  4,
+                       "kit":  "kenney-modular-dungeon"
+                   }
+               ]
+}

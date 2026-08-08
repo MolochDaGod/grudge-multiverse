@@ -19,6 +19,7 @@ import {
   biomeIslandSummary,
   ISLAND_ARCHETYPES,
 } from "./biomeSsot.mjs";
+import { stampDungeonPois } from "./dungeonSeedGen.mjs";
 
 export const WORLD_SCHEMA = "grudge.multiverse.world/v1";
 export const WORLD_GEN_VERSION = "2026-08-08.6-live-mine-toon";
@@ -355,6 +356,8 @@ export function generateWorld(seedInput, opts = {}) {
     }),
     poi("poi-training", "Training Yard", hubRadius * 0.4, 0, "training", "#88aacc"),
   );
+  // Kenney modular dungeon entrances (seeded layout per world seed)
+  stampDungeonPois(pois, seedLabel, rng, hubRadius);
 
   for (const f of factions) {
     const cx = Math.cos(f.angle) * f.capitalR;
