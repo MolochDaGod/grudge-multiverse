@@ -30,8 +30,9 @@ Schema: `grudge.multiverse.world/v1` · gen: `WORLD_GEN_VERSION`
 ## How to play a seed
 
 ```
-https://grudge-multiverse.vercel.app/?seed=GRUDGEHOLD#room1
+https://grudge-multiverse.vercel.app/#room1
 https://grudge-multiverse.vercel.app/?seed=VALHEIM42#room1
+(default seed when omitted: **VALHEIM42**)
 ```
 
 - Room locks seed on **first** join (query `seed=`).

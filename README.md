@@ -1,7 +1,8 @@
 # Grudge Multiverse (Warlords)
 
-**Live:** https://grudge-multiverse.vercel.app/#room1  
-**Alt:** https://multiverse.grudge-studio.com/#room1  
+**Live:** https://grudge-multiverse.vercel.app/?seed=VALHEIM42#room1  
+**Alt:** https://multiverse.grudge-studio.com/?seed=VALHEIM42#room1  
+**Default world seed:** `VALHEIM42` (Valheim-style content map on Bermuda terrain)
 
 Multiplayer Warlords island on Free Fire **Bermuda** + **grudge6 Toon RTS ★** race kits (SI ~1.8 m heroes).
 

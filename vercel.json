@@ -18,10 +18,12 @@
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate, no-cache"
+          "value": "public, max-age=0, must-revalidate, no-cache, no-store"
         },
         { "key": "CDN-Cache-Control", "value": "max-age=0, must-revalidate" },
-        { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0, must-revalidate" }
+        { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0, must-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Surrogate-Control", "value": "no-store" }
       ]
     },
     {
@@ -29,10 +31,12 @@
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate, no-cache"
+          "value": "public, max-age=0, must-revalidate, no-cache, no-store"
         },
         { "key": "CDN-Cache-Control", "value": "max-age=0, must-revalidate" },
-        { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0, must-revalidate" }
+        { "key": "Vercel-CDN-Cache-Control", "value": "max-age=0, must-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Surrogate-Control", "value": "no-store" }
       ]
     },
     {

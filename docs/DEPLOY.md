@@ -59,9 +59,10 @@ npm run smoke:character
 
 ```bash
 # Authoritative generate (same as SPA)
-curl -s "https://grudge-multiverse-room-production.up.railway.app/api/world?seed=GRUDGEHOLD"
-# Play
-# https://grudge-multiverse.vercel.app/?seed=GRUDGEHOLD#room1
+curl -s "https://grudge-multiverse-room-production.up.railway.app/api/world?seed=VALHEIM42"
+# Play (default seed VALHEIM42)
+# https://grudge-multiverse.vercel.app/#room1
+# https://grudge-multiverse.vercel.app/?seed=VALHEIM42#room1
 ```
 
 Doc: `docs/WORLD_SEED_SSOT.md` · generator: `shared/worldSeedGen.mjs`

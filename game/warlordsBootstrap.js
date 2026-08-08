@@ -1009,7 +1009,8 @@ export async function attachWarlordsWorld(ctx) {
   const roomHint = (typeof location !== "undefined" && (location.hash || "#room1").slice(1)) || "room1";
   const playSeed =
     (typeof window !== "undefined" && window.__mvWorldSeed) ||
-    resolvePlaySeed({ roomCode: roomHint });
+    resolvePlaySeed({ roomCode: roomHint }) ||
+    "VALHEIM42";
   window.setLoaderStatus?.(`Generating world seed ${playSeed}…`);
   // Prefer welcome world meta seed; always re-generate locally at measured landRadius
   const realm = mountRealmLife(scene, island, groundAt, {

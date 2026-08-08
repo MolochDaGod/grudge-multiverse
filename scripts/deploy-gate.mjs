@@ -20,6 +20,9 @@ const ANIMS = "https://open.grudge-studio.com/anims/baked";
 
 const MAP = `${CDN}/models/maps/bermuda.glb`;
 
+/** Default world seed identity (content overlay, not terrain GLB path). */
+const DEFAULT_SEED = "VALHEIM42";
+
 /** Toon RTS ★ play meshes only (human.glb … dwarf.glb). */
 const KITS = [
   `${CDN}/asset-packs/toon-rts-characters/glb/characters/human.glb`,
@@ -163,8 +166,35 @@ async function main() {
     console.error(`[deploy-gate] ${failed} critical check(s) failed — REFUSING deploy`);
     process.exit(1);
   }
+  // Default seed world API (Railway may lag — warn only)
+  try {
+    const roomHost =
+      process.env.MV_ROOM_URL ||
+      "https://grudge-multiverse-room-production.up.railway.app";
+    const wr = await fetch(
+      `${roomHost}/api/world?seed=${DEFAULT_SEED}`,
+      { method: "GET", redirect: "follow" },
+    );
+    if (wr.ok) {
+      const j = await wr.json();
+      if (j.seed === DEFAULT_SEED) {
+        console.log(
+          "  OK  world seed",
+          DEFAULT_SEED,
+          j.summary || j.counts || "",
+        );
+      } else {
+        console.warn("  WARN world seed mismatch", j.seed, "expected", DEFAULT_SEED);
+      }
+    } else {
+      console.warn("  WARN /api/world", wr.status, "(redeploy Railway if missing)");
+    }
+  } catch (e) {
+    console.warn("  WARN world API unreachable", e?.message || e);
+  }
+
   console.log(
-    `[deploy-gate] PASS — map + ${KITS.length} Toon RTS kits + ${ATLASES.length} atlases + anims + ${parsePass} idle parse(s)`,
+    `[deploy-gate] PASS — map + ${KITS.length} Toon RTS kits + ${ATLASES.length} atlases + anims + ${parsePass} idle parse(s) · defaultSeed=${DEFAULT_SEED}`,
   );
   process.exit(0);
 }

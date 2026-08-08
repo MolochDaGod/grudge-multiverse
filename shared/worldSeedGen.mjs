@@ -13,7 +13,7 @@
  */
 
 export const WORLD_SCHEMA = "grudge.multiverse.world/v1";
-export const WORLD_GEN_VERSION = "2026-08-07.1-valheim-seed";
+export const WORLD_GEN_VERSION = "2026-08-08.1-valheim42-default";
 
 /** Grudge Info (info.grudge-studio.com) — product SSOT links, not mesh CDN. */
 export const GRUDGE_INFO = {
@@ -29,8 +29,11 @@ export const GRUDGE_INFO = {
   },
 };
 
-/** Default if room/URL omit seed — still deterministic. */
-export const DEFAULT_WORLD_SEED = "GRUDGEHOLD";
+/**
+ * Default world seed when room/URL omit ?seed= (Valheim-style map identity).
+ * Production default: VALHEIM42
+ */
+export const DEFAULT_WORLD_SEED = "VALHEIM42";
 
 export const FACTION_ORDER = ["crusade", "fabled", "legion", "wild"];
 

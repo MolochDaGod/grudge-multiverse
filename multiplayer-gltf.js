@@ -1912,14 +1912,16 @@ async function init() {
         window.setLoaderStatus?.("Connecting Multiverse Railway room…");
         const roomHint = (location.hash || "#room1").slice(1) || "room1";
         const sel = loadSelection();
-        let seedHint = null;
+        let seedHint = "VALHEIM42";
         try {
-            seedHint = new URLSearchParams(location.search).get("seed");
+            seedHint = new URLSearchParams(location.search).get("seed") || "VALHEIM42";
         } catch { /* */ }
+        // Canonical default world seed (Valheim-style map identity)
+        if (!window.__mvWorldSeed) window.__mvWorldSeed = seedHint;
         const { client, ok, err, code, backend, seed: roomSeed, world } = await connectMultiverseDanger(myName, roomHint, {
             classId: sel.classId,
             raceId: sel.raceId,
-            seed: seedHint || undefined,
+            seed: seedHint,
         });
         dangerNet = client;
         window.__mvDangerNet = client;
