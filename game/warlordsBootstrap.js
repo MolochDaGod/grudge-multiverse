@@ -29,6 +29,7 @@ import {
   isVendorShopOpen,
 } from "./vendorShopUi.js";
 import { FleetSkillVfx, vfxKindForSkill } from "./fleetVfx.js";
+import { ThornProjectileField, isNatureStaffWeapon } from "./thornProjectile.js";
 import {
   aim,
   bindCombatAim,
@@ -548,6 +549,8 @@ export async function attachWarlordsWorld(ctx) {
   scene.add(reticle);
 
   const vfx = new FleetSkillVfx(scene);
+  const thorns = new ThornProjectileField(scene);
+  window.__mvThorns = thorns;
   const impacts = new ImpactFx(scene);
   window.__mvImpacts = impacts;
   const crosshairEl = document.getElementById("crosshair");
@@ -934,20 +937,112 @@ export async function attachWarlordsWorld(ctx) {
       }
 
       const kind = vfxKindForSkill(skill);
-      const color =
-        classId === "mage"
+      const loadoutW = loadLoadout()?.weapon;
+      const natureStaff =
+        isNatureStaffWeapon(loadoutW) ||
+        skill.school === "nature" ||
+        skill.projectile === "thorn" ||
+        /thorn|nature|vine|bramble|grove/i.test(`${skill.id} ${skill.name}`);
+      const color = natureStaff
+        ? 0x5aaa40
+        : classId === "mage"
           ? 0xc478ff
           : classId === "ranger"
             ? 0x7ec8ff
             : classId === "worge"
               ? 0xff6a3a
               : 0x9fe8ff;
-      // AoE blast VFX at feet or soft-lock ground
-      const vfxOrigin = isAoe && prefPoint
-        ? new THREE.Vector3(prefPoint.x, groundAt(prefPoint.x, prefPoint.z) ?? feet.y, prefPoint.z)
-        : feet.clone();
-      vfx.play(kind, vfxOrigin, dir, color, { radius: aoeR || range, dist: gapClose });
-      if (isAoe && kind !== "blast") {
+      // Cast origin ~ staff tip height
+      const hand = feet
+        .clone()
+        .add(new THREE.Vector3(0, 1.35, 0))
+        .add(dir.clone().multiplyScalar(0.45));
+      const aimTarget = prefPoint
+        ? prefPoint.clone().add(new THREE.Vector3(0, 1.1, 0))
+        : feet
+            .clone()
+            .add(dir.clone().multiplyScalar(Math.min(range || 18, 18)))
+            .add(new THREE.Vector3(0, 1.1, 0));
+      const vfxOrigin =
+        isAoe && prefPoint
+          ? new THREE.Vector3(
+              prefPoint.x,
+              groundAt(prefPoint.x, prefPoint.z) ?? feet.y,
+              prefPoint.z,
+            )
+          : feet.clone();
+
+      // Nature staff basic (F) + slot 1: red_thorn form→spin→launch
+      const useThorn =
+        natureStaff &&
+        (skill.projectile === "thorn" ||
+          skill.id === "thorn_basic" ||
+          skill.id === "thorn_lance" ||
+          skill.key === "KeyF" ||
+          skill.key === "Digit1");
+      if (useThorn) {
+        const thornDmg = clampPvpDmg(
+          equippedWeaponDmg(14) * (skill.dmgMul || 1),
+        );
+        thorns.spawn(hand, aimTarget, {
+          dmg: thornDmg,
+          formSec: skill.formSec ?? (skill.key === "Digit1" ? 0.42 : 0.32),
+          spin: skill.spin ?? (skill.key === "Digit1" ? 16 : 12),
+          speed: skill.key === "Digit1" ? 28 : 24,
+          onHit: (proj) => {
+            const realmNow = window.__mvRealm;
+            if (realmNow) {
+              let target = null;
+              if (prefId) {
+                target = realmNow.actors?.find?.(
+                  (a) =>
+                    a.alive &&
+                    (a.id === prefId || a.mesh === prefMesh || a.mesh?.uuid === prefMesh?.uuid),
+                );
+              }
+              if (!target) {
+                target = pickNearestHostile(realmNow, proj.mesh.position, 2.4);
+              }
+              if (target) {
+                const drop = damageRealmActor(realmNow, target, proj.dmg);
+                if (drop && target.mesh) loot.spawn(target.mesh.position.clone(), { ...drop });
+              }
+            }
+            // Boss soft-lock
+            for (const b of bosses.bosses) {
+              if (b.dead || !b.root) continue;
+              if (b.root.position.distanceTo(proj.mesh.position) < 2.8) {
+                bosses.hit(b.id, Math.floor(proj.dmg), playerId);
+                set?.(ref(db, `rooms/${roomId}/bosses/${b.id}`), bosses.serialize()[b.id]);
+              }
+            }
+            impacts.play("hit", proj.mesh.position, { radius: 1.1, color: 0x5aaa40 });
+          },
+        });
+        ctx.onCombatEvent?.({
+          kind: "skill",
+          skill: skill.id,
+          name: skill.name,
+          vfx: "thorn",
+          aoeR: 0,
+          x: hand.x,
+          y: hand.y,
+          z: hand.z,
+          dx: dir.x,
+          dz: dir.z,
+          color,
+        });
+        // Damage deferred to projectile impact — do not double-hit instantly
+        return;
+      }
+
+      if (kind !== "thorn") {
+        vfx.play(kind, vfxOrigin, dir, color, {
+          radius: aoeR || range,
+          dist: gapClose,
+        });
+      }
+      if (isAoe && kind !== "blast" && kind !== "thorn") {
         vfx.play("blast", vfxOrigin, dir, color, { radius: aoeR || 4 });
       }
 
@@ -1517,6 +1612,7 @@ export async function attachWarlordsWorld(ctx) {
       buildSnap?.update?.();
       worldPhys?.step?.(dt);
       vfx.update(dt);
+      thorns?.update?.(dt);
       if (capsule?.position) loot.update(dt, capsule.position);
       syncFocusCrosshair(crosshairEl);
       // Soft-lock track moving bosses (chest point stays live)

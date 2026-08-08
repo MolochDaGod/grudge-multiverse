@@ -332,12 +332,14 @@ export function vfxKindForSkill(skill) {
   const k = skill?.kind || "";
   const id = skill?.id || "";
   const name = skill?.name || "";
-  const blob = `${k} ${id} ${name}`.toLowerCase();
+  const blob = `${k} ${id} ${name} ${skill?.school || ""} ${skill?.projectile || ""}`.toLowerCase();
+  // Nature thorns use dedicated mesh projectile — skip generic bolt flash
+  if (/thorn|vine|bramble|nature/.test(blob) && skill?.projectile === "thorn") return "thorn";
   // Fire / flame first (CastingAbilities fire + mage fire)
   if (/fire|flame|burn|meteor|inferno|pyro|ember/.test(blob)) return "fire";
   // AoE blast (full shell) vs soft nova ring
-  if (/meteor|storm|rain|rampage|explode|blast|nuke/.test(blob)) return "blast";
-  if (k.includes("aoe") || k.includes("nova") || /nova|cleave|volley/.test(blob)) {
+  if (/meteor|storm|rain|rampage|explode|blast|nuke|tempest/.test(blob)) return "blast";
+  if (k.includes("aoe") || k.includes("nova") || /nova|cleave|volley|bramble/.test(blob)) {
     return "nova";
   }
   // Ranged / magic bolt
