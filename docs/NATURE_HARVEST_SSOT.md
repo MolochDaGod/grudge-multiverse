@@ -15,15 +15,19 @@
 
 Place: bottom of mesh at `groundY - bury`. Chunk hits reduce scale and re-bury remaining mass.
 
-## Trees
+## Trees (procedural instanced forest)
+
+Port of [discourse procedural instanced forest](https://discourse.threejs.org/t/procedural-instanced-forest-high-performance-real-trees/88610):
 
 | Spec | Value |
 |------|--------|
-| Variety | oak, default, pine, detailed, palm (Kenney nature-kit) |
-| Height | 11–16 m SI canopy targets |
-| Chunks | 3–5 trunk/canopy stages |
-| Decor | `InstancedMesh` cone forest (no harvest) for density |
-| Pattern | discourse-style instanced forest + per-tree harvest nodes |
+| Module | `game/instancedForest.js` (`InstancedForest`) |
+| Draw | Instanced bark cylinders + leaf planes + shaders |
+| Variety | 5 structural tree types (angle/falloff/levels) |
+| LOD | leaf fade + distant bark green tint + sway fade |
+| Cull | per-tree frustum (zero instance matrices) |
+| Harvest | invisible trunk proxies → chunk scale / hide tree |
+| Chunks | 4 stages · wood loot per strip |
 
 ## Animals
 

@@ -195,9 +195,14 @@ export class HarvestSystem {
             n.object.position.y = n.groundY - bury;
           }
         }
+        if (n.forestTreeIndex != null && this.opts.nature?.forest) {
+          this.opts.nature.forest.setTreeVisible(n.forestTreeIndex, true);
+          this.opts.nature.forest.setTreeChunkScale(n.forestTreeIndex, 1);
+        }
       }
     }
-    this.opts.nature?.update?.(dt);
+    // nature.update(dt, camera?) — camera optional for forest cull
+    this.opts.nature?.update?.(dt, this.opts.getCamera?.());
   }
 
   serializePublic() {

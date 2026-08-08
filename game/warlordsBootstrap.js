@@ -685,6 +685,7 @@ export async function attachWarlordsWorld(ctx) {
   const harvest = new HarvestSystem(scene, island.harvestNodes, {
     flash,
     nature: natureCtl,
+    getCamera: () => ctx.camera,
     onChunk: (n) => {
       set?.(ref(db, `rooms/${roomId}/harvest/${n.id}`), {
         hp: n.hp,

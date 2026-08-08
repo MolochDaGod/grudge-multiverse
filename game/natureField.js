@@ -1,16 +1,15 @@
 /**
- * Procedural / CDN nature field for Multiverse 5 km seeds.
- * Pattern: variety + instanced decor (discourse forest style) + pickable harvest nodes.
+ * Multiverse nature field — 5 km seed land discs.
  *
- * - Trees: Kenney nature-kit variety, SI canopy heights
- * - Rocks: 20 m tall, 40% buried (Valheim mining), multi-chunk HP
- * - Decor: InstancedMesh trees for density without per-draw cost
+ * Trees: discourse-style InstancedForest (real branched canopy + leaf sway LOD)
+ *   https://discourse.threejs.org/t/procedural-instanced-forest-high-performance-real-trees/88610
+ * Rocks: 20 m tall, 40% buried, multi-chunk Valheim mining (Kenney cliff GLB or procedural)
+ * Harvest: proxy meshes for pick; forest visual hides/scales per tree index
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import {
-  TREE_PROTOTYPES,
   ROCK_PROTOTYPES,
   kenneyNatureUrl,
   NATURE_DENSITY,
@@ -19,7 +18,14 @@ import {
   ROCK_BURY_FRAC,
   HP_PER_CHUNK,
   CHUNK_DEBRIS,
+  TREE_CHUNKS,
 } from "./natureSsot.js";
+import {
+  InstancedForest,
+  createLeafTexture,
+  createBarkTexture,
+  FOREST_CONFIG,
+} from "./instancedForest.js";
 import { COLLIDER_LAYER } from "./mapLiteracy.js";
 
 function mulberry32(a) {
@@ -41,10 +47,6 @@ function hashSeed(str) {
   return h >>> 0;
 }
 
-/**
- * Normalize a loaded GLB root so min.y = 0 and height ≈ targetHeightM.
- * @returns {THREE.Object3D}
- */
 function normalizeToHeight(root, targetHeightM) {
   const clone = root.clone(true);
   clone.updateMatrixWorld(true);
@@ -52,8 +54,7 @@ function normalizeToHeight(root, targetHeightM) {
   const size = new THREE.Vector3();
   box.getSize(size);
   const h = Math.max(0.01, size.y);
-  const s = targetHeightM / h;
-  clone.scale.multiplyScalar(s);
+  clone.scale.multiplyScalar(targetHeightM / h);
   clone.updateMatrixWorld(true);
   const box2 = new THREE.Box3().setFromObject(clone);
   clone.position.y -= box2.min.y;
@@ -61,37 +62,6 @@ function normalizeToHeight(root, targetHeightM) {
   return clone;
 }
 
-/** Procedural tree fallback (discourse-style trunk + canopy) when GLB fails. */
-function makeProceduralTree(proto, scale = 1) {
-  const g = new THREE.Group();
-  const h = (proto.heightM || 12) * scale;
-  const trunkR = Math.max(0.18, h * 0.028);
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(trunkR * 0.7, trunkR, h * 0.55, 8),
-    new THREE.MeshStandardMaterial({
-      color: proto.trunkTint || 0x3d2a18,
-      roughness: 0.92,
-    }),
-  );
-  trunk.position.y = h * 0.275;
-  trunk.castShadow = true;
-  g.add(trunk);
-  const canopy = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(h * 0.22, 1),
-    new THREE.MeshStandardMaterial({
-      color: proto.canopyTint || 0x2f7a34,
-      roughness: 0.85,
-    }),
-  );
-  canopy.position.y = h * 0.62;
-  canopy.scale.set(1.1, 1.25, 1.1);
-  canopy.castShadow = true;
-  g.add(canopy);
-  g.userData.siHeight = h;
-  return g;
-}
-
-/** Procedural boulder — 20 m class with base at y=0 (bury applied on place). */
 function makeProceduralRock(proto, scale = 1) {
   const h = (proto.heightM || ROCK_HEIGHT_M) * scale;
   const g = new THREE.Group();
@@ -103,13 +73,11 @@ function makeProceduralRock(proto, scale = 1) {
       flatShading: true,
     }),
   );
-  // Sit on y=0: geometry radius → shift up
   body.position.y = h * 0.42;
   body.scale.set(1.05, 1.15, 0.95);
   body.castShadow = true;
   body.receiveShadow = true;
   g.add(body);
-  // Extra lobe for variety
   const lobe = new THREE.Mesh(
     new THREE.DodecahedronGeometry(h * 0.22, 0),
     body.material.clone(),
@@ -121,15 +89,7 @@ function makeProceduralRock(proto, scale = 1) {
   return g;
 }
 
-async function loadPrototype(loader, url) {
-  const gltf = await loader.loadAsync(url);
-  return gltf.scene;
-}
-
 /**
- * Mount nature field after island expand.
- * Mutates island.harvestNodes (appends) and returns controller.
- *
  * @param {THREE.Scene} scene
  * @param {object} island
  * @param {(x:number,z:number)=>number|null} groundAt
@@ -146,67 +106,27 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
   harvestRoot.name = "nature-harvest";
   root.add(harvestRoot);
 
-  const decorRoot = new THREE.Group();
-  decorRoot.name = "nature-decor";
-  root.add(decorRoot);
-
   const debrisRoot = new THREE.Group();
   debrisRoot.name = "nature-debris";
   root.add(debrisRoot);
 
-  const loader = new GLTFLoader();
-  try {
-    const draco = new DRACOLoader();
-    draco.setDecoderPath(
-      "https://www.gstatic.com/draco/versioned/decoders/1.5.7/",
-    );
-    loader.setDRACOLoader(draco);
-  } catch {
-    /* optional */
-  }
-
-  // Load tree/rock templates (CDN with procedural fallback)
-  const treeTemplates = [];
-  for (const proto of TREE_PROTOTYPES) {
-    let tpl = null;
+  const sampleGround = (x, z) => {
+    let y = island.waterY ?? 0.25;
     try {
-      const raw = await loadPrototype(loader, kenneyNatureUrl(proto.file));
-      tpl = normalizeToHeight(raw, proto.heightM);
-      tpl.traverse((o) => {
-        if (o.isMesh) {
-          o.castShadow = true;
-          o.receiveShadow = true;
-          o.frustumCulled = true;
-        }
-      });
-    } catch (e) {
-      console.warn("[nature] tree CDN fail", proto.id, e?.message || e);
-      tpl = makeProceduralTree(proto, 1);
+      if (typeof groundAt === "function") {
+        const g = groundAt(x, z);
+        if (Number.isFinite(g)) y = g;
+      } else if (island.sampleY) {
+        const g = island.sampleY(x, z);
+        if (Number.isFinite(g)) y = g;
+      }
+    } catch {
+      /* */
     }
-    treeTemplates.push({ proto, template: tpl });
-  }
+    return y;
+  };
 
-  const rockTemplates = [];
-  for (const proto of ROCK_PROTOTYPES) {
-    let tpl = null;
-    try {
-      const raw = await loadPrototype(loader, kenneyNatureUrl(proto.file));
-      tpl = normalizeToHeight(raw, proto.heightM || ROCK_HEIGHT_M);
-      tpl.traverse((o) => {
-        if (o.isMesh) {
-          o.castShadow = true;
-          o.receiveShadow = true;
-          o.frustumCulled = true;
-        }
-      });
-    } catch (e) {
-      console.warn("[nature] rock CDN fail", proto.id, e?.message || e);
-      tpl = makeProceduralRock(proto, 1);
-    }
-    rockTemplates.push({ proto, template: tpl });
-  }
-
-  // Land discs: hub + faction territories from seed world
+  // Land discs
   const discs = [];
   if (island.landDiscs?.length) {
     for (const d of island.landDiscs) discs.push({ ...d });
@@ -225,27 +145,7 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
     }
   }
 
-  const sampleGround = (x, z) => {
-    let y = island.waterY ?? 0.25;
-    try {
-      if (typeof groundAt === "function") {
-        const g = groundAt(x, z);
-        if (Number.isFinite(g)) y = g;
-      } else if (island.sampleY) {
-        const g = island.sampleY(x, z);
-        if (Number.isFinite(g)) y = g;
-      }
-    } catch {
-      /* */
-    }
-    return y;
-  };
-
-  const harvestNodes = [];
-  let treeIdx = 0;
-  let rockIdx = 0;
-
-  const placeOnDisc = (disc, count, minSpacing, preferCoastal = false) => {
+  const placeOnDisc = (disc, count, minSpacing) => {
     const pts = [];
     let guard = 0;
     while (pts.length < count && guard++ < count * 40) {
@@ -254,7 +154,6 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       if (rr < NATURE_DENSITY.clearHubM && disc.x === 0 && disc.z === 0) continue;
       const x = disc.x + Math.cos(a) * rr;
       const z = disc.z + Math.sin(a) * rr;
-      // stay on land-ish
       const gy = sampleGround(x, z);
       if (gy <= (island.waterY ?? 0.25) + 0.35) continue;
       let ok = true;
@@ -265,69 +164,132 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
         }
       }
       if (!ok) continue;
-      pts.push({ x, z, y: gy, coastal: preferCoastal || rr > disc.r * 0.72 });
+      pts.push({ x, z, y: gy });
     }
     return pts;
   };
 
-  // ── Harvest trees ─────────────────────────────────────────────
+  // ── Procedural instanced forest (discourse) ───────────────────
+  const treePlacements = [];
+  const treesPerDisc =
+    NATURE_DENSITY.harvestTreesPerDisc +
+    Math.floor(NATURE_DENSITY.decorTreesPerDisc * 0.45);
   for (const disc of discs) {
-    const pts = placeOnDisc(
-      disc,
-      NATURE_DENSITY.harvestTreesPerDisc,
-      NATURE_DENSITY.minSpacingTreeM,
-    );
+    const pts = placeOnDisc(disc, treesPerDisc, NATURE_DENSITY.minSpacingTreeM);
     for (const p of pts) {
-      let pick = treeTemplates[Math.floor(rng() * treeTemplates.length)];
-      if (p.coastal) {
-        const palm = treeTemplates.find((t) => t.proto.coastal);
-        if (palm && rng() < 0.55) pick = palm;
-      }
-      const { proto, template } = pick;
-      const scaleJitter = 0.75 + rng() * 0.5;
-      const obj = template.clone(true);
-      obj.scale.multiplyScalar(scaleJitter);
-      obj.rotation.y = rng() * Math.PI * 2;
-      // slight lean
-      obj.rotation.z = (rng() - 0.5) * 0.08;
-      obj.rotation.x = (rng() - 0.5) * 0.06;
-      const height = (proto.heightM || 12) * scaleJitter;
-      obj.position.set(p.x, p.y, p.z);
-      obj.name = `nature-tree-${proto.id}-${treeIdx}`;
-      const chunks = proto.chunks || 4;
-      const maxHp = chunks * HP_PER_CHUNK.tree;
-      const id = `nat_tree_${seed}_${treeIdx++}`;
-      obj.userData.harvestId = id;
-      obj.userData.harvestKind = "tree";
-      obj.userData.selectable = "node";
-      obj.userData.worldKind = "tree";
-      obj.userData.colliderLayer = COLLIDER_LAYER.HARVEST;
-      obj.userData.natureProto = proto.id;
-      obj.userData.siHeight = height;
-      harvestRoot.add(obj);
-      harvestNodes.push({
-        id,
-        kind: "tree",
-        materialId: proto.materialId || "t0_wood",
-        object: obj,
-        position: new THREE.Vector3(p.x, p.y + height * 0.4, p.z),
-        halfExtents: new THREE.Vector3(1.2, height * 0.5, 1.2),
-        hp: maxHp,
-        maxHp,
-        tool: "axe",
-        zone: "nature",
-        chunks,
-        maxChunks: chunks,
-        chunkMode: true,
-        buryFrac: 0,
-        siHeight: height,
-        nature: true,
-        protoId: proto.id,
+      treePlacements.push({
+        x: p.x,
+        z: p.z,
+        y: p.y,
+        scale: 0.7 + rng() * 0.85,
+        typeIndex: Math.floor(rng() * 5),
+        seed: (hashSeed(seed) ^ Math.floor(p.x * 100) ^ Math.floor(p.z * 100)) >>> 0,
       });
     }
   }
 
-  // ── Harvest rocks — 20 m, 40% buried ──────────────────────────
+  const forest = new InstancedForest({
+    ...FOREST_CONFIG,
+    CUSTOM_TREE_CULLING: true,
+    LOD_FADE_START: 220,
+    LOD_MAX_DISTANCE: 520,
+    TREE_COUNT: treePlacements.length,
+  });
+  const leafTex = createLeafTexture();
+  const barkTex = createBarkTexture();
+  const forestResult = forest.generateFromPlacements(
+    treePlacements,
+    leafTex,
+    barkTex,
+  );
+  root.add(forest.group);
+
+  // Harvest proxies — thin pickable trunks linked to forest tree index
+  const harvestNodes = [];
+  let treeIdx = 0;
+  for (let i = 0; i < treePlacements.length; i++) {
+    // Only every Nth tree is harvestable (keep density visual, limit MP nodes)
+    const harvestable =
+      i % 2 === 0 || treePlacements[i].scale > 1.1;
+    if (!harvestable) continue;
+
+    const p = treePlacements[i];
+    const height = forest.treePlacements[i]?.height || 10;
+    const proxy = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.75, Math.min(height * 0.55, 8), 6),
+      new THREE.MeshBasicMaterial({
+        visible: false,
+        transparent: true,
+        opacity: 0,
+      }),
+    );
+    proxy.position.set(p.x, p.y + Math.min(height * 0.28, 4), p.z);
+    proxy.name = `tree-proxy-${i}`;
+    const chunks = TREE_CHUNKS;
+    const maxHp = chunks * HP_PER_CHUNK.tree;
+    const id = `nat_tree_${seed}_${treeIdx++}`;
+    proxy.userData.harvestId = id;
+    proxy.userData.harvestKind = "tree";
+    proxy.userData.selectable = "node";
+    proxy.userData.worldKind = "tree";
+    proxy.userData.colliderLayer = COLLIDER_LAYER.HARVEST;
+    proxy.userData.forestTreeIndex = i;
+    harvestRoot.add(proxy);
+
+    harvestNodes.push({
+      id,
+      kind: "tree",
+      materialId: "t0_wood",
+      object: proxy,
+      position: new THREE.Vector3(p.x, p.y + height * 0.4, p.z),
+      halfExtents: new THREE.Vector3(1.2, height * 0.5, 1.2),
+      hp: maxHp,
+      maxHp,
+      tool: "axe",
+      zone: "nature",
+      chunks,
+      maxChunks: chunks,
+      chunkMode: true,
+      siHeight: height,
+      nature: true,
+      forestTreeIndex: i,
+      protoId: `proc_${treePlacements[i].typeIndex ?? 0}`,
+    });
+  }
+
+  // ── Valheim rocks 20 m / 40% bury ─────────────────────────────
+  const loader = new GLTFLoader();
+  try {
+    const draco = new DRACOLoader();
+    draco.setDecoderPath(
+      "https://www.gstatic.com/draco/versioned/decoders/1.5.7/",
+    );
+    loader.setDRACOLoader(draco);
+  } catch {
+    /* optional */
+  }
+
+  const rockTemplates = [];
+  for (const proto of ROCK_PROTOTYPES) {
+    let tpl = null;
+    try {
+      const gltf = await loader.loadAsync(kenneyNatureUrl(proto.file));
+      tpl = normalizeToHeight(gltf.scene, proto.heightM || ROCK_HEIGHT_M);
+      tpl.traverse((o) => {
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.receiveShadow = true;
+          o.frustumCulled = true;
+        }
+      });
+    } catch (e) {
+      console.warn("[nature] rock CDN fail", proto.id, e?.message || e);
+      tpl = makeProceduralRock(proto, 1);
+    }
+    rockTemplates.push({ proto, template: tpl });
+  }
+
+  let rockIdx = 0;
   for (const disc of discs) {
     const pts = placeOnDisc(
       disc,
@@ -344,7 +306,6 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       const height = (proto.heightM || ROCK_HEIGHT_M) * scaleJitter;
       const buryFrac = proto.buryFrac ?? ROCK_BURY_FRAC;
       const bury = height * buryFrac;
-      // bottom of mesh at y=0 after normalize → sink bury metres into ground
       obj.position.set(p.x, p.y - bury, p.z);
       obj.name = `nature-rock-${proto.id}-${rockIdx}`;
       const chunks = proto.chunks || 6;
@@ -355,18 +316,19 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       obj.userData.selectable = "node";
       obj.userData.worldKind = "rock";
       obj.userData.colliderLayer = COLLIDER_LAYER.HARVEST;
-      obj.userData.natureProto = proto.id;
       obj.userData.siHeight = height;
       obj.userData.buryFrac = buryFrac;
-      obj.userData.buryM = bury;
-      obj.userData.exposedM = height * (1 - buryFrac);
       harvestRoot.add(obj);
       harvestNodes.push({
         id,
         kind: "rock",
         materialId: proto.materialId || "t0_stone",
         object: obj,
-        position: new THREE.Vector3(p.x, p.y + height * (1 - buryFrac) * 0.5, p.z),
+        position: new THREE.Vector3(
+          p.x,
+          p.y + height * (1 - buryFrac) * 0.5,
+          p.z,
+        ),
         halfExtents: new THREE.Vector3(
           height * 0.35,
           height * (1 - buryFrac) * 0.5,
@@ -390,70 +352,24 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
     }
   }
 
-  // ── Instanced decor trees (density, no harvest) ───────────────
-  // One shared cone+trunk billboard-ish icosa for draw-call batching
-  const decorGeo = new THREE.ConeGeometry(1.4, 4.5, 6);
-  decorGeo.translate(0, 2.25, 0);
-  const decorMat = new THREE.MeshStandardMaterial({
-    color: 0x2a6b32,
-    roughness: 0.9,
-    flatShading: true,
-  });
-  const maxDecor = discs.length * NATURE_DENSITY.decorTreesPerDisc;
-  const inst = new THREE.InstancedMesh(decorGeo, decorMat, maxDecor);
-  inst.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-  inst.castShadow = false;
-  inst.receiveShadow = true;
-  inst.frustumCulled = true;
-  inst.name = "nature-decor-instanced";
-  const dummy = new THREE.Object3D();
-  const color = new THREE.Color();
-  let di = 0;
-  for (const disc of discs) {
-    const pts = placeOnDisc(
-      disc,
-      NATURE_DENSITY.decorTreesPerDisc,
-      4.5,
-    );
-    for (const p of pts) {
-      if (di >= maxDecor) break;
-      const s = 0.7 + rng() * 1.4;
-      dummy.position.set(p.x, p.y, p.z);
-      dummy.rotation.set(0, rng() * Math.PI * 2, 0);
-      dummy.scale.set(s * 0.85, s, s * 0.85);
-      dummy.updateMatrix();
-      inst.setMatrixAt(di, dummy.matrix);
-      color.setHSL(0.28 + rng() * 0.08, 0.45 + rng() * 0.2, 0.28 + rng() * 0.12);
-      inst.setColorAt(di, color);
-      di++;
-    }
-  }
-  inst.count = di;
-  inst.instanceMatrix.needsUpdate = true;
-  if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
-  decorRoot.add(inst);
-
-  // Merge into island harvest list
   if (!Array.isArray(island.harvestNodes)) island.harvestNodes = [];
   island.harvestNodes.push(...harvestNodes);
   island.natureField = {
-    gen: NATURE_GEN,
+    gen: `${NATURE_GEN}+proc-forest`,
     trees: treeIdx,
+    forestTrees: treePlacements.length,
+    branches: forestResult.stats.branches,
+    leaves: forestResult.stats.leaves,
     rocks: rockIdx,
-    decor: di,
     discs: discs.length,
   };
 
   console.info(
-    `[nature] ${NATURE_GEN} harvest trees=${treeIdx} rocks=${rockIdx} (${ROCK_HEIGHT_M}m @ ${ROCK_BURY_FRAC * 100}% bury) decorInst=${di} discs=${discs.length}`,
+    `[nature] ${island.natureField.gen} forestTrees=${treePlacements.length} harvestTrees=${treeIdx} rocks=${rockIdx} (${ROCK_HEIGHT_M}m@${ROCK_BURY_FRAC * 100}%bury) branches=${forestResult.stats.branches} leaves=${forestResult.stats.leaves}`,
   );
 
-  /** Active debris for update() */
   const debris = [];
 
-  /**
-   * Spawn chunk debris at node (called from HarvestSystem).
-   */
   function spawnChunkDebris(node, kind) {
     const n = CHUNK_DEBRIS[kind === "rock" ? "rockPieces" : "treePieces"] || 3;
     const base =
@@ -461,7 +377,8 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       node.position?.clone?.() ||
       new THREE.Vector3();
     const h = node.siHeight || (kind === "rock" ? ROCK_HEIGHT_M : 12);
-    const exposed = kind === "rock" ? h * (1 - (node.buryFrac ?? ROCK_BURY_FRAC)) : h;
+    const exposed =
+      kind === "rock" ? h * (1 - (node.buryFrac ?? ROCK_BURY_FRAC)) : h * 0.5;
     for (let i = 0; i < n; i++) {
       const mesh = new THREE.Mesh(
         kind === "rock"
@@ -475,7 +392,7 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       );
       mesh.position.set(
         base.x + (rng() - 0.5) * 1.2,
-        (node.groundY ?? base.y) + exposed * (0.3 + rng() * 0.5),
+        (node.groundY ?? base.y) + exposed * (0.2 + rng() * 0.5),
         base.z + (rng() - 0.5) * 1.2,
       );
       mesh.castShadow = true;
@@ -493,15 +410,18 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
     }
   }
 
-  /**
-   * Visual: shrink remaining rock/tree after chunk strip (Valheim weld scale).
-   */
   function applyChunkVisual(node) {
-    if (!node?.object || !node.maxChunks) return;
-    const frac = Math.max(0.12, (node.chunks || 0) / node.maxChunks);
+    if (!node) return;
+    const frac = Math.max(0.12, (node.chunks || 0) / Math.max(1, node.maxChunks));
+    // Procedural forest tree
+    if (node.forestTreeIndex != null) {
+      if (node.chunks <= 0) forest.setTreeVisible(node.forestTreeIndex, false);
+      else forest.setTreeChunkScale(node.forestTreeIndex, frac);
+      return;
+    }
+    if (!node.object || !node.maxChunks) return;
     const base = node._chunkBaseScale || node.object.scale.x || 1;
     if (!node._chunkBaseScale) node._chunkBaseScale = base;
-    // Rocks keep bury: scale about base, re-anchor bottom into ground
     if (node.kind === "rock" && Number.isFinite(node.groundY)) {
       const h = (node.siHeight || ROCK_HEIGHT_M) * frac;
       const bury = h * (node.buryFrac ?? ROCK_BURY_FRAC);
@@ -512,12 +432,12 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
     }
   }
 
-  function update(dt) {
+  function update(dt, camera) {
     const now = performance.now();
+    forest.update(camera, now * 0.001);
     for (let i = debris.length - 1; i >= 0; i--) {
       const d = debris[i];
-      const age = now - d.born;
-      if (age > d.life) {
+      if (now - d.born > d.life) {
         debrisRoot.remove(d.mesh);
         d.mesh.geometry?.dispose?.();
         d.mesh.material?.dispose?.();
@@ -528,7 +448,6 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       d.mesh.position.addScaledVector(d.vel, dt);
       d.mesh.rotation.x += dt * 2;
       d.mesh.rotation.z += dt * 1.4;
-      // soft ground stop
       const gy = sampleGround(d.mesh.position.x, d.mesh.position.z);
       if (d.mesh.position.y < gy + 0.15) {
         d.mesh.position.y = gy + 0.15;
@@ -541,6 +460,7 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
 
   return {
     root,
+    forest,
     harvestNodes,
     spawnChunkDebris,
     applyChunkVisual,
