@@ -27,6 +27,11 @@ import {
   FOREST_CONFIG,
 } from "./instancedForest.js";
 import { COLLIDER_LAYER } from "./mapLiteracy.js";
+import {
+  sampleBiome,
+  pickBiomeTreeId,
+  ISLAND_ARCHETYPES,
+} from "./biomeSsot.js";
 
 function mulberry32(a) {
   return function rand() {
@@ -169,21 +174,60 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
     return pts;
   };
 
-  // ── Procedural instanced forest (discourse) ───────────────────
+  // Island biomes (sector map) — density & tree type per island, not rings
+  const islandBiomes =
+    opts.world?.biomes?.islands ||
+    island.islandBiomes ||
+    island.seedTerrains?.islands ||
+    null;
+  const seedU32 = hashSeed(seed);
+
+  // Map tree id → forest typeIndex (InstancedForest TREE_TYPES variety)
+  const treeTypeIndex = { oak: 0, default: 1, pine: 2, detailed: 3, palm: 4 };
+
+  // ── Procedural instanced forest (discourse) + island biome density ─
   const treePlacements = [];
-  const treesPerDisc =
-    NATURE_DENSITY.harvestTreesPerDisc +
-    Math.floor(NATURE_DENSITY.decorTreesPerDisc * 0.45);
   for (const disc of discs) {
-    const pts = placeOnDisc(disc, treesPerDisc, NATURE_DENSITY.minSpacingTreeM);
+    const biome = sampleBiome(disc.x, disc.z, {
+      seedU32,
+      islands: islandBiomes,
+      landDiscs: discs,
+    });
+    const dens = biome.treeDensity ?? 1;
+    const treesPerDisc = Math.max(
+      4,
+      Math.floor(
+        (NATURE_DENSITY.harvestTreesPerDisc +
+          NATURE_DENSITY.decorTreesPerDisc * 0.45) *
+          dens,
+      ),
+    );
+    // Hellmaw sparse; wildwood dense; ethereal_falls medium
+    const pts = placeOnDisc(
+      disc,
+      treesPerDisc,
+      Math.max(4, NATURE_DENSITY.minSpacingTreeM / Math.sqrt(dens)),
+    );
     for (const p of pts) {
+      const b = sampleBiome(p.x, p.z, {
+        seedU32,
+        islands: islandBiomes,
+        landDiscs: discs,
+      });
+      const tid = pickBiomeTreeId(b, rng) || "default";
       treePlacements.push({
         x: p.x,
         z: p.z,
         y: p.y,
         scale: 0.7 + rng() * 0.85,
-        typeIndex: Math.floor(rng() * 5),
-        seed: (hashSeed(seed) ^ Math.floor(p.x * 100) ^ Math.floor(p.z * 100)) >>> 0,
+        typeIndex: treeTypeIndex[tid] ?? Math.floor(rng() * 5),
+        treeId: tid,
+        biomeId: b.id,
+        seed:
+          (hashSeed(seed) ^
+            Math.floor(p.x * 100) ^
+            Math.floor(p.z * 100)) >>>
+          0,
       });
     }
   }
@@ -253,11 +297,12 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       siHeight: height,
       nature: true,
       forestTreeIndex: i,
-      protoId: `proc_${treePlacements[i].typeIndex ?? 0}`,
+      protoId: treePlacements[i].treeId || `proc_${treePlacements[i].typeIndex ?? 0}`,
+      biomeId: treePlacements[i].biomeId || null,
     });
   }
 
-  // ── Valheim rocks 20 m / 40% bury ─────────────────────────────
+  // ── Valheim rocks — scale/bury by **island** biome (Hellmaw big, meadows small) ─
   const loader = new GLTFLoader();
   try {
     const draco = new DRACOLoader();
@@ -291,23 +336,47 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
 
   let rockIdx = 0;
   for (const disc of discs) {
+    const discBiome = sampleBiome(disc.x, disc.z, {
+      seedU32,
+      islands: islandBiomes,
+      landDiscs: discs,
+    });
+    const rockN = Math.max(
+      2,
+      Math.floor(
+        NATURE_DENSITY.harvestRocksPerDisc * (discBiome.rockDensity ?? 1),
+      ),
+    );
     const pts = placeOnDisc(
       disc,
-      NATURE_DENSITY.harvestRocksPerDisc,
+      rockN,
       NATURE_DENSITY.minSpacingRockM,
     );
     for (const p of pts) {
-      const pick = rockTemplates[Math.floor(rng() * rockTemplates.length)];
+      const b = sampleBiome(p.x, p.z, {
+        seedU32,
+        islands: islandBiomes,
+        landDiscs: discs,
+      });
+      // Prefer cave rock on hellmaw/mountain
+      let pick = rockTemplates[Math.floor(rng() * rockTemplates.length)];
+      if (b.archetype === "volcanic" || b.id === "hellmaw" || b.id === "frozen_expanse") {
+        pick =
+          rockTemplates.find((t) => t.proto.id === "cliff_cave") || pick;
+      }
       const { proto, template } = pick;
-      const scaleJitter = 0.85 + rng() * 0.3;
+      const biomeScale = b.rockScale ?? 1;
+      const scaleJitter = (0.85 + rng() * 0.3) * biomeScale;
       const obj = template.clone(true);
       obj.scale.multiplyScalar(scaleJitter);
       obj.rotation.y = rng() * Math.PI * 2;
-      const height = (proto.heightM || ROCK_HEIGHT_M) * scaleJitter;
-      const buryFrac = proto.buryFrac ?? ROCK_BURY_FRAC;
+      // Valheim full 20 m on volcanic/mountain; smaller on ethereal meadows
+      const baseH = proto.heightM || ROCK_HEIGHT_M;
+      const height = baseH * scaleJitter;
+      const buryFrac = b.rockBury ?? proto.buryFrac ?? ROCK_BURY_FRAC;
       const bury = height * buryFrac;
       obj.position.set(p.x, p.y - bury, p.z);
-      obj.name = `nature-rock-${proto.id}-${rockIdx}`;
+      obj.name = `nature-rock-${b.id || proto.id}-${rockIdx}`;
       const chunks = proto.chunks || 6;
       const maxHp = chunks * HP_PER_CHUNK.rock;
       const id = `nat_rock_${seed}_${rockIdx++}`;
@@ -318,6 +387,7 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       obj.userData.colliderLayer = COLLIDER_LAYER.HARVEST;
       obj.userData.siHeight = height;
       obj.userData.buryFrac = buryFrac;
+      obj.userData.biomeId = b.id;
       harvestRoot.add(obj);
       harvestNodes.push({
         id,
@@ -347,6 +417,7 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
         groundY: p.y,
         nature: true,
         protoId: proto.id,
+        biomeId: b.id,
         valheimRock: true,
       });
     }

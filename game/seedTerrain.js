@@ -10,6 +10,11 @@
  */
 import * as THREE from "three";
 import { COLLIDER_LAYER } from "./mapLiteracy.js";
+import {
+  sampleBiome,
+  biomeTerrainColor,
+  assignIslandBiomes,
+} from "./biomeSsot.js";
 
 /** Default args (Simon-style knobs, SI-scaled). */
 export const TERRAIN_DEFAULTS = {
@@ -219,18 +224,36 @@ function heightColor(y, waterY, peak) {
 }
 
 /**
- * Build a disc terrain mesh (Simon plane displace, SI).
+ * Build a disc terrain mesh (Simon plane displace, SI) tinted by **island biome**.
  * @returns {{ mesh: THREE.Mesh, sampleY: (x:number,z:number)=>number }}
  */
 export function createDiscTerrainMesh(disc, seedU32, waterY, args = {}) {
-  const a = { ...TERRAIN_DEFAULTS, ...args };
+  const biome = args.biome || null;
+  const peakScale = biome?.peakScale ?? 1;
+  const a = {
+    ...TERRAIN_DEFAULTS,
+    ...args,
+    peakM: (args.peakM || TERRAIN_DEFAULTS.peakM) * peakScale,
+  };
+  // Volcanic / Hellmaw: sharper peaks, less river
+  if (biome?.archetype === "volcanic" || biome?.id === "hellmaw") {
+    a.rivers = 0.15;
+    a.erosion = 0.75;
+    a.peakM = Math.max(a.peakM, 18);
+  }
+  // End of Path / mist: flatter, wetter
+  if (biome?.id === "end_of_path" || biome?.waterBias) {
+    a.rivers = 0.55;
+    a.peakM *= 0.85;
+    a.shoreFlatM = 1.8;
+  }
   const res = a.resolution;
   const diameter = disc.r * 2;
   const geo = new THREE.PlaneGeometry(diameter, diameter, res, res);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
-  const col = new THREE.Color();
+  const islands = args.islands || null;
 
   for (let i = 0; i < pos.count; i++) {
     const lx = pos.getX(i);
@@ -245,23 +268,38 @@ export function createDiscTerrainMesh(disc, seedU32, waterY, args = {}) {
       y = waterY - 2;
     }
     pos.setY(i, y);
-    heightColor(y, waterY, a.peakM).toArray(colors, i * 3);
+    const b =
+      biome ||
+      (islands
+        ? sampleBiome(wx, wz, { seedU32, islands })
+        : null);
+    if (b && b.id !== "ocean") {
+      const c = biomeTerrainColor(b, y, waterY, a.peakM);
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    } else {
+      heightColor(y, waterY, a.peakM).toArray(colors, i * 3);
+    }
   }
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
 
   const mesh = new THREE.Mesh(geo, makeStylizedTerrainMaterial());
   mesh.position.set(0, 0, 0);
-  mesh.name = `seed-terrain-${disc.x.toFixed(0)}_${disc.z.toFixed(0)}`;
+  const bid = biome?.id || "island";
+  mesh.name = `seed-terrain-${bid}-${disc.x.toFixed(0)}_${disc.z.toFixed(0)}`;
   mesh.receiveShadow = true;
   mesh.castShadow = false;
   mesh.userData.worldKind = "terrain";
   mesh.userData.colliderLayer = COLLIDER_LAYER.WALKABLE;
   mesh.userData.walkable = true;
   mesh.userData.seedTerrain = true;
+  mesh.userData.biomeId = bid;
+  mesh.userData.archetype = biome?.archetype || null;
 
   const sampleY = (x, z) => sampleSeedTerrainHeight(x, z, seedU32, disc, waterY, a);
-  return { mesh, sampleY, disc };
+  return { mesh, sampleY, disc, biome };
 }
 
 /**
@@ -286,30 +324,83 @@ export function mountSeedTerrains(scene, island, opts = {}) {
   const samplers = [];
   const meshes = [];
 
+  // Island biomes from world zones or assign by compass (sector map)
+  let islandBiomes =
+    opts.world?.biomes?.islands ||
+    opts.islands ||
+    null;
+  if (!islandBiomes?.length) {
+    const forAssign = discs.map((d, i) => ({
+      ...d,
+      kind: i === 0 && Math.hypot(d.x, d.z) < 80 ? "hub" : "territory",
+      faction: d.faction || null,
+    }));
+    // Prefer zone stamps from seed gen
+    if (opts.world?.zones?.length) {
+      islandBiomes = opts.world.zones
+        .filter((z) => z.x != null && z.radius)
+        .map((z) => ({
+          x: z.x,
+          z: z.z,
+          r: z.radius,
+          kind: z.kind,
+          faction: z.faction,
+          biomeId: z.biomeId,
+          archetype: z.archetype,
+          name: z.biomeName || z.name,
+          sectorHint: z.sectorHint,
+          allowWorldBoss: z.allowWorldBoss,
+        }));
+      // Fill missing biomeIds
+      const assigned = assignIslandBiomes(forAssign, seedU32);
+      for (const ib of islandBiomes) {
+        if (!ib.biomeId) {
+          const a = assigned.find(
+            (x) => Math.hypot(x.x - ib.x, x.z - ib.z) < 50,
+          );
+          if (a) Object.assign(ib, a);
+        }
+      }
+    } else {
+      islandBiomes = assignIslandBiomes(forAssign, seedU32);
+    }
+  }
+
   for (const disc of discs) {
     const isHub = Math.hypot(disc.x, disc.z) < 40;
-    // Skip full hub mesh replace — Bermuda owns centre; optional skirt only
-    if (isHub && !opts.includeHub) {
-      // thin outer ring only if disc bigger than mesh
-      if (disc.r <= meshLandR * 1.05) continue;
-      const skirt = { x: 0, z: 0, r: disc.r };
-      // We'll still sample hub via Bermuda + dome; skip mesh for hub
-      continue;
-    }
+    // Skip full hub mesh replace — Bermuda owns centre (Ethereal Falls shell)
+    if (isHub && !opts.includeHub) continue;
     if (isHub) continue;
+
+    const stamp =
+      islandBiomes.find(
+        (i) => Math.hypot(i.x - disc.x, i.z - disc.z) < 80,
+      ) || null;
+    const biome = stamp
+      ? sampleBiome(disc.x, disc.z, { seedU32, islands: islandBiomes })
+      : null;
 
     const { mesh, sampleY } = createDiscTerrainMesh(disc, seedU32, waterY, {
       peakM: 12 + (seedU32 % 6),
       frequency: 0.0035 + (seedU32 % 5) * 0.00015,
       erosion: 0.5,
       rivers: 0.35,
+      biome,
+      islands: islandBiomes,
     });
     root.add(mesh);
     meshes.push(mesh);
-    samplers.push({ disc, sampleY });
+    samplers.push({ disc, sampleY, biomeId: biome?.id });
   }
 
-  island.seedTerrains = { root, meshes, samplers, seedU32 };
+  island.seedTerrains = {
+    root,
+    meshes,
+    samplers,
+    seedU32,
+    islands: islandBiomes,
+  };
+  island.islandBiomes = islandBiomes;
 
   // Compose sampleY: Bermuda hub → FBM discs → sea
   const meshSample = island.sampleY;

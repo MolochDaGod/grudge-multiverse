@@ -21,7 +21,7 @@ export const ROCK_CHUNKS = 6;
 /** Chunks / stages per tree (trunk segments + canopy). */
 export const TREE_CHUNKS = 4;
 
-export const NATURE_GEN = "2026-08-08.2-proc-forest";
+export const NATURE_GEN = "2026-08-08.3-island-biomes";
 
 /** Kenney nature-kit singles (verified 200 on CDN). */
 export const TREE_PROTOTYPES = [

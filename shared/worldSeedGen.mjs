@@ -12,8 +12,16 @@
  * Info hub: https://info.grudge-studio.com/docs
  */
 
+import {
+  BIOME_GEN,
+  sampleBiome,
+  assignIslandBiomes,
+  biomeIslandSummary,
+  ISLAND_ARCHETYPES,
+} from "./biomeSsot.mjs";
+
 export const WORLD_SCHEMA = "grudge.multiverse.world/v1";
-export const WORLD_GEN_VERSION = "2026-08-08.3-5km";
+export const WORLD_GEN_VERSION = "2026-08-08.5-island-biomes";
 
 /**
  * Seed play space — SI metres (same as Island-Crusade / Valheim-scale).
@@ -286,7 +294,44 @@ export function generateWorld(seedInput, opts = {}) {
   /** @type {object[]} */
   const seaLanes = [];
 
-  // Hub capital
+  // Island biomes (sector map) — not distance rings
+  const landDiscsForBiome = [
+    {
+      x: 0,
+      z: 0,
+      r: Math.max(hubRadius * 1.15, 360),
+      kind: "hub",
+      faction: "neutral",
+    },
+    ...factions.map((f) => ({
+      x: Math.cos(f.angle) * f.capitalR,
+      z: Math.sin(f.angle) * f.capitalR,
+      r: f.islandRadius,
+      kind: "territory",
+      faction: f.faction,
+    })),
+  ];
+  const islandBiomes = assignIslandBiomes(landDiscsForBiome, seedU32);
+  const biomeAt = (x, z) =>
+    sampleBiome(x, z, { seedU32, islands: islandBiomes });
+
+  // Stamp archetype on zones
+  for (const z0 of zones) {
+    const ib = islandBiomes.find(
+      (i) =>
+        Math.hypot(i.x - (z0.x || 0), i.z - (z0.z || 0)) < 40 ||
+        (z0.kind === "hub" && i.biomeId === "ethereal_falls"),
+    );
+    if (ib) {
+      z0.biomeId = ib.biomeId;
+      z0.archetype = ib.archetype;
+      z0.sectorHint = ib.sectorHint;
+      z0.allowWorldBoss = ib.allowWorldBoss;
+      z0.biomeName = ib.name;
+    }
+  }
+
+  // Hub capital — Ethereal Falls / Sanctuary
   settlements.push({
     id: "town-neutral",
     faction: "neutral",
@@ -296,6 +341,8 @@ export function generateWorld(seedInput, opts = {}) {
     x: 0,
     z: 0,
     radius: 34,
+    biome: "ethereal_falls",
+    archetype: "home",
     accent: FACTION_THEMES.neutral.accent,
     population: Math.round(12 * density),
   });
@@ -582,11 +629,45 @@ export function generateWorld(seedInput, opts = {}) {
       lod: true,
       worldSizeM: worldSize,
     },
-    summary: `${seedLabel} · 5×5 km · ${settlements.length} sites · ${npcs.length} NPCs · ${hostiles.length} hostiles · ${harbors.length} harbors`,
+    biomes: {
+      gen: BIOME_GEN,
+      mode: "island_archetypes",
+      islands: biomeIslandSummary(islandBiomes),
+      note: "Valheim systems per island (sector map): Ethereal Falls hub, Hellmaw volcanic S, End of Path mist, etc. — not distance rings",
+    },
+    summary: `${seedLabel} · 5×5 km · islands ${islandBiomes.map((i) => i.biomeId).join("+")} · ${settlements.length} sites · ${npcs.length} NPCs · ${hostiles.length} hostiles · ${harbors.length} harbors`,
   };
+
+  // Stamp biome from nearest island
+  for (const s of settlements) {
+    if (!s.biome) {
+      const b = biomeAt(s.x, s.z);
+      s.biome = b.id;
+      s.archetype = b.archetype;
+    }
+  }
+  for (const p of pois) {
+    if (!p.biome) p.biome = biomeAt(p.x, p.z).id;
+  }
+  for (const h of harbors) {
+    if (!h.biome) h.biome = biomeAt(h.x, h.z).id || "coast";
+  }
+  for (const a of animals) {
+    if (!a.biome) a.biome = biomeAt(a.x, a.z).id;
+  }
+  for (const h of hostiles) {
+    if (!h.biome) h.biome = biomeAt(h.x, h.z).id;
+  }
 
   return doc;
 }
+
+export {
+  sampleBiome,
+  BIOME_GEN,
+  assignIslandBiomes,
+  ISLAND_ARCHETYPES,
+};
 
 function poi(id, name, x, z, kind, accent, extra = {}) {
   return { id, name, x, z, kind, accent, radius: 3.5, ...extra };
