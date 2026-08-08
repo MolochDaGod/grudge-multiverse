@@ -16,6 +16,7 @@ import {
   COLLIDER_LAYER,
 } from "./mapLiteracy.js";
 import { assetUrlBust } from "./grudge6SSOT.js";
+import { adaptiveNavCellSize, applyMeshTerrainLod } from "./worldLod.js";
 
 // Enable BVH raycasts for ground sampling (same as playerController)
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
@@ -358,11 +359,16 @@ export async function loadBermudaIsland(scene, opts = {}) {
   const maxH = opts.maxHarvest ?? 80;
   const capped = harvestNodes.slice(0, maxH);
 
-  // Heightfield navmesh — land only (above waterline, inside landRadius)
+  // Mesh terrain LOD tags (frustum + distance bands in bootstrap)
+  const meshLod = applyMeshTerrainLod(root);
+
+  // Heightfield navmesh — land only; cell size scales with map span (large-scale best practice)
+  const navCell =
+    opts.navCellSize ?? adaptiveNavCellSize(landRadius, halfW);
   const nav = buildNavGrid(
     { bounds: box, halfW, hubRadius, scale, waterY, landRadius },
     sampleY,
-    { cellSize: opts.navCellSize ?? 5, waterY, landRadius },
+    { cellSize: navCell, waterY, landRadius },
   );
 
   // Spawns: ALWAYS from walkable land cells (never mathematical ring into sea)
@@ -426,10 +432,12 @@ export async function loadBermudaIsland(scene, opts = {}) {
     humanHeightM: HUMAN_HEIGHT_M,
     nav,
     sampleY,
+    meshLod,
+    navCellSize: navCell,
   };
   console.info("[island] literacy", describeIslandLiteracy(island, nav));
   console.info(
-    `[island] land spawns=${spawns.length} first=${spawns[0]?.toArray?.()?.map?.((n) => +n.toFixed(1))}`,
+    `[island] land spawns=${spawns.length} navCell=${navCell}m meshLod=${JSON.stringify(meshLod)} first=${spawns[0]?.toArray?.()?.map?.((n) => +n.toFixed(1))}`,
   );
   return island;
 }

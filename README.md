@@ -40,8 +40,11 @@ Contract: `game/grudge6SSOT.js` · version stamp `GRUDGE6_SSOT_VERSION` · deplo
 ### Systems (production)
 
 - **Map:** Bermuda CDN GLB, SI metres, land-only navmesh + A\*  
-- **Realm overlay (seeded world):** Valheim-style `?seed=` → denser towns/villages/camps/NPCs/AI/wildlife on Bermuda — `shared/worldSeedGen.mjs` · `docs/WORLD_SEED_SSOT.md`  
+- **Realm overlay (seeded world):** default **VALHEIM42** — towns/villages/camps/NPCs/AI/wildlife/harbors on Bermuda — `shared/worldSeedGen.mjs` · `docs/WORLD_SEED_SSOT.md`  
+- **Boats / sailing:** coastal harbors · E board · WASD sail · F disembark — `game/boats.js`  
+- **Nav + LOD:** land heightfield + sea water-mask path; actor/mesh LOD — `game/worldLod.js` · `mapLiteracy.buildNavGrid`  
 - **Crusade ingest notes:** `docs/ISLAND_CRUSADE_INGEST.md`  
+
 
 - **Hero:** Toon RTS ★ load → SI fit (`characterDeploy`) → mesh_ids equip  
 - **Harvest:** trees/rocks → wood/stone, Firebase HP sync  

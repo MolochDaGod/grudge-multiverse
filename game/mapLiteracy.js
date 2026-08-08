@@ -366,6 +366,74 @@ export function buildNavGrid(island, sampleY, opts = {}) {
     return out;
   };
 
+  /** Sea path for boats — A* on water/non-walkable cells near coast. */
+  const findSeaPath = (sx, sz, gx, gz) => {
+    const start = cellAt(sx, sz);
+    const goal = cellAt(gx, gz);
+    const waterOk = (c) => c && (c.water || !c.walkable);
+    if (!waterOk(start) || !waterOk(goal)) {
+      return [
+        { x: sx, y: waterY + 0.15, z: sz },
+        { x: gx, y: waterY + 0.15, z: gz },
+      ];
+    }
+    const key = (i, j) => j * cols + i;
+    const open = [{ i: start.i, j: start.j, g: 0, f: 0 }];
+    const came = new Map();
+    const gScore = new Map([[key(start.i, start.j), 0]]);
+    const h = (i, j) => Math.hypot(i - goal.i, j - goal.j);
+    open[0].f = h(start.i, start.j);
+    const closed = new Set();
+    const dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+    ];
+    let guard = 0;
+    while (open.length && guard++ < 40000) {
+      open.sort((a, b) => a.f - b.f);
+      const cur = open.shift();
+      const ck = key(cur.i, cur.j);
+      if (closed.has(ck)) continue;
+      closed.add(ck);
+      if (cur.i === goal.i && cur.j === goal.j) {
+        const path = [];
+        let k = ck;
+        while (k !== undefined) {
+          const c = cells[k];
+          if (c) path.push({ x: c.x, y: waterY + 0.15, z: c.z });
+          k = came.get(k);
+        }
+        path.reverse();
+        return path.length ? path : [{ x: gx, y: waterY + 0.15, z: gz }];
+      }
+      for (const [di, dj] of dirs) {
+        const ni = cur.i + di;
+        const nj = cur.j + dj;
+        if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
+        const c = cells[nj * cols + ni];
+        if (!waterOk(c)) continue;
+        const nk = key(ni, nj);
+        if (closed.has(nk)) continue;
+        const step = di !== 0 && dj !== 0 ? 1.414 : 1;
+        const tent = (gScore.get(ck) ?? Infinity) + step;
+        if (tent >= (gScore.get(nk) ?? Infinity)) continue;
+        came.set(nk, ck);
+        gScore.set(nk, tent);
+        open.push({ i: ni, j: nj, g: tent, f: tent + h(ni, nj) });
+      }
+    }
+    return [
+      { x: sx, y: waterY + 0.15, z: sz },
+      { x: gx, y: waterY + 0.15, z: gz },
+    ];
+  };
+
   return {
     cellSize,
     cols,
@@ -383,6 +451,7 @@ export function buildNavGrid(island, sampleY, opts = {}) {
     cellAt,
     snap,
     findPath,
+    findSeaPath,
     pickLandSpawns,
     isWalkableWorld(x, z) {
       const c = cellAt(x, z);

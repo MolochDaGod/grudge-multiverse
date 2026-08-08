@@ -13,7 +13,7 @@
  */
 
 export const WORLD_SCHEMA = "grudge.multiverse.world/v1";
-export const WORLD_GEN_VERSION = "2026-08-08.1-valheim42-default";
+export const WORLD_GEN_VERSION = "2026-08-08.2-boats-lod-nav";
 
 /** Grudge Info (info.grudge-studio.com) — product SSOT links, not mesh CDN. */
 export const GRUDGE_INFO = {
@@ -253,6 +253,10 @@ export function generateWorld(seedInput, opts = {}) {
   const animals = [];
   /** @type {object[]} */
   const pois = [];
+  /** @type {object[]} */
+  const harbors = [];
+  /** @type {object[]} */
+  const seaLanes = [];
 
   // Hub capital
   settlements.push({
@@ -400,6 +404,56 @@ export function generateWorld(seedInput, opts = {}) {
         f.accent,
       ),
     );
+
+    // Coastal harbor (boat dock) — seaward of capital
+    const harborR = landRadius * (0.9 + rng() * 0.06);
+    const harborA = f.angle + (rng() - 0.5) * 0.25;
+    const hx = Math.cos(harborA) * harborR;
+    const hz = Math.sin(harborA) * harborR;
+    const harbor = {
+      id: `harbor-${f.faction}`,
+      name: `${f.name.split(" ")[0]} Harbor`,
+      kind: "harbor",
+      faction: f.faction,
+      x: hx,
+      z: hz,
+      accent: f.accent,
+      radius: 8,
+      boats: Math.round(1 + density * 0.5),
+    };
+    harbors.push(harbor);
+    pois.push(poi(harbor.id, harbor.name, hx, hz, "harbor", f.accent, { faction: f.faction }));
+  }
+
+  // Hub harbor (south)
+  harbors.push({
+    id: "harbor-hub",
+    name: "Grudgehold Docks",
+    kind: "harbor",
+    faction: "neutral",
+    x: 0,
+    z: landRadius * 0.88,
+    accent: "#4a90d9",
+    radius: 10,
+    boats: 2,
+  });
+  pois.push(
+    poi("harbor-hub", "Grudgehold Docks", 0, landRadius * 0.88, "harbor", "#4a90d9"),
+  );
+
+  // Sea lanes between harbors (for map UI / future convoy AI)
+  for (let i = 0; i < harbors.length; i++) {
+    const a = harbors[i];
+    const b = harbors[(i + 1) % harbors.length];
+    seaLanes.push({
+      id: `lane-${a.id}-${b.id}`,
+      from: a.id,
+      to: b.id,
+      ax: a.x,
+      az: a.z,
+      bx: b.x,
+      bz: b.z,
+    });
   }
 
   // Wildlife scatter (seeded)
@@ -470,6 +524,8 @@ export function generateWorld(seedInput, opts = {}) {
     hostiles,
     animals,
     pois,
+    harbors,
+    seaLanes,
     counts: {
       settlements: settlements.length,
       npcs: npcs.length,
@@ -477,14 +533,21 @@ export function generateWorld(seedInput, opts = {}) {
       animals: animals.length,
       pois: pois.length,
       zones: zones.length,
+      harbors: harbors.length,
+      seaLanes: seaLanes.length,
     },
     grudgeInfo: GRUDGE_INFO,
     playMesh: {
       kind: "bermuda_glb",
       url: "https://assets.grudge-studio.com/models/maps/bermuda.glb",
-      note: "Seed places content on Bermuda SI land; does not replace terrain bytes",
+      note: "Seed places content on Bermuda SI land + coastal sailing; terrain mesh is Bermuda GLB",
     },
-    summary: `${seedLabel} · ${settlements.length} sites · ${npcs.length} NPCs · ${hostiles.length} hostiles · ${animals.length} wildlife`,
+    nav: {
+      land: "heightfield_grid",
+      sea: "water_mask_inverse",
+      lod: true,
+    },
+    summary: `${seedLabel} · ${settlements.length} sites · ${npcs.length} NPCs · ${hostiles.length} hostiles · ${animals.length} wildlife · ${harbors.length} harbors`,
   };
 
   return doc;

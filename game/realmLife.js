@@ -25,6 +25,7 @@ import {
   ANIMAL_AI,
   WOLF_AI,
 } from "./realmAi.js";
+import { createActorLod } from "./worldLod.js";
 
 function snapLand(x, z, island, groundAt) {
   let sx = x;
@@ -365,6 +366,8 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
     });
   }
 
+  const actorLod = createActorLod(actors);
+
   const state = {
     root,
     world,
@@ -387,6 +390,7 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
     },
     actors,
     interactables,
+    actorLod,
     zone: FACTION_THEMES.neutral,
     mission: null,
     stats: {
@@ -395,6 +399,7 @@ export function mountRealmLife(scene, island, groundAt, opts = {}) {
       raiders: world.counts?.hostiles ?? actors.filter((a) => a.type === "raider").length,
       animals: world.counts?.animals ?? actors.filter((a) => a.type === "animal").length,
       settlements: world.counts?.settlements ?? world.settlements.length,
+      harbors: world.counts?.harbors ?? (world.harbors || []).length,
     },
   };
 
@@ -418,8 +423,8 @@ export function updateRealmLife(realm, dt, playerPos, opts = {}) {
   const attacks = [];
   realm.zone = factionAtWorld(playerPos.x, playerPos.z, realm.world);
 
-  for (const a of realm.actors) {
-    if (!a.alive || !a.mesh || !a.brain || !a.params) continue;
+  const runAi = (a, doStep) => {
+    if (!doStep || !a.alive || !a.mesh || !a.brain || !a.params) return;
     const step = stepBrain(
       a.brain,
       a.params,
@@ -458,6 +463,13 @@ export function updateRealmLife(realm, dt, playerPos, opts = {}) {
         a._nextHit = now + 1100;
       }
     }
+  };
+
+  // Large-scale LOD: cull far actors, throttle mid-range AI
+  if (realm.actorLod) {
+    realm.actorLod.update(playerPos, runAi);
+  } else {
+    for (const a of realm.actors) runAi(a, true);
   }
 
   let near = null;
@@ -467,6 +479,16 @@ export function updateRealmLife(realm, dt, playerPos, opts = {}) {
     if (d < it.radius && d < best) {
       best = d;
       near = it;
+    }
+  }
+  // Merge boat docks if provided
+  if (opts.boatInteract) {
+    for (const it of opts.boatInteract) {
+      const d = Math.hypot(playerPos.x - it.x, playerPos.z - it.z);
+      if (d < it.radius && d < best) {
+        best = d;
+        near = it;
+      }
     }
   }
   realm.near = near;

@@ -77,6 +77,19 @@ Hub **Grudge Info Obelisk** POI → **E** opens info docs.
 - Market NPCs (5 roles) + guards + captains  
 - Wildlife + farm stock  
 - POIs: shrine, mine, watchtower, info obelisk  
+- **Harbors + sea lanes** · coastal boats (board E / sail WASD / leave F)  
+- **Land nav** heightfield + **sea nav** water-mask A\*  
+- **LOD** actor bands + mesh terrain distance culling  
+
+## Large-scale map practices
+
+| Concern | Implementation |
+|---------|----------------|
+| Nav density | `adaptiveNavCellSize(landRadius)` — larger cells on bigger maps |
+| Actor AI | `worldLod.createActorLod` near/mid/far/cull |
+| Mesh props | LOD0 near, LOD1/2 far, terrain always |
+| Boats | Seed harbors · `game/boats.js` · sea snap on water mask |
+| Seed lock | Room `welcome.seed` = SPA generateWorld |
 
 ## Deploy order
 

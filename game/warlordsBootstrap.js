@@ -81,6 +81,8 @@ import {
   resolvePlaySeed,
 } from "./realmLife.js";
 import { generateWorld } from "./worldSeedGen.js";
+import { mountBoats } from "./boats.js";
+import { updateMeshTerrainLod } from "./worldLod.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -1055,9 +1057,17 @@ export async function attachWarlordsWorld(ctx) {
   } catch {
     /* */
   }
+  // Coastal boats + harbors (seed docks + sea nav)
+  const boats = mountBoats(scene, island, realm.world, groundAt);
+  window.__mvBoats = boats;
+  // Append boat interacts into realm for E prompts
+  if (boats?.dockInteract?.length) {
+    realm.interactables.push(...boats.dockInteract);
+  }
+
   flash?.(
-    `World ${realm.seed} · ${realm.stats.settlements} sites · ${realm.stats.npcs} NPCs · ${realm.stats.raiders} hostiles · ${realm.stats.animals} wildlife`,
-    2.4,
+    `World ${realm.seed} · ${realm.stats.settlements} sites · ${realm.stats.npcs} NPCs · ${realm.stats.harbors || boats?.boats?.length || 0} harbors · boats E board / F leave`,
+    2.6,
   );
 
   document.addEventListener("keydown", (e) => {
@@ -1065,11 +1075,22 @@ export async function attachWarlordsWorld(ctx) {
       closeVendorShop();
       return;
     }
+    // F — disembark boat
+    if (e.code === "KeyF" && !e.repeat && boats?.active) {
+      const land = boats.tryDisembark(island.nav, groundAt);
+      if (land && capsule) {
+        capsule.position.set(land.x, land.y, land.z);
+        window.__mvSailing = false;
+        flash?.("Disembarked on shore", 1.2);
+      }
+      return;
+    }
+
     if (e.code !== "KeyE" || e.repeat) return;
     const cam = ctx.camera;
     if (!cam || !capsule) return;
 
-    // 0) Crusade market NPCs / captains (realm interactables)
+    // 0) Crusade market NPCs / captains / boats (realm interactables)
     if (realm?.near) {
       const it = realm.near;
       if (it.kind === "vendor" && it.vendorKey && VENDORS[it.vendorKey]) {
@@ -1106,6 +1127,18 @@ export async function attachWarlordsWorld(ctx) {
       if (it.kind === "poi") {
         flash?.(`${it.label}`, 1.0);
         return;
+      }
+      if (it.kind === "boat" && boats) {
+        if (boats.active) {
+          flash?.("Already sailing · F to disembark", 1.2);
+          return;
+        }
+        const b = boats.tryBoard(capsule.position);
+        if (b) {
+          flash?.("Sailing · WASD steer · F disembark", 2.0);
+          window.__mvSailing = true;
+          return;
+        }
       }
     }
 
@@ -1292,8 +1325,34 @@ export async function attachWarlordsWorld(ctx) {
       const ctrl = localPlayer?._player;
       if (!pos) return;
 
-      // Crusade realm AI + zone
-      const realmTick = updateRealmLife(realm, dt, pos, { groundAt });
+      // Mesh terrain LOD (distance bands)
+      if (ctx.camera && island.root) {
+        updateMeshTerrainLod(island.root, ctx.camera.position);
+      }
+
+      // Sailing mode — boat owns motion; skip land water push
+      if (boats?.active) {
+        const inp = ctrl?.input || {};
+        boats.updateSail(
+          dt,
+          {
+            fwd: !!(inp.fwd || inp.analogMoveY < -0.2),
+            bkd: !!(inp.bkd || inp.analogMoveY > 0.2),
+            lft: !!(inp.lft || inp.analogMoveX < -0.2),
+            rgt: !!(inp.rgt || inp.analogMoveX > 0.2),
+          },
+          capsule,
+        );
+        window.__mvSailing = true;
+      } else {
+        window.__mvSailing = false;
+      }
+
+      // Crusade realm AI + zone (LOD-throttled) + boat interacts
+      const realmTick = updateRealmLife(realm, dt, pos, {
+        groundAt,
+        boatInteract: boats?.dockInteract,
+      });
       window.__mvZone = realmTick.zone;
       window.__mvNearRealm = realmTick.near || null;
       for (const atk of realmTick.attacks) {
@@ -1353,25 +1412,26 @@ export async function attachWarlordsWorld(ctx) {
 
       // Feet IK / snap — same height field as nav (SI raycast)
       let groundY = groundAt(pos.x, pos.z) ?? 0;
-      // Water layer physics — soft land clamp (no swim yet)
-      if (island.waterPhysics?.constrainPosition?.(pos, groundAt)) {
-        groundY = groundAt(pos.x, pos.z) ?? groundY;
-        try {
-          ctrl.playerVelocity.x *= 0.35;
-          ctrl.playerVelocity.z *= 0.35;
-          ctrl.playerVelocity.y = 0;
-        } catch {
-          /* ignore */
+      // Water layer / void clamp — skip while sailing (boat owns motion)
+      if (!boats?.active) {
+        if (island.waterPhysics?.constrainPosition?.(pos, groundAt)) {
+          groundY = groundAt(pos.x, pos.z) ?? groundY;
+          try {
+            ctrl.playerVelocity.x *= 0.35;
+            ctrl.playerVelocity.z *= 0.35;
+            ctrl.playerVelocity.y = 0;
+          } catch {
+            /* ignore */
+          }
         }
-      }
-      // Keep capsule from falling into void (safety)
-      const feetEst = capsuleFeetY(ctrl, capsule);
-      if (feetEst < groundY - 0.5 || pos.y < groundY - 2) {
-        pos.y = groundY + 1.15;
-        try {
-          ctrl.playerVelocity.y = 0;
-        } catch {
-          /* ignore */
+        const feetEst = capsuleFeetY(ctrl, capsule);
+        if (feetEst < groundY - 0.5 || pos.y < groundY - 2) {
+          pos.y = groundY + 1.15;
+          try {
+            ctrl.playerVelocity.y = 0;
+          } catch {
+            /* ignore */
+          }
         }
       }
 
