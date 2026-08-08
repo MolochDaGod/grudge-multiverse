@@ -1,6 +1,8 @@
 /**
  * Expand Multiverse play space to seed world size (default 5 km × 5 km SI).
- * Bermuda GLB stays at hub; ocean + nav cover the full seed disc.
+ * Bermuda GLB stays at hub; ocean + FBM pads + nav cover the full seed disc.
+ *
+ * Terrain practices: Simon infinite FBM (seedTerrain) · three.js Water · Rapier heightfields
  */
 import * as THREE from "three";
 import { buildNavGrid, COLLIDER_LAYER } from "./mapLiteracy.js";
@@ -11,6 +13,7 @@ import {
   WORLD_RADIUS_M,
   DEFAULT_LAND_RADIUS_M,
 } from "./worldSeedGen.js";
+import { mountSeedTerrains, sampleSeedTerrainHeight } from "./seedTerrain.js";
 
 /**
  * After Bermuda load, expand water + rebuild nav for 5 km seed realm.
@@ -18,7 +21,7 @@ import {
  *
  * @param {object} island from loadBermudaIsland
  * @param {THREE.Scene} scene
- * @param {{ worldSizeM?: number, worldRadiusM?: number, world?: object }} [opts]
+ * @param {{ worldSizeM?: number, worldRadiusM?: number, world?: object, seed?: string }} [opts]
  */
 export function expandIslandToSeedWorld(island, scene, opts = {}) {
   const worldSize = opts.worldSizeM || WORLD_SIZE_M;
@@ -41,7 +44,7 @@ export function expandIslandToSeedWorld(island, scene, opts = {}) {
     landDiscs[0].r = Math.max(landDiscs[0].r, opts.world.hubRadius);
   }
 
-  // Large ocean disc (5 km realm)
+  // Large ocean disc (5 km realm) — visual until three.js Water mounts
   if (island.waterGroup) {
     const waterSize = Math.max(worldRadius * 2.2, worldHalf * 1.05);
     island.waterGroup.traverse((o) => {
@@ -57,16 +60,21 @@ export function expandIslandToSeedWorld(island, scene, opts = {}) {
   }
 
   const meshSample = island.sampleY;
-  const inLandDisc = (x, z) => {
-    for (const d of landDiscs) {
-      if (Math.hypot(x - d.x, z - d.z) <= d.r) return d;
-    }
-    return null;
-  };
+  island.landDiscs = landDiscs;
+  island.meshLandRadius = meshLandR;
+  island.worldSizeM = worldSize;
+  island.worldHalfM = worldHalf;
+  island.worldRadiusM = worldRadius;
 
-  // Sample: Bermuda mesh on hub disc; raised pad on faction islands; else sea
+  // Simon-style FBM terrain meshes on faction discs (before nav bake)
+  mountSeedTerrains(scene, island, {
+    seed: opts.seed || opts.world?.seed || "VALHEIM42",
+    world: opts.world,
+  });
+
+  // sampleY already composed by mountSeedTerrains; ensure hub mesh + FBM + sea
+  const fbmSample = island.sampleY;
   const sampleY = (x, z) => {
-    const disc = inLandDisc(x, z);
     const d0 = Math.hypot(x, z);
     if (d0 <= meshLandR * 1.02 && meshSample) {
       try {
@@ -76,10 +84,25 @@ export function expandIslandToSeedWorld(island, scene, opts = {}) {
         /* fall through */
       }
     }
-    if (disc) {
-      // Procedural island height (gentle dome)
-      const t = 1 - Math.hypot(x - disc.x, z - disc.z) / Math.max(1, disc.r);
-      return waterY + 1.0 + Math.max(0, t) * 8;
+    if (fbmSample && fbmSample !== meshSample) {
+      try {
+        const y = fbmSample(x, z);
+        if (Number.isFinite(y)) return y;
+      } catch {
+        /* */
+      }
+    }
+    // last resort dome
+    for (const disc of landDiscs) {
+      if (Math.hypot(x - disc.x, z - disc.z) <= disc.r) {
+        return sampleSeedTerrainHeight(
+          x,
+          z,
+          island.seedTerrains?.seedU32 || 1,
+          disc,
+          waterY,
+        );
+      }
     }
     return waterY;
   };
@@ -89,8 +112,6 @@ export function expandIslandToSeedWorld(island, scene, opts = {}) {
     new THREE.Vector3(worldHalf, waterY + 120, worldHalf),
   );
   const cellSize = adaptiveNavCellSize(worldRadius, worldHalf);
-  // landRadius for grid: use worldRadius so cells exist across disc;
-  // walkable via height > water (island domes + Bermuda)
   const nav = buildNavGrid(
     {
       bounds,
@@ -104,10 +125,6 @@ export function expandIslandToSeedWorld(island, scene, opts = {}) {
     { cellSize, waterY, landRadius: worldRadius, maxSlope: 1.4 },
   );
 
-  island.worldSizeM = worldSize;
-  island.worldHalfM = worldHalf;
-  island.worldRadiusM = worldRadius;
-  island.meshLandRadius = meshLandR;
   island.sampleY = sampleY;
   island.nav = nav;
   island.landRadius = worldRadius;
@@ -124,7 +141,7 @@ export function expandIslandToSeedWorld(island, scene, opts = {}) {
   }
 
   console.info(
-    `[worldSpace] 5×5 km seed size=${worldSize}m radius=${worldRadius}m navCell=${cellSize}m meshLandR=${meshLandR.toFixed(0)}m discs=${landDiscs.length}`,
+    `[worldSpace] 5×5 km seed size=${worldSize}m radius=${worldRadius}m navCell=${cellSize}m meshLandR=${meshLandR.toFixed(0)}m discs=${landDiscs.length} fbm=${island.seedTerrains?.meshes?.length || 0}`,
   );
 
   return island;

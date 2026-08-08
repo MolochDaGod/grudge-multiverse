@@ -96,6 +96,9 @@ import { mountBoats } from "./boats.js";
 import { updateMeshTerrainLod } from "./worldLod.js";
 import { mountNatureField } from "./natureField.js";
 import { ROCK_HEIGHT_M, ROCK_BURY_FRAC, NATURE_GEN } from "./natureSsot.js";
+import { mountOceanWater } from "./oceanWater.js";
+import { mountWorldPhysics } from "./worldPhysics.js";
+import { mountBuildSnap } from "./buildSnap.js";
 
 /** @deprecated use setupRaceClassSelectUI — race first, then class */
 export function setupClassSelectUI() {
@@ -332,7 +335,18 @@ export async function attachWarlordsWorld(ctx) {
     worldSizeM: WORLD_SIZE_M,
     worldRadiusM: WORLD_RADIUS_M,
     world: seedDoc,
+    seed: earlySeed,
   });
+  // three.js Water (reflective ocean) — docs/#examples/en/objects/Water
+  let oceanCtl = null;
+  try {
+    oceanCtl = mountOceanWater(scene, island, {
+      size: Math.max(WORLD_RADIUS_M * 2.4, WORLD_SIZE_M * 1.05),
+    });
+    window.__mvOcean = oceanCtl;
+  } catch (e) {
+    console.warn("[warlords] ocean Water", e);
+  }
   const groundAt = island.sampleY || makeGroundSampler(island.root);
   const mapW = island.worldSizeM || island.halfW * 2;
   console.info(
@@ -681,6 +695,25 @@ export async function attachWarlordsWorld(ctx) {
   } catch (e) {
     console.warn("[warlords] nature field", e);
   }
+
+  // Rapier world solids (heightfields + rocks) — docs/#examples/en/physics/RapierPhysics
+  let worldPhys = null;
+  try {
+    worldPhys = await mountWorldPhysics(island, {
+      harvestNodes: island.harvestNodes,
+    });
+    window.__mvWorldPhysics = worldPhys;
+  } catch (e) {
+    console.warn("[warlords] worldPhysics", e);
+  }
+
+  // 1 m snap build (B) — Kenney / SeedThree living-scene practice
+  const buildSnap = mountBuildSnap(scene, island, groundAt, {
+    flash,
+    getCamera: () => ctx.camera,
+    getPlayerPos: () => capsule?.position,
+  });
+  window.__mvBuild = buildSnap;
 
   const harvest = new HarvestSystem(scene, island.harvestNodes, {
     flash,
@@ -1406,6 +1439,9 @@ export async function attachWarlordsWorld(ctx) {
     },
     update(dt) {
       harvest.update(dt);
+      oceanCtl?.update?.(dt);
+      buildSnap?.update?.();
+      worldPhys?.step?.(dt);
       vfx.update(dt);
       if (capsule?.position) loot.update(dt, capsule.position);
       syncFocusCrosshair(crosshairEl);
