@@ -218,30 +218,32 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   }
   if (!template) {
     console.error(
-      "[grudge6Loader] FAIL-CLOSED: Toon RTS kit load failed — no playable production hero",
+      "[grudge6Loader] FAIL-CLOSED: Toon RTS kit load failed — NO capsule stand-in",
       kitUrl,
       lastErr,
     );
-    const cap = makeCapsuleStandIn(classDef, kit);
+    // Never return CapsuleGeometry heroes (forbidden in multiplayer shared experience)
+    const err = new Error(
+      `[grudge6Loader] kit load failed: ${lastErr?.message || lastErr || "unknown"}`,
+    );
+    err.code = "TOON_KIT_FAIL";
     const failSource = {
       ...source,
       degraded: true,
-      standIn: true,
+      standIn: false,
       playMesh: "none",
       isToonRtsKit: false,
       director: false,
       coreBonesOk: false,
       coreClipOk: false,
-      pipeline: "capsule",
+      pipeline: "failed",
       error: String(lastErr?.message || lastErr),
       integrity: "red",
       integrityReasons: ["toon_kit_load_failed"],
+      ok: false,
     };
-    failSource.integrity = gradeCharacterSource(failSource).grade;
-    cap.source = failSource;
-    cap.root.userData.characterSource = failSource;
     if (typeof window !== "undefined") window.__mvCharacterSource = failSource;
-    return cap;
+    throw err;
   }
   source.kitUrl = loadedUrl;
   source.playMesh = isToonRtsKitUrl(loadedUrl) ? "toon-rts" : "legacy-races";
@@ -532,27 +534,7 @@ export async function loadGrudge6Class(classIdOrOpts, raceId) {
   };
 }
 
-function makeCapsuleStandIn(classDef, kit) {
-  const colors = { warrior: 0x4a6a9a, ranger: 0x3a7a4a, mage: 0x6a3a8a, worge: 0x8a3a2a };
-  const root = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.32, 1.0, 6, 12),
-    new THREE.MeshStandardMaterial({ color: colors[classDef.id] || 0x888888 }),
-  );
-  body.position.y = 0.9;
-  root.add(body);
-  const mixer = new THREE.AnimationMixer(root);
-  return {
-    root,
-    model: body,
-    classDef,
-    kit: kit || resolveClassKit(classDef.id),
-    mixer,
-    director: null,
-    clips: {},
-    animPack: classDef.animPack,
-    visibleMeshes: [],
-    shownMeshes: [],
-    standIn: true,
-  };
+/** @deprecated Capsules forbidden — always throw instead of stand-in. */
+function makeCapsuleStandIn() {
+  throw new Error("[grudge6Loader] capsule stand-in purged — Toon RTS only");
 }

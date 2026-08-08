@@ -1949,6 +1949,9 @@ async function init() {
                     else if (window.__mvTraversal?.loco) clip = window.__mvTraversal.loco;
                 } catch { /* */ }
                 const combatState = window.__mvCombatState || warlords?.combat?.state || "idle";
+                // Shared experience snap — race/class/pack/meshes so remotes load same Toon assets
+                const src = window.__mvCharacterSource || {};
+                const sprinting = !!localPlayer._player?.input?.shift;
                 dangerNet.sendState({
                     px: cap.position.x,
                     py: cap.position.y,
@@ -1960,11 +1963,15 @@ async function init() {
                     stamina: window.__mvStamina ?? 100,
                     combat: combatState,
                     moving,
+                    sprinting,
                     grounded: !!localPlayer._player.getIsOnGround?.(),
                     dead: isDead,
                     focus: !!warlords?.aim?.focusEnabled,
                     classId: sel2.classId,
                     raceId: sel2.raceId,
+                    animPack: src.animPack || warlords?.g6?.animPack || "sword_shield",
+                    meshIds: src.shownMeshes || warlords?.g6?.shownMeshes || src.meshIds || [],
+                    name: myName,
                 });
             };
             setInterval(reportState, STATE_REPORT_MS);
@@ -1989,19 +1996,21 @@ async function init() {
                         } catch { /* remote shape */ }
                         continue;
                     }
-                    // Railway capsule remote (game-ready peer without Mixamo)
+                    // Railway Toon remote (fail-closed load — never cylinder)
                     let nr = netRemotes.get(p.id);
                     if (!nr) {
                         nr = new MvNetworkRemote(p.id, scene, {
                             name: p.name,
-                            classId: p.classId,
-                            raceId: p.raceId,
+                            classId: p.classId || "warrior",
+                            raceId: p.raceId || "western-kingdoms",
+                            animPack: p.animPack,
+                            meshIds: p.meshIds,
                         });
                         netRemotes.set(p.id, nr);
-                        addRoomNotify(p.name || p.id, "joined (net)");
+                        addRoomNotify(p.name || p.id, "joined (Toon)");
                         updateCountUI?.();
                     }
-                    if (typeof p.px === "number") {
+                    if (typeof p.px === "number" || p.clip || p.classId) {
                         nr.applyState(p);
                     }
                 }

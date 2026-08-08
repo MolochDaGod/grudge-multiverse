@@ -46,6 +46,11 @@ import {
   syncHp,
   refreshCharacterIntegrityBadge,
 } from "./warlordsHud.js";
+import {
+  assertPlayReady,
+  playContractVersions,
+  refreshMpReadyBadge,
+} from "./mpSession.js";
 import { setTightHudSkillBar } from "./drcTightHud.js";
 import { startRagdollLite, updateRagdollLite, restoreRagdollLite } from "./ragdollLite.js";
 import { setupRaceClassSelectUI } from "./raceClassSelect.js";
@@ -529,17 +534,39 @@ export async function attachWarlordsWorld(ctx) {
     );
     refreshCharacterIntegrityBadge(g6.source);
     const grade = g6.source?.integrity || g6.integrity || "red";
-    if (grade === "red" || g6.source?.degraded || !g6.director) {
+    const welcome = typeof window !== "undefined" ? window.__mvWorldWelcome : null;
+    const ready = assertPlayReady(g6.source, {
+      seed: window.__mvWorldSeed,
+      worldGen: welcome?.genVersion,
+      warlordsPlay: welcome?.warlordsPlay,
+    });
+    window.__mvPlayReady = ready;
+    refreshMpReadyBadge({
+      ok: ready.ok && grade === "green",
+      reasons: ready.reasons,
+      seed: window.__mvWorldSeed,
+    });
+    window.__mvPlayContract = playContractVersions();
+
+    if (grade === "red" || g6.source?.degraded || !g6.director || !ready.ok) {
+      // Remove any partial body — never leave a cylinder or broken kit in the world
+      const failSrc = g6.source;
+      try {
+        g6.root?.parent?.remove?.(g6.root);
+      } catch {
+        /* */
+      }
+      g6 = null;
       flash?.(
-        `CHAR FAIL (${grade}) — not production Toon RTS. See badge top-right.`,
-        4.5,
+        `PLAY BLOCKED — Toon+anims required (no capsules). ${ready.reasons?.[0] || grade}`,
+        5,
       );
-      console.error("[warlords] FAIL-CLOSED character", g6.source);
+      console.error("[warlords] FAIL-CLOSED character / mp ready", failSrc || ready);
     } else if (grade === "yellow") {
       flash?.(`Toon RTS degraded · ${g6.source?.integrityReasons?.join(", ") || "?"}`, 2.5);
     } else {
       flash?.(
-        `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${g6.animPack} · OK`,
+        `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${g6.animPack} · MP READY`,
         1.4,
       );
     }
@@ -561,8 +588,9 @@ export async function attachWarlordsWorld(ctx) {
     refreshCharacterIntegrityBadge(g6.source);
 
   } catch (e) {
-    console.error("grudge6 load failed", e);
-    flash?.("Character load crashed — check console", 3);
+    console.error("grudge6 load failed — no capsule fallback", e);
+    g6 = null;
+    flash?.("Character load FAILED — Toon RTS required (no stand-in cylinders)", 5);
     refreshCharacterIntegrityBadge({
       degraded: true,
       playMesh: "none",
@@ -571,6 +599,11 @@ export async function attachWarlordsWorld(ctx) {
       coreClipOk: false,
       integrity: "red",
       integrityReasons: ["load_exception"],
+    });
+    refreshMpReadyBadge({
+      ok: false,
+      reasons: ["local_toon_load_failed"],
+      seed: window.__mvWorldSeed,
     });
   }
 

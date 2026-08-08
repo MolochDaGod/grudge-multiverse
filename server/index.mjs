@@ -39,6 +39,10 @@ import {
   WORLD_SCHEMA,
 } from "./worldSeedGen.mjs";
 
+/** Play contract stamp — clients refuse mismatch for shared assets */
+const PLAY_CONTRACT = process.env.WARLORDS_PLAY_CONTRACT || "2026-08-08.valheim42.1";
+const MP_PROTOCOL = "grudge.multiverse.mp/v1";
+
 const PORT = Number(process.env.PORT || 8787);
 const TICK_MS = Number(process.env.TICK_MS || 50); // 20 Hz snapshots
 const STALE_MS = Number(process.env.STALE_MS || 15000);
@@ -187,6 +191,7 @@ class Room {
         name: p.name,
         classId: p.classId,
         raceId: p.raceId,
+        animPack: p.animPack || p.snap?.animPack || null,
         ...(p.snap || {}),
       });
     }
@@ -336,6 +341,7 @@ wss.on("connection", (ws, _req, url) => {
         name: msg.player || msg.name,
         classId: msg.classId,
         raceId: msg.raceId,
+        animPack: msg.animPack,
       });
       if (!res.ok) {
         ws.send(JSON.stringify({ t: "error", code: res.error, message: "Room full" }));
@@ -343,11 +349,13 @@ wss.on("connection", (ws, _req, url) => {
         return;
       }
       selfId = res.player.id;
+      if (msg.animPack) res.player.animPack = String(msg.animPack).slice(0, 32);
       const roster = [...room.players.values()].map((p) => ({
         id: p.id,
         name: p.name,
         classId: p.classId,
         raceId: p.raceId,
+        animPack: p.animPack || null,
       }));
       ws.send(
         JSON.stringify({
@@ -366,6 +374,11 @@ wss.on("connection", (ws, _req, url) => {
           },
           seed: room.seed,
           world: worldWelcomePayload(room.world),
+          protocol: MP_PROTOCOL,
+          worldGen: WORLD_GEN_VERSION,
+          warlordsPlay: PLAY_CONTRACT,
+          requireToon: true,
+          forbidCapsule: true,
         }),
       );
       room.broadcast(
@@ -376,6 +389,7 @@ wss.on("connection", (ws, _req, url) => {
             name: res.player.name,
             classId: res.player.classId,
             raceId: res.player.raceId,
+            animPack: res.player.animPack || null,
           },
         },
         selfId,
@@ -428,6 +442,12 @@ wss.on("connection", (ws, _req, url) => {
 
     if (msg.t === "state") {
       const snap = msg.snap || msg;
+      if (snap.classId) me.classId = String(snap.classId).slice(0, 24);
+      if (snap.raceId) me.raceId = String(snap.raceId).slice(0, 32);
+      if (snap.animPack) me.animPack = String(snap.animPack).slice(0, 32);
+      const meshIds = Array.isArray(snap.meshIds)
+        ? snap.meshIds.slice(0, 24).map((x) => String(x).slice(0, 64))
+        : me.snap?.meshIds || [];
       me.snap = {
         px: Number(snap.px) || 0,
         py: Number(snap.py) || 0,
@@ -439,14 +459,17 @@ wss.on("connection", (ws, _req, url) => {
         stamina: Math.max(0, Math.min(100, Number(snap.stamina ?? 100))),
         combat: String(snap.combat || "idle").slice(0, 24),
         moving: !!snap.moving,
+        sprinting: !!snap.sprinting,
         grounded: snap.grounded !== false,
         dead: !!snap.dead,
         focus: !!snap.focus,
         classId: me.classId,
         raceId: me.raceId,
+        animPack: me.animPack || snap.animPack || null,
+        meshIds,
         name: me.name,
       };
-      if (msg.name) me.name = String(msg.name).slice(0, 24);
+      if (msg.name || snap.name) me.name = String(msg.name || snap.name).slice(0, 24);
       return;
     }
 

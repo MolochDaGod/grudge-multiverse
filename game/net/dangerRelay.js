@@ -151,6 +151,7 @@ export class DangerRelay {
           name: this.playerName,
           classId: this.classId,
           raceId: this.raceId,
+          animPack: this.animPack || undefined,
           seed: this.seed || undefined,
         }),
       );

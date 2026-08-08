@@ -99,8 +99,19 @@ Hub **Grudge Info Obelisk** POI → **E** opens info docs.
    `curl "https://grudge-multiverse-room-production.up.railway.app/api/world?seed=TEST"`  
    Hard-refresh SPA with `?seed=TEST`.
 
+## Multiplayer shared experience (no cylinders)
+
+| Rule | Detail |
+|------|--------|
+| Local hero | Toon RTS + director only — kit fail **throws**, no capsule |
+| Remotes | `MvNetworkRemote` hydrates same Toon race/class/pack |
+| Snapshot | `raceId`, `classId`, `animPack`, `meshIds`, `clip` |
+| Welcome | `worldGen`, `warlordsPlay`, `requireToon`, `forbidCapsule` |
+| Ready gate | `mpSession.assertPlayReady` → green before shared play |
+
 ## Do not
 
 - Invent a second seed hash on the client that ignores `welcome.seed`.  
 - Ship different generator versions FE vs BE without bumping `WORLD_GEN_VERSION` both sides.  
-- Replace Bermuda GLB path without CDN bake (seed places **content**, not terrain bytes).
+- Replace Bermuda GLB path without CDN bake (seed places **content**, not terrain bytes).  
+- **Never** ship CapsuleGeometry / cylinders as player or remote avatars.
