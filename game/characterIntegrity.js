@@ -35,14 +35,14 @@ export function gradeCharacterSource(source) {
   if (s.playMesh !== "toon-rts" && s.isToonRtsKit !== true) {
     reasons.push("not_toon_rts_play_mesh");
   }
-  // ObjectStore hardened contract stamp (single Warlords play system)
-  if (s.grudge6Play !== true && s.playMesh === "toon-rts") {
-    // soft: older stamps may omit — require contract when present path claims Toon
-  }
-  if (s.warlordsPlayContract && !/^2026-08-07\.harden/.test(String(s.warlordsPlayContract))) {
-    reasons.push(`stale_play_contract:${s.warlordsPlayContract}`);
-  }
-  if (!s.warlordsPlayContract && s.playMesh === "toon-rts") {
+  // Warlords play contract — accept any 2026-08+ fleet stamp (not only old harden)
+  if (s.warlordsPlayContract) {
+    const c = String(s.warlordsPlayContract);
+    if (!/^2026-0[89]|2026-1[0-2]|202[7-9]/.test(c) && !/valheim|harden|toon|island/i.test(c)) {
+      reasons.push(`stale_play_contract:${c}`);
+    }
+  } else if (s.playMesh === "toon-rts") {
+    // soft yellow only — loader may stamp after grade in some paths
     reasons.push("missing_warlords_play_contract");
   }
   if (!s.director) {
@@ -67,15 +67,16 @@ export function gradeCharacterSource(source) {
     reasons.push("no_mesh_ids_shown");
   }
 
-  // Hard reds
+  // Hard reds — block play
   const hard = reasons.some((r) =>
     /capsule|not_toon|no_animation_director|core_bones_missing|idle_clip_missing/.test(r),
   );
-  if (hard || reasons.length >= 3) {
+  if (hard) {
     return { grade: "red", reasons, ok: false };
   }
+  // Yellow = playable with warnings (mesh_ids partial, soft contract noise)
   if (reasons.length > 0) {
-    return { grade: "yellow", reasons, ok: false };
+    return { grade: "yellow", reasons, ok: true };
   }
   return { grade: "green", reasons: [], ok: true };
 }

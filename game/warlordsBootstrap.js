@@ -644,8 +644,14 @@ export async function attachWarlordsWorld(ctx) {
     });
     window.__mvPlayContract = playContractVersions();
 
-    if (grade === "red" || g6.source?.degraded || !g6.director || !ready.ok) {
-      // Remove any partial body — never leave a cylinder or broken kit in the world
+    // Play if Toon mesh + director bound — yellow is OK (warnings only)
+    const playOk =
+      !!g6.director &&
+      g6.source?.playMesh === "toon-rts" &&
+      grade !== "red" &&
+      ready.ok !== false &&
+      !g6.source?.standIn;
+    if (!playOk) {
       const failSrc = g6.source;
       try {
         g6.root?.parent?.remove?.(g6.root);
@@ -654,15 +660,18 @@ export async function attachWarlordsWorld(ctx) {
       }
       g6 = null;
       flash?.(
-        `PLAY BLOCKED — Toon+anims required (no capsules). ${ready.reasons?.[0] || grade}`,
+        `PLAY BLOCKED — Toon RTS + anims required. ${ready.reasons?.[0] || grade}`,
         5,
       );
       console.error("[warlords] FAIL-CLOSED character / mp ready", failSrc || ready);
     } else if (grade === "yellow") {
-      flash?.(`Toon RTS degraded · ${g6.source?.integrityReasons?.join(", ") || "?"}`, 2.5);
+      flash?.(
+        `Toon RTS playable · ${g6.source?.integrityReasons?.slice(0, 2).join(", ") || "warn"}`,
+        2.2,
+      );
     } else {
       flash?.(
-        `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${g6.animPack} · MP READY`,
+        `${g6.kit?.label || classDef.label} · ${g6.diagnose?.height?.toFixed?.(2) || "?"}m · ${g6.animPack} · READY`,
         1.4,
       );
     }

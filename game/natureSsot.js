@@ -124,4 +124,31 @@ export const CHUNK_DEBRIS = {
 export const HP_PER_CHUNK = {
   rock: 22,
   tree: 16,
+  ore: 28,
+};
+
+/**
+ * Ore veins — mineable nodes (pick). Biome-weighted in natureField.
+ * Assets: Kenney cliff rocks recolored (toon); multipack isolate later.
+ */
+export const ORE_VEINS = [
+  { id: "copper", materialId: "t0_copper", name: "Copper Ore", color: 0xb87333, weight: 0.45, chunks: 5 },
+  { id: "tin", materialId: "t1_tin", name: "Tin Ore", color: 0xa0b0b8, weight: 0.25, chunks: 5 },
+  { id: "iron", materialId: "t1_iron", name: "Iron Ore", color: 0x5a5a62, weight: 0.22, chunks: 6 },
+  { id: "silver", materialId: "t2_silver", name: "Silver Ore", color: 0xc0c8d0, weight: 0.08, chunks: 7 },
+];
+
+/** Fleet CDN packs already on assets (isolate multipacks — do not load whole as one). */
+export const FLEET_NATURE_CDN = {
+  kenneyOak: "https://assets.grudge-studio.com/models/world/kenney/nature-kit/tree_oak.glb",
+  kenneyPine: "https://assets.grudge-studio.com/models/world/kenney/nature-kit/tree_pineDefaultA.glb",
+  kenneyPalm: "https://assets.grudge-studio.com/models/world/kenney/nature-kit/tree_palm.glb",
+  kenneyRock: "https://assets.grudge-studio.com/models/world/kenney/nature-kit/cliff_blockCave_rock.glb",
+  palmPirate: "https://assets.grudge-studio.com/models/world/kenney/pirate-kit/palm-straight.glb",
+  boat: "https://assets.grudge-studio.com/models/world/kenney/watercraft-pack/boat-sail-a.glb",
+  tower: "https://assets.grudge-studio.com/models/world/kenney/castle-kit/tower-base.glb",
+  /** Multipack — isolate mesh names only when used */
+  stylizedRocks: "https://assets.grudge-studio.com/models/nature/stylized/rocks/stylised_rocks.glb",
+  rocks70: "https://assets.grudge-studio.com/models/nature/stylized/rocks/70_stylized_rocks.glb",
+  natureVol1: "https://assets.grudge-studio.com/models/nature/stylized/biome/stylized_nature_pack_vol1.glb",
 };

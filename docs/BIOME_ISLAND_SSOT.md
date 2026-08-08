@@ -38,3 +38,22 @@ Do not invent hosts.
 - Start on **Ethereal Falls** hub (Bermuda shell).  
 - Sail to faction islands with distinct biomes (volcanic south = Hellmaw).  
 - Same seed → same island biome assignment (FE + Railway).
+
+## Layers (playable deploy)
+
+| Layer | System |
+|-------|--------|
+| Terrain hub | Bermuda GLB SI |
+| Terrain pads | FBM per island biome color |
+| Water | three.js Water + sea nav |
+| Nature | Instanced forest + Kenney rocks/ore |
+| Harvest | multi-chunk rock/ore/tree (pick/axe) |
+| Characters | Toon RTS GLB only |
+| NPCs / hostiles | realmLife raceId snap |
+| Build | 1 m snap (B) |
+
+## Fleet assets already on CDN (use, don’t invent)
+
+Kenney nature-kit trees/rocks · pirate palms · watercraft · castle tower ·  
+`models/nature/stylized/rocks/*` multipacks (isolate only) ·  
+`models/nature/stylized/biome/*` · bermuda map · Toon RTS characters.

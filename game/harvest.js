@@ -78,7 +78,7 @@ export class HarvestSystem {
       tool === "any" ||
       tool === n.tool ||
       (tool === "axe" && n.kind === "tree") ||
-      (tool === "pick" && n.kind === "rock");
+      (tool === "pick" && (n.kind === "rock" || n.kind === "ore"));
     const dmg = Math.max(1, Math.floor(power * (match ? 1 : 0.45)));
     n.hp = Math.max(0, n.hp - dmg);
 
@@ -132,10 +132,16 @@ export class HarvestSystem {
   _grantLoot(n, chunkCount = 1) {
     const bag = loadBag();
     const qty = Math.max(1, chunkCount) * (1 + Math.floor(Math.random() * 2));
+    const matId =
+      n.materialId ||
+      (n.kind === "tree" ? "t0_wood" : n.kind === "ore" ? "t0_copper" : "t0_stone");
+    const matName =
+      n.materialName ||
+      (n.kind === "tree" ? "Wood" : n.kind === "ore" ? "Ore" : "Stone");
     addItem(bag, {
-      id: n.materialId || (n.kind === "tree" ? "t0_wood" : "t0_stone"),
-      name: n.kind === "tree" ? "Wood" : "Stone",
-      tier: 0,
+      id: matId,
+      name: matName,
+      tier: n.tier ?? (String(matId).startsWith("t2") ? 2 : String(matId).startsWith("t1") ? 1 : 0),
       slot: "mat",
       qty,
     });

@@ -19,6 +19,7 @@ import {
   HP_PER_CHUNK,
   CHUNK_DEBRIS,
   TREE_CHUNKS,
+  ORE_VEINS,
 } from "./natureSsot.js";
 import {
   InstancedForest,
@@ -32,6 +33,7 @@ import {
   pickBiomeTreeId,
   ISLAND_ARCHETYPES,
 } from "./biomeSsot.js";
+import { styleMineableMesh } from "./toonMaterials.js";
 
 function mulberry32(a) {
   return function rand() {
@@ -388,11 +390,13 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
       obj.userData.siHeight = height;
       obj.userData.buryFrac = buryFrac;
       obj.userData.biomeId = b.id;
+      styleMineableMesh(obj, "t0_stone");
       harvestRoot.add(obj);
       harvestNodes.push({
         id,
         kind: "rock",
         materialId: proto.materialId || "t0_stone",
+        materialName: "Stone",
         object: obj,
         position: new THREE.Vector3(
           p.x,
@@ -419,6 +423,77 @@ export async function mountNatureField(scene, island, groundAt, opts = {}) {
         protoId: proto.id,
         biomeId: b.id,
         valheimRock: true,
+      });
+    }
+
+    // Ore veins — mineable pick nodes (toon-colored Kenney rocks)
+    const oreCount = Math.max(
+      1,
+      Math.floor(rockN * 0.35 * ((discBiome.danger || 0) > 0.6 ? 1.4 : 1)),
+    );
+    const orePts = placeOnDisc(disc, oreCount, NATURE_DENSITY.minSpacingRockM * 0.85);
+    for (const p of orePts) {
+      const roll = rng();
+      let acc = 0;
+      let vein = ORE_VEINS[0];
+      for (const v of ORE_VEINS) {
+        acc += v.weight;
+        if (roll <= acc) {
+          vein = v;
+          break;
+        }
+      }
+      // Hellmaw / mountain prefer iron+
+      if (
+        (discBiome.id === "hellmaw" || discBiome.id === "frozen_expanse") &&
+        rng() < 0.45
+      ) {
+        vein = ORE_VEINS.find((v) => v.id === "iron") || vein;
+      }
+      const pick = rockTemplates[0] || rockTemplates[Math.floor(rng() * rockTemplates.length)];
+      if (!pick) continue;
+      const { template } = pick;
+      const scaleJitter = 0.35 + rng() * 0.25; // smaller than landscape rocks
+      const obj = template.clone(true);
+      obj.scale.multiplyScalar(scaleJitter);
+      obj.rotation.y = rng() * Math.PI * 2;
+      const height = ROCK_HEIGHT_M * scaleJitter * 0.55;
+      const buryFrac = 0.35;
+      const bury = height * buryFrac;
+      obj.position.set(p.x, p.y - bury, p.z);
+      obj.name = `nature-ore-${vein.id}-${rockIdx}`;
+      styleMineableMesh(obj, vein.materialId);
+      const chunks = vein.chunks || 5;
+      const maxHp = chunks * HP_PER_CHUNK.ore;
+      const id = `nat_ore_${seed}_${rockIdx++}`;
+      obj.userData.harvestId = id;
+      obj.userData.harvestKind = "ore";
+      obj.userData.selectable = "node";
+      obj.userData.worldKind = "rock";
+      obj.userData.colliderLayer = COLLIDER_LAYER.HARVEST;
+      harvestRoot.add(obj);
+      harvestNodes.push({
+        id,
+        kind: "ore",
+        materialId: vein.materialId,
+        materialName: vein.name,
+        object: obj,
+        position: new THREE.Vector3(p.x, p.y + height * 0.4, p.z),
+        halfExtents: new THREE.Vector3(height * 0.3, height * 0.4, height * 0.3),
+        hp: maxHp,
+        maxHp,
+        tool: "pick",
+        zone: "ore",
+        chunks,
+        maxChunks: chunks,
+        chunkMode: true,
+        buryFrac,
+        siHeight: height,
+        groundY: p.y,
+        nature: true,
+        protoId: vein.id,
+        biomeId: discBiome.id,
+        tier: vein.materialId.startsWith("t2") ? 2 : vein.materialId.startsWith("t1") ? 1 : 0,
       });
     }
   }

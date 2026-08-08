@@ -28,10 +28,10 @@
  * Bump when kit/atlas/anim contracts change — used as asset query bust.
  * Must stay aligned with ObjectStore WARLORDS_PLAY_CONTRACT_VERSION for play.
  */
-export const GRUDGE6_SSOT_VERSION = "2026-08-08.valheim42.1";
+export const GRUDGE6_SSOT_VERSION = "2026-08-08.live-toon.2";
 
 /** Same stamp as ObjectStore js/grudge6-kit.js — no second character system. */
-export const WARLORDS_PLAY_CONTRACT_VERSION = "2026-08-08.valheim42.1";
+export const WARLORDS_PLAY_CONTRACT_VERSION = "2026-08-08.live-toon.2";
 
 /** Append to CDN asset URLs so clients drop stale browser cache after SSOT ship. */
 export function assetUrlBust(url) {

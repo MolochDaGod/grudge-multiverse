@@ -21,7 +21,7 @@ import {
 } from "./biomeSsot.mjs";
 
 export const WORLD_SCHEMA = "grudge.multiverse.world/v1";
-export const WORLD_GEN_VERSION = "2026-08-08.5-island-biomes";
+export const WORLD_GEN_VERSION = "2026-08-08.6-live-mine-toon";
 
 /**
  * Seed play space — SI metres (same as Island-Crusade / Valheim-scale).
